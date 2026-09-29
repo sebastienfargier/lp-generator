@@ -7,9 +7,9 @@ Ce domaine est indépendant du Landing Page Generator :
 
 Supprimer ce dossier ne change rien au générateur de landing pages.
 
-Étape actuelle : contrat, catalogue, templates normalisés, validation
-runtime et premier renderer HTML (étape 3A). Pas encore d'UI, d'API, de
-preview ni de génération.
+Étape actuelle : fondation (contrat, catalogue, templates, validation,
+renderer) et premier workspace `/email-generator` en mode démo (étape 4A).
+Pas encore d'IA.
 
 | Fichier | Rôle |
 |---|---|
@@ -21,6 +21,8 @@ preview ni de génération.
 | `surfaces.ts` | les 7 surfaces fermées et les invariants de `recettes-couleur.md` |
 | `schemas.ts` | validation Zod d'EmailConfig, dérivée du manifeste (`parseEmailConfig`) |
 | `renderer.ts` | rendu HTML : `renderEmail`, `renderEmailFromUnknown` (serveur, hors `index.ts`) |
+| `demo-generator.ts` | mode démo : brief validé → EmailConfig déterministe, sans IA |
+| `generation.ts` | serveur : brief → démo → Zod → `renderEmail` (`runEmailGeneration`) |
 | `socle-email.html` | enveloppe du document, copie à l'identique du socle du projet Email |
 | `index.ts` | exports publics |
 
@@ -319,6 +321,48 @@ se rendent ; les deux `product-details` lèvent l'erreur du rôle
 - **Première intégration serveur ou Vercel.** Il faudra vérifier que
   `templates/` et `socle-email.html` sont bien inclus dans le bundle.
   `next.config` n'est pas modifié à ce stade.
+
+## Workspace `/email-generator`
+
+`app/email-generator/page.tsx` (serveur) rend l'aperçu initial avec
+`runEmailGeneration`. `components/email/` contient la partie client : le
+brief, l'appel à `POST /api/generate-email` et l'aperçu.
+
+La route est propre au domaine Email : `/api/generate` reste réservé aux
+landing pages. L'aperçu affiche le HTML de `renderEmail` tel quel :
+- dans une iframe `srcDoc`, `sandbox="allow-same-origin"`, donc sans script
+  ni popup ;
+- à 720 px en Desktop (au-dessus du seuil mobile de 640 px du socle) et à
+  390 px en Mobile, réduit si la surface est plus étroite.
+
+**HTML canonique ou aperçu.** `renderEmail()` produit le seul HTML
+exportable : jetons système et vrais liens. `preview.ts` (`toPreviewHtml`)
+en dérive le HTML d'aperçu, affiché dans l'iframe :
+- le logo sombre devient `/logos/logo_studi_sombre_lowres.png` ;
+- les 40 icônes deviennent `/icones/<nom>.png`. Un autre nom est une erreur ;
+- les réseaux sociaux deviennent un pixel transparent : aucun réseau n'est
+  attribué à ces positions ;
+- les `href` deviennent `data-preview-href`, sans script : les liens sont
+  inertes et leur destination reste inspectable.
+
+Les chemins `/logos` et `/icones` ne sont jamais des URLs envoyables, et
+n'entrent ni dans EmailConfig ni dans le HTML canonique.
+
+**Largeur au-delà de 640 px.** Chaque lame commence par une table
+`width="100%"` avec `background:#FFFFFF`, qui contient la table `.lame` de
+640 px. `recettes-couleur.md` §3 attribue le Fond à cette « table pleine
+largeur ». Chaque lame forme donc une bande pleine largeur, blanche ou à la
+couleur de sa surface, qui recouvre le fond neutre `#F5F5F4` du socle. Le
+comportement est conforme aux sources ; le changer suppose une décision de
+design.
+
+**`icons-grid`.** Ses icônes PNG au trait sombre sont posées sur un carré
+`#1D1916` : le contraste est insuffisant. Cette lame n'est pas utilisée par
+la démo, en attendant une décision sur le design ou les assets.
+
+Next.js trace automatiquement `templates/` et `socle-email.html` pour la
+page et la route (vérifié dans les `.nft.json` du build). Il reste à tester
+sur Vercel.
 
 ## Tests
 
