@@ -6,6 +6,7 @@
  * son jeton par la valeur de la plateforme (CDN, tag d'envoi) ; son libellé
  * éventuel est verrouillé et reste celui du template.
  */
+import type { EmailIconName } from "./manifest"
 
 export const emailSystemElements = {
   /** Logo Studi monochrome pour fond clair. */
@@ -49,3 +50,13 @@ export const emailHrefPlaceholders = {
   urlToConfirm: "[URL À CONFIRMER]",
   utm: "[UTM À DÉFINIR — CRM]",
 } as const
+
+/**
+ * Jeton runtime interne et temporaire d'une icône du catalogue, écrit dans le
+ * `src` de son slot. Ce n'est pas une syntaxe des sources (qui n'emploient
+ * que `[URL_CDN_ICONE_*]`, `_01`…`_04`, `_24`) ni un jeton de plateforme : sa
+ * résolution vers une URL CDN réelle reste à définir.
+ */
+export function emailIconToken(icon: EmailIconName) {
+  return `[URL_CDN_ICONE:${icon}]`
+}

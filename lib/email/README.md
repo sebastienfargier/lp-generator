@@ -7,8 +7,9 @@ Ce domaine est indépendant du Landing Page Generator :
 
 Supprimer ce dossier ne change rien au générateur de landing pages.
 
-Étape actuelle : contrat, catalogue, templates normalisés et validation
-runtime (étape 2). Pas encore de renderer, d'UI, d'API ni de génération.
+Étape actuelle : contrat, catalogue, templates normalisés, validation
+runtime et premier renderer HTML (étape 3A). Pas encore d'UI, d'API, de
+preview ni de génération.
 
 | Fichier | Rôle |
 |---|---|
@@ -19,6 +20,8 @@ runtime (étape 2). Pas encore de renderer, d'UI, d'API ni de génération.
 | `disclaimers.ts` | catalogue fermé des 9 disclaimers (guidelines, chapitre 12) |
 | `surfaces.ts` | les 7 surfaces fermées et les invariants de `recettes-couleur.md` |
 | `schemas.ts` | validation Zod d'EmailConfig, dérivée du manifeste (`parseEmailConfig`) |
+| `renderer.ts` | rendu HTML : `renderEmail`, `renderEmailFromUnknown` (serveur, hors `index.ts`) |
+| `socle-email.html` | enveloppe du document, copie à l'identique du socle du projet Email |
 | `index.ts` | exports publics |
 
 ## Principe : le HTML des lames est maîtrisé
@@ -34,6 +37,11 @@ couleurs. Le contrat n'a aucun champ `html`, `style`, `className` ou `css`.
 | `data-slot="<nom>"` | l'élément dont la config fournit le contenu | l'`EmailConfig` |
 | `data-system="<nom>"` | logo, réseaux sociaux, désabonnement, préférences | le système (`system.ts`) |
 | `data-optional="<slot>"` | les lignes supprimées quand ce slot optionnel est absent | le renderer, cas listés ci-dessous |
+| `data-color-role="<rôle>"` | un élément dont les couleurs ne suivent pas la table §3 | le renderer (`resolveColorRole`) |
+
+Ces quatre attributs sont internes. Ils servent aux vérifications et aux
+transformations, puis sont retirés du HTML final. Aucun autre `data-*`
+n'est touché.
 
 Le renderer ne fait que les opérations suivantes, sans heuristique.
 
@@ -99,13 +107,9 @@ Les fichiers source de Claude restent hors du repo.
   identiques à l'octet près. Le sens de synchronisation s'inverse : c'est le
   repo qui fait foi, et `bibliotheque-lames.md` est à régénérer depuis ces
   fichiers.
-- **`socle-email.html`** n'est pas encore dans le repo, car il n'a pas changé.
-  Il deviendra l'enveloppe du renderer :
-  - `subject` remplace `[OBJET DE L'EMAIL]` ;
-  - `preheader` remplace `[PREHEADER]` ;
-  - les lames s'insèrent entre les marqueurs `LAMES`.
-
-  Voir `emailDocumentTokens`.
+- **`socle-email.html`** : `lib/email/socle-email.html` est la source runtime.
+  C'est une copie octet pour octet du socle du projet Email, sans aucune
+  modification.
 
 ## Disclaimers
 
@@ -228,6 +232,115 @@ chaque appel de `parseEmailConfig` et `safeParseEmailConfig`, sans
 `z.config`. Les messages métier sont écrits dans les schémas.
 `EmailConfigSchema.parse` est une API bas niveau : appelée directement, elle
 garde la locale globale et ne garantit pas le français.
+
+## Renderer (`renderer.ts`)
+
+Importer depuis `@/lib/email/renderer`, côté serveur uniquement : le module
+lit les fichiers avec `node:fs`, et `index.ts` reste importable partout.
+
+- `renderEmail(config)` prend une EmailConfig déjà valide et renvoie le HTML
+  complet.
+- `renderEmailFromUnknown(input)` enchaîne `parseEmailConfig`, puis
+  `renderEmail`. Il lève une `ZodError` si la config est invalide.
+
+Le HTML n'est jamais re-sérialisé. parse5 localise les éléments, avec les
+positions exactes des balises et des attributs, puis le renderer applique
+des remplacements ponctuels au texte d'origine. Commentaires MSO, entités,
+classes et styles restent octet pour octet.
+
+**Document.** Dans l'en-tête du socle, `[OBJET DE L'EMAIL]` et `[PREHEADER]`
+sont remplacés par le texte échappé, avant l'insertion des lames. Les lames
+sont ensuite insérées entre les marqueurs `LAMES`, dans l'ordre de
+`config.blocks`.
+
+**Slots.**
+
+| Type | Opération |
+|---|---|
+| `texte` | contenu ← texte échappé |
+| `cta`, `lien` | `href` ← valeur ; contenu ← libellé échappé |
+| `cta:fleche` | idem, suivi de ` &nbsp;&#8594;` |
+| `asset:visuel` | `src` et `alt` |
+| `asset:icone` | `src` ← `[URL_CDN_ICONE:<nom>]` : jeton runtime interne temporaire, absent des sources, à résoudre plus tard |
+| `disclaimer` | `*` + texte exact du catalogue, date au format JJ/MM/AAAA |
+
+Si `disclaimer-2` est absent, ses deux lignes `data-optional` sont supprimées.
+
+**Échappement.**
+- Texte : `&`, `<`, `>`.
+- Attributs : en plus `"`.
+- Liquid n'est jamais interprété : il reste une chaîne destinée à la
+  plateforme.
+
+**Éléments système.** Leurs jetons sont conservés : logo, réseaux sociaux,
+désabonnement, préférences, icônes. Aucun n'est résolu vers un CDN ou un CRM.
+
+**Attributs internes.** Leurs positions sont relevées dans le template
+d'origine. Ils sont retirés dans la même passe que les autres remplacements,
+après toutes les vérifications. Une ligne `data-optional` déjà supprimée
+n'est pas traitée une seconde fois.
+
+**Surfaces.**
+- Une lame `fixed` garde ses couleurs.
+- Une lame `configurable` reçoit la recette de sa surface (`page` si absente),
+  via `emailSurfaceRecipes` et `emailColorSubstitutions`.
+- Toute couleur absente de la table est une erreur.
+- Deux rôles explicites (`data-color-role`) couvrent les exceptions
+  connues ; le rôle est porté par le template, jamais déduit d'une valeur :
+  - `icon-background` : les 3 pastilles de 44 px de `icons-list` (§3). Blanc
+    sur les surfaces claires, Filet sur Marque et Encre ;
+  - `overlay-card` : la carte superposée au visuel des deux
+    `product-details`. Sur Page, elle garde son fond blanc et son contour
+    encre, comme dans l'exemple complet 5. Aucune source ne dit son rendu sur
+    une surface colorée : une erreur explicite est levée.
+- Les autres lames à icônes (`icons-grid`, `benefits-and-testimonial`,
+  `cta-and-testimonial`) suivent la table §3, qui couvre leurs couleurs.
+
+**Intégrité.** Un `EmailTemplateError` est levé dans chacun de ces cas :
+- slot du manifeste absent du template, ou `data-slot` non déclaré ;
+- élément porteur inattendu, ou contenu qui n'est pas du texte seul ;
+- flèche du gabarit manquante ;
+- jeton système altéré ;
+- marqueur du socle absent ;
+- lame inconnue.
+
+Les 36 lames se rendent sur Page. Sur Marque, 24 des 26 lames configurables
+se rendent ; les deux `product-details` lèvent l'erreur du rôle
+`overlay-card`.
+
+**Points connus, non traités.**
+
+- **Enveloppe pleine largeur.** `recettes-couleur.md` §3 attribue
+  explicitement le Fond à la « table pleine largeur », qui est donc colorée.
+  Les références font toutes 640 px de large et ne montrent pas ce qu'il y a
+  au-delà.
+- **Visuels en mobile.** Avec `height:auto`, les images dépassent les hauteurs
+  `phNNN` prévues pour le mobile. Un audit visuel séparé est prévu.
+- **Première intégration serveur ou Vercel.** Il faudra vérifier que
+  `templates/` et `socle-email.html` sont bien inclus dans le bundle.
+  `next.config` n'est pas modifié à ce stade.
+
+## Tests
+
+```bash
+npm run test:email
+```
+
+Le runner est `node:test`, sans dépendance : Node exécute directement le
+TypeScript. `tests/resolve-ts.mjs` complète seulement les imports sans
+extension de `lib/email`. Les tests utilisent les vrais templates et le vrai
+socle ; seuls les cas de corruption injectent une source modifiée.
+
+- `schemas.test.ts` : contrat EmailConfig. Chaque cas refusé porte aussi un
+  `@ts-expect-error`, vérifié par `tsc` au lint et au build.
+- `manifest.test.ts` : 36 lames ; slots, éléments système et optionnels de
+  chaque template identiques au manifeste.
+- `renderer.test.ts` : document, slots, échappement, surfaces, intégrité, et
+  rendu des 36 lames sur Page.
+
+Les deux `product-details` ne sont volontairement pas supportés sur une
+surface colorée, tant qu'aucune règle de design ne fixe le rendu de leur
+carte (`overlay-card`). Le test attend l'erreur explicite.
 
 ## Arbitrages V1
 
