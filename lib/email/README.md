@@ -24,6 +24,8 @@ Pas encore d'IA.
 | `section-catalog.ts` | catalogue métier des 36 lames et règles globales pour le futur prompt (`getEmailSectionCatalogForPrompt`) |
 | `destinations.ts` | 60 destinations Studi contrôlées, chacune avec sa source (`emailDestinationUrl`) |
 | `generation-context.ts` | contexte compact d'une génération : lames candidates, liens, vocabulaire (`buildEmailGenerationContext`) |
+| `generation-request.ts` | contrat d'entrée d'une génération par modèle : faits structurés et validés (`EmailGenerationRequest`) |
+| `ai-prompt.ts` | prompt système, assemblage du prompt, schéma de sortie, validation de la réponse (sans réseau) |
 | `demo-generator.ts` | mode démo : brief validé → EmailConfig déterministe, sans IA |
 | `generation.ts` | serveur : brief → démo → Zod → `renderEmail` (`runEmailGeneration`) |
 | `socle-email.html` | enveloppe du document, copie à l'identique du socle du projet Email |
@@ -418,6 +420,34 @@ visuels envoyables. Le contexte fait 9 000 à 15 000 caractères, contre
 `destinations.ts` recopie les chemins de `sources-studi.md` (§2, §4 bis, §5),
 avec l'hôte des guidelines (§6.4) et le placeholder UTM. Les destinations
 sans URL établie sont listées à part et ne sont pas proposables.
+
+## Génération par modèle (préparée, non branchée)
+
+`EmailGenerationRequest` porte les faits qu'un modèle ne doit jamais
+inventer : offre (valeur, code, date de fin, compte à rebours, disclaimer),
+faits validés, témoignage, partenaire, visuels HTTPS. `EmailBrief` et le
+mode démo sont inchangés, et `emailBriefToGenerationRequest` fait le pont.
+
+La sélection des lames du contexte ne s'appuie que sur ces champs. Le texte
+du brief ne sert plus qu'à l'intention : quiz, choix, liens, surface.
+
+`buildEmailAiPrompt(request)` renvoie l'un de ces trois cas :
+- `ready`, avec :
+  - `system` : les instructions ;
+  - `user` : `{ request, context }` en JSON ;
+  - `outputSchema` : le JSON Schema dérivé de `EmailConfigSchema`
+    (`z.toJSONSchema`), restreint aux lames candidates ;
+- `invalid-request` ;
+- `impossible` : ni hero, ni footer, ou aucune lame de corps possible avec
+  les données fournies.
+
+La réponse du modèle passe par `validateGeneratedEmail` : d'abord Zod, puis
+des contrôles propres à la requête :
+- lames candidates seulement ;
+- liens contrôlés, visuels fournis, disclaimers proposés ;
+- faits recopiés à l'identique.
+
+Elle passe ensuite par `renderEmail`. Le prompt n'est jamais une garantie.
 
 ## Tests
 

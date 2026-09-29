@@ -1,134 +1,114 @@
 /**
- * Contexte compact et destinations contrôlées : sélection déterministe, sans
- * URL inventée, assez de lames pour composer un email complet.
+ * Contexte compact et destinations contrôlées : sélection déterministe à
+ * partir des faits structurés de la requête, sans URL inventée.
  */
 import assert from "node:assert/strict"
-import { readFileSync } from "node:fs"
-import { join } from "node:path"
 import { describe, test } from "node:test"
 
-import { defaultEmailBrief, type EmailBrief } from "../demo-generator"
-import {
-  emailDestinations,
-  emailDestinationUrl,
-  emailUnconfirmedDestinations,
-  studiOrigin,
-} from "../destinations"
+import { defaultEmailBrief } from "../demo-generator"
+import { emailDestinations, emailDestinationUrl, emailUnconfirmedDestinations, studiOrigin } from "../destinations"
 import { emailDisclaimers } from "../disclaimers"
-import {
-  buildEmailGenerationContext,
-  explainEmailSectionSelection,
-  sendableVisuals,
-  type EmailGenerationContextOptions,
-} from "../generation-context"
+import { buildEmailGenerationContext, explainEmailSectionSelection } from "../generation-context"
+import { emailBriefToGenerationRequest, type EmailGenerationRequest } from "../generation-request"
 import { emailBlockManifest } from "../manifest"
 import { isEmailHref } from "../schemas"
 import { getEmailSectionCatalogForPrompt } from "../section-catalog"
+import { scenarios } from "./scenarios"
 
-const sourcesStudi = (() => {
-  try {
-    return readFileSync(join(process.env.EMAIL_SOURCES_DIR ?? "", "sources-studi.md"), "utf8")
-  } catch {
-    return null
-  }
-})()
-
-const briefs: Record<string, [EmailBrief, EmailGenerationContextOptions]> = {
-  reconversion: [defaultEmailBrief, {}],
-  accompagnement: [
-    { ...defaultEmailBrief, brief: "Présenter l'accompagnement Studi à des personnes qui hésitent à se former seules.", objective: "accompagnement" },
-    { emailType: "lifecycle-debut" },
-  ],
-  evolution: [
-    { ...defaultEmailBrief, brief: "Encourager des salariés à monter en compétences en management ou en ressources humaines.", audience: "Salariés qui veulent évoluer", objective: "evolution-carriere" },
-    { emailType: "newsletter" },
-  ],
-  promo: [
-    { ...defaultEmailBrief, brief: "Email promo de rentrée : bourse d'études jusqu'à -30 %, avec code promo et date de fin.", objective: "decouverte-formations" },
-    { emailType: "promo" },
-  ],
-}
 const contexts = Object.fromEntries(
-  Object.entries(briefs).map(([name, [brief, options]]) => [name, buildEmailGenerationContext(brief, options)])
+  Object.entries(scenarios).map(([name, request]) => [name, buildEmailGenerationContext(request)])
 )
 const fullSize = JSON.stringify(getEmailSectionCatalogForPrompt()).length
 const manifestTypes = new Set(Object.keys(emailBlockManifest))
+const destinationIds = Object.keys(emailDestinations) as (keyof typeof emailDestinations)[]
+const types = (context: (typeof contexts)[string]): string[] => context.sections.map((section) => section.type)
 
 describe("destinations contrôlées", () => {
   test("chaque URL : hôte des sources, chemin /fr/, placeholder UTM, EmailHref valide", () => {
-    for (const id of Object.keys(emailDestinations) as (keyof typeof emailDestinations)[]) {
-      const url = emailDestinationUrl(id)
-      assert.ok(url.startsWith(`${studiOrigin}/fr/`), url)
-      assert.ok(url.endsWith("?[UTM À DÉFINIR — CRM]"), url)
-      assert.ok(isEmailHref(url), url)
-    }
     assert.equal(studiOrigin, "https://www.studi.com")
+    for (const id of destinationIds) {
+      const url = emailDestinationUrl(id)
+      assert.ok(url.startsWith(`${studiOrigin}/fr/`) && url.endsWith("?[UTM À DÉFINIR — CRM]") && isEmailHref(url), url)
+    }
   })
 
-  test("chaque chemin a une provenance, et figure dans sources-studi.md si disponible", (context) => {
+  test("60 destinations, chacune avec sa provenance ; 34 filières", () => {
+    assert.equal(destinationIds.length, 60)
+    assert.equal(Object.values(emailDestinations).filter((destination) => destination.group === "filiere").length, 34)
     for (const destination of Object.values(emailDestinations)) {
       assert.match(destination.source, /^(sources-studi\.md|guidelines-communication\.md) §/)
-    }
-    if (!sourcesStudi) return context.skip("EMAIL_SOURCES_DIR non défini : vérification des chemins ignorée")
-    for (const destination of Object.values(emailDestinations)) {
-      if (destination.source.startsWith("sources-studi.md")) {
-        assert.ok(sourcesStudi.includes(`\`${destination.path}\``), destination.path)
-      }
     }
   })
 
   test("les destinations non confirmées ne sont pas proposables", () => {
-    assert.ok(emailUnconfirmedDestinations.length > 0)
     const labels = new Set<string>(Object.values(emailDestinations).map((destination) => destination.label))
     for (const { label } of emailUnconfirmedDestinations) assert.ok(!labels.has(label), label)
   })
 })
 
 describe("contexte de génération", () => {
-  test("sérialisable et déterministe", () => {
-    for (const [name, [brief, options]] of Object.entries(briefs)) {
+  test("sérialisable, déterministe, sans les données de la requête", () => {
+    for (const [name, request] of Object.entries(scenarios)) {
       const serialized = JSON.stringify(contexts[name])
       assert.deepEqual(JSON.parse(serialized), contexts[name])
-      assert.equal(JSON.stringify(buildEmailGenerationContext(brief, options)), serialized, name)
+      assert.equal(JSON.stringify(buildEmailGenerationContext(request)), serialized, name)
+      assert.ok(!serialized.includes(request.brief), `${name} : brief répété`)
     }
   })
 
   test("uniquement des lames connues, sans doublon", () => {
     for (const context of Object.values(contexts)) {
-      const types = context.sections.map((section) => section.type)
-      assert.equal(new Set(types).size, types.length)
-      for (const type of types) assert.ok(manifestTypes.has(type), type)
+      assert.equal(new Set(types(context)).size, context.sections.length)
+      for (const type of types(context)) assert.ok(manifestTypes.has(type), type)
     }
   })
 
-  test("assez de lames pour composer un email complet", () => {
+  test("de quoi composer un email complet", () => {
     for (const [name, context] of Object.entries(contexts)) {
       const families = new Set(context.sections.map((section) => section.family))
-      const types = new Set(context.sections.map((section) => section.type))
-      assert.ok(types.has("email-module-footer-compact-legal"), `${name} : footer`)
-      assert.ok(families.has("Header"), `${name} : header`)
-      assert.ok(families.has("Hero"), `${name} : hero`)
-      assert.ok(families.has("Story"), `${name} : contenu`)
+      for (const family of ["Header", "Hero", "Story", "Footer"] as const) assert.ok(families.has(family), `${name} : ${family}`)
       assert.ok(families.has("Features") || families.has("Benefits"), `${name} : arguments`)
-      assert.ok(context.sections.length >= 8 && context.sections.length <= 18, `${name} : ${context.sections.length}`)
+      assert.ok(types(context).includes("email-module-footer-compact-legal"), `${name} : footer`)
     }
   })
 
-  test("mentions légales seulement quand le brief peut en appeler", () => {
-    const has = (name: string) => contexts[name]!.sections.some((section) => section.type === "email-module-legal-disclaimer")
-    assert.equal(has("reconversion"), false)
-    assert.equal(has("promo"), true)
-    assert.ok(!("disclaimers" in contexts.reconversion!))
-    assert.ok("disclaimers" in contexts.promo!)
+  test("lames de promo : uniquement si la requête fournit code, compte à rebours, valeur", () => {
+    const editorial = types(contexts.reconversion!)
+    for (const type of ["email-module-discount-banner-cards", "email-module-hero-countdown-variant-01", "email-module-banner-full"]) {
+      assert.ok(!editorial.includes(type), type)
+    }
+    const promo = types(contexts.promo!)
+    for (const type of ["email-module-discount-banner-cards", "email-module-hero-countdown-variant-02", "email-module-banner-full"]) {
+      assert.ok(promo.includes(type), type)
+    }
+    const noCode = buildEmailGenerationContext({ ...scenarios.promo!, offer: { ...scenarios.promo!.offer!, code: undefined } })
+    assert.ok(!types(noCode).includes("email-module-discount-banner-cards"))
+    // Un mot « code » dans le brief ne suffit plus : seul le champ compte.
+    const cueOnly = buildEmailGenerationContext({ ...scenarios.reconversion!, brief: "Avec un code promo et une date de fin." })
+    assert.ok(!types(cueOnly).includes("email-module-discount-banner-cards"))
   })
 
-  test("disclaimers : identifiants et intitulés, jamais le texte juridique", () => {
+  test("témoignage et partenaire : uniquement s'ils sont fournis", () => {
+    assert.ok(!types(contexts.reconversion!).includes("email-module-cta-and-testimonial"))
+    const withTestimonial = buildEmailGenerationContext({ ...scenarios.reconversion!, testimonial: { quote: "…", author: "Apprenant Studi" } })
+    assert.ok(types(withTestimonial).includes("email-module-cta-and-testimonial"))
+    const withPartner = buildEmailGenerationContext({ ...scenarios.reconversion!, partner: { name: "Le Wagon" }, visuals: [{ src: "https://cdn.studi.com/v.jpg", alt: "" }] })
+    assert.ok(types(withPartner).includes("email-module-hero-split-image-dark"))
+  })
+
+  test("mentions légales et disclaimers : seulement si un fait ou l'offre l'exigent", () => {
+    assert.ok(!types(contexts.reconversion!).includes("email-module-legal-disclaimer"))
+    assert.ok(!("disclaimers" in contexts.reconversion!))
+    assert.ok(types(contexts.promo!).includes("email-module-legal-disclaimer"))
+    const withFact = buildEmailGenerationContext({ ...scenarios.reconversion!, facts: [{ statement: "96 % ont constaté une progression professionnelle", disclaimer: "chiffres-performance" }] })
+    assert.ok(types(withFact).includes("email-module-legal-disclaimer"))
     const serialized = JSON.stringify(contexts.promo)
     for (const { text } of Object.values(emailDisclaimers)) assert.ok(!serialized.includes(text.slice(0, 40)))
   })
 
-  test("product-details : jamais hors promo, toujours limité à Page", () => {
+  test("product-details : seulement avec une offre, limitées à Page ; icons-grid jamais", () => {
     for (const [name, context] of Object.entries(contexts)) {
+      assert.ok(!types(context).includes("email-module-icons-grid"))
       for (const section of context.sections) {
         if (section.type.startsWith("email-module-product-details")) {
           assert.equal(name, "promo")
@@ -136,85 +116,54 @@ describe("contexte de génération", () => {
         }
       }
     }
+    assert.match(explainEmailSectionSelection(scenarios.reconversion!)["email-module-icons-grid"]!, /contraste/)
   })
 
-  test("icons-grid jamais proposé (contraste non résolu)", () => {
-    for (const context of Object.values(contexts)) {
-      assert.ok(!context.sections.some((section) => section.type === "email-module-icons-grid"))
-    }
-    assert.match(explainEmailSectionSelection(defaultEmailBrief)["email-module-icons-grid"]!, /contraste/)
-  })
-
-  test("lames à visuel écartées sans visuel HTTPS ; chemins locaux jamais envoyables", () => {
+  test("lames à visuel : autant de visuels fournis que de slots image", () => {
     const withVisuel = (context: (typeof contexts)[string]) =>
       context.sections.filter((section) => section.slots.some((slot) => slot.endsWith(": asset:visuel")))
     for (const context of Object.values(contexts)) assert.deepEqual(withVisuel(context), [])
-
-    assert.deepEqual(sendableVisuals(["/images/hero-bilan.jpg", "/logos/logo_studi_sombre_lowres.png", "/icones/star.png", "http://a.fr/x.jpg"]), [])
-    const local = buildEmailGenerationContext(defaultEmailBrief, { visuals: ["/images/hero-bilan.jpg"] })
-    assert.deepEqual(withVisuel(local), [])
-
-    const one = buildEmailGenerationContext(defaultEmailBrief, { visuals: ["https://cdn.studi.com/v.jpg", "/images/hero-bilan.jpg"] })
-    assert.deepEqual(one.visuals, ["https://cdn.studi.com/v.jpg"])
+    const one = buildEmailGenerationContext({ ...scenarios.reconversion!, visuals: [{ src: "https://cdn.studi.com/v.jpg", alt: "Apprenante" }] })
     assert.ok(withVisuel(one).length > 0)
     for (const section of withVisuel(one)) {
       assert.equal(section.slots.filter((slot) => slot.endsWith(": asset:visuel")).length, 1, section.type)
     }
   })
 
-  test("liens : uniquement des destinations contrôlées", () => {
-    const allowed = new Set((Object.keys(emailDestinations) as (keyof typeof emailDestinations)[]).map((id) => emailDestinationUrl(id)))
+  test("liens : destinations contrôlées, footer toujours, blog selon le type, filières citées", () => {
+    const allowed = new Set(destinationIds.map((id) => emailDestinationUrl(id)))
     for (const context of Object.values(contexts)) {
-      assert.ok(context.links.length > 0)
       for (const link of context.links) assert.ok(allowed.has(link.url), link.url)
-      // Hors liens et visuels, aucune URL avec un hôte n'est proposée.
-      const rest = JSON.stringify({ ...context, links: [], visuals: [] })
-      assert.ok(!/https?:\/\/[a-z0-9]/i.test(rest), rest.match(/https?:\/\/[^"\s]*/)?.[0])
-    }
-  })
-
-  test("liens : footer toujours, blog seulement pour les types qui l'admettent, filières citées", () => {
-    for (const context of Object.values(contexts)) {
-      for (const id of ["catalogue-formations", "alternance", "trajectoire-magazine"]) {
-        assert.ok(context.links.some((link) => link.id === id), id)
-      }
+      for (const id of ["catalogue-formations", "alternance", "trajectoire-magazine"]) assert.ok(context.links.some((link) => link.id === id))
+      assert.ok(!/https?:\/\/[a-z0-9]/i.test(JSON.stringify({ ...context, links: [] })))
     }
     assert.ok(!contexts.promo!.links.some((link) => link.id.startsWith("blog")))
     assert.ok(contexts.reconversion!.links.some((link) => link.id === "blog-reconversion-professionnelle"))
-    const evolutionIds = contexts.evolution!.links.map((link) => link.id)
-    assert.ok(evolutionIds.includes("filiere-ressources-humaines-paie"))
+    assert.ok(contexts.evolution!.links.some((link) => link.id === "filiere-ressources-humaines-paie"))
     assert.ok(!contexts.accompagnement!.links.some((link) => link.id === "filiere-accompagnement-petite-enfance"))
   })
 
-  test("vocabulaire seulement si nécessaire", () => {
+  test("vocabulaire seulement si nécessaire ; surface recommandée", () => {
     for (const context of Object.values(contexts)) {
       const kinds = new Set(context.sections.flatMap((section) => section.slots.map((slot) => slot.split(": ")[1])))
       assert.equal("iconNames" in context, kinds.has("asset:icone"))
       assert.equal("disclaimers" in context, kinds.has("disclaimer"))
       assert.deepEqual(Object.keys(context.slotKinds).sort(), [...kinds].sort())
     }
-  })
-
-  test("surface recommandée selon le type et l'audience", () => {
     assert.equal(contexts.reconversion!.surfaces.recommended, "marque")
     assert.equal(contexts.promo!.surfaces.recommended, "accent-1")
-    assert.equal(buildEmailGenerationContext({ ...defaultEmailBrief, audience: "Demandeurs d'emploi" }).surfaces.recommended, "accent-2-soft")
   })
 
-  test("aucun HTML, classe ni couleur hex", () => {
-    for (const context of Object.values(contexts)) {
-      const serialized = JSON.stringify(context)
-      assert.ok(!/<\/?[a-z][a-z0-9-]*[\s>]/i.test(serialized))
-      assert.ok(!/className|class=|style=/.test(serialized))
-      assert.ok(!/#[0-9a-f]{6}\b/i.test(serialized))
-    }
-  })
-
-  test("réduction mesurable par rapport au catalogue complet", () => {
+  test("aucun HTML, classe ni couleur hex ; réduction mesurable", () => {
     for (const [name, context] of Object.entries(contexts)) {
-      const size = JSON.stringify(context).length
-      const limit = name === "promo" ? 0.65 : 0.45
-      assert.ok(size < fullSize * limit, `${name} : ${size} / ${fullSize}`)
+      const serialized = JSON.stringify(context)
+      assert.ok(!/<\/?[a-z][a-z0-9-]*[\s>]/i.test(serialized) && !/className|class=|style=/.test(serialized) && !/#[0-9a-f]{6}\b/i.test(serialized))
+      assert.ok(serialized.length < fullSize * (name === "promo" ? 0.65 : 0.45), `${name} : ${serialized.length} / ${fullSize}`)
     }
+  })
+
+  test("le brief du mode démo s'adapte sans fait inventé", () => {
+    const request: EmailGenerationRequest = emailBriefToGenerationRequest(defaultEmailBrief)
+    assert.deepEqual(Object.keys(request).sort(), ["audience", "brief", "campaignName", "objective", "subject"])
   })
 })

@@ -1,22 +1,22 @@
 /**
- * Contexte compact pour une génération : brief → sélection déterministe de
- * lames candidates et de destinations → objet JSON pour le futur modèle.
+ * Contexte compact pour une génération : requête structurée → sélection
+ * déterministe de lames candidates et de destinations → objet JSON pour le
+ * futur modèle.
  *
  * Il réduit l'espace de choix, il ne compose pas l'email : le modèle choisit
- * et ordonne les lames parmi les candidates. Tout est dérivé des sources
- * internes — manifeste (slots), catalogue métier (section-catalog),
- * surfaces, icônes, disclaimers, destinations — sans liste concurrente.
- * Aucun HTML, style, texte juridique ni appel à un modèle.
+ * et ordonne les lames parmi les candidates. Une lame n'est candidate que si
+ * la requête fournit les faits que ses slots exigent (code, compte à rebours,
+ * valeur, témoignage, partenaire, visuels) : jamais de faits lus dans le
+ * texte libre du brief. Tout est dérivé des sources internes — manifeste,
+ * catalogue métier, surfaces, icônes, disclaimers, destinations.
  */
-import type { EmailBrief } from "./demo-generator"
-import { emailObjectives } from "./demo-generator"
 import {
   emailDestinations,
   emailDestinationUrl,
   type EmailDestinationId,
   filiereUsage,
 } from "./destinations"
-import { ImageAssetSlotSchema } from "./schemas"
+import type { EmailGenerationRequest, EmailType } from "./generation-request"
 import {
   emailEditorialGuidance,
   emailStructuralRules,
@@ -25,26 +25,10 @@ import {
 } from "./section-catalog"
 import type { EmailSurface } from "./surfaces"
 
-/** Types d'email des sources (`experience-generation.md` §4). */
-export const emailTypes = [
-  "promo",
-  "lifecycle-debut",
-  "lifecycle-fin",
-  "newsletter",
-  "transactionnel",
-] as const
-
-export type EmailType = (typeof emailTypes)[number]
-
-export type EmailGenerationContextOptions = {
-  /** Type d'email s'il est connu ; sinon email éditorial générique. */
-  emailType?: EmailType
-  /** Visuels fournis par le brief : seules les URLs HTTPS envoyables comptent. */
-  visuals?: readonly string[]
-}
+export { emailTypes, type EmailType } from "./generation-request"
 
 /* -------------------------------------------------------------------------- */
-/* Lecture du brief                                                           */
+/* Lecture de la requête                                                      */
 /* -------------------------------------------------------------------------- */
 
 function normalize(text: string) {
@@ -56,81 +40,82 @@ function mentions(text: string, keywords: readonly string[]) {
   return keywords.some((keyword) => normalized.includes(normalize(keyword)))
 }
 
-/** Cas qui appellent un disclaimer (bibliothèque, lame legal-disclaimer). */
-const disclaimerCues = ["financ", "cpf", "100 %", "100%", "bourse", "rembours", "salaire", "audirep", "remise", "promo"]
+/** Indices non factuels, lus dans le texte : intention, pas donnée. */
 const empathyCues = ["demandeur", "sans emploi", "chomage", "recherche d'emploi"]
 const diagnosticCues = ["quiz", "test", "diagnostic", "niveau", "bilan"]
-const partnerCues = ["partenaire", "ecole partenaire"]
-const codeCues = ["code"]
-const deadlineCues = ["date de fin", "jusqu'au", "echeance", "prend fin", "jours", "compte a rebours"]
 const choiceCues = ["choix", "choisir", "options", "au choix"]
 
-/** Visuels réellement envoyables : le contrat ImageAssetSlot (HTTPS). */
-export function sendableVisuals(visuals: readonly string[] = []) {
-  return visuals.filter((src) => ImageAssetSlotSchema.safeParse({ src, alt: "" }).success)
+/** Faits disponibles, tous issus des champs structurés de la requête. */
+type Available = {
+  text: string
+  emailType: EmailType | undefined
+  visualCount: number
+  code: boolean
+  countdown: boolean
+  figure: boolean
+  offer: boolean
+  testimonial: boolean
+  partner: boolean
+  disclaimer: boolean
+}
+
+function readRequest(request: EmailGenerationRequest): Available {
+  const facts = request.facts ?? []
+  return {
+    text: `${request.campaignName} ${request.subject ?? ""} ${request.brief} ${request.audience}`,
+    emailType: request.emailType,
+    visualCount: request.visuals?.length ?? 0,
+    code: Boolean(request.offer?.code),
+    countdown: Boolean(request.offer?.countdown),
+    figure: Boolean(request.offer?.value) || facts.length > 0,
+    offer: Boolean(request.offer),
+    testimonial: Boolean(request.testimonial),
+    partner: Boolean(request.partner),
+    disclaimer: Boolean(request.offer) || facts.some((fact) => fact.disclaimer),
+  }
 }
 
 /* -------------------------------------------------------------------------- */
 /* Sélection des lames                                                        */
 /* -------------------------------------------------------------------------- */
 
-type Reading = {
-  text: string
-  emailType: EmailType | undefined
-  /** Nombre de visuels HTTPS envoyables fournis. */
-  visualCount: number
-}
-
-const hasSlot = (section: EmailPromptSection, test: (name: string, kind: string) => boolean) =>
-  section.slots.some((slot) => {
-    const [name = "", kind = ""] = slot.replace("?", "").split(": ")
-    return test(name, kind)
-  })
+const slotNames = (section: EmailPromptSection) =>
+  section.slots.map((slot) => slot.replace("?", "").split(": ")[0] ?? "")
 
 /**
- * Raison d'écarter une lame pour ce brief, ou `null` si elle est candidate.
- * Les critères viennent des slots du manifeste et des limites du catalogue.
+ * Raison d'écarter une lame pour cette requête, ou `null` si elle est
+ * candidate. Critères : données exigées par ses slots (manifeste), limites
+ * du catalogue métier.
  */
-function exclusionReason(section: EmailPromptSection, reading: Reading): string | null {
-  const promo = reading.emailType === "promo"
+function exclusionReason(section: EmailPromptSection, available: Available): string | null {
   const type = section.type
+  const names = slotNames(section)
+  const has = (test: (name: string) => boolean) => names.some(test)
 
   if (type === "email-module-legal-disclaimer") {
-    return promo || mentions(reading.text, disclaimerCues) ? null : "aucun cas de disclaimer dans le brief"
+    return available.disclaimer ? null : "aucun fait ni offre n'appelle de disclaimer"
   }
   if (type === "email-module-icons-grid") return "contraste des icônes non résolu"
+
   const visualSlots = section.slots.filter((slot) => slot.endsWith(": asset:visuel")).length
-  if (visualSlots > reading.visualCount) {
-    return `${visualSlots} visuel(s) HTTPS requis, ${reading.visualCount} fourni(s)`
+  if (visualSlots > available.visualCount) {
+    return `${visualSlots} visuel(s) HTTPS requis, ${available.visualCount} fourni(s)`
   }
-  if (hasSlot(section, (name) => name.startsWith("temoignage"))) return "témoignage validé requis"
-  if (hasSlot(section, (name) => /^produit-\d+-titre$/.test(name))) return "intitulés de formation exacts requis"
-  if (hasSlot(section, (name) => name === "partenaire") && !mentions(reading.text, partnerCues)) {
-    return "aucun partenaire dans le brief"
-  }
-  const needsCode = hasSlot(section, (name) => name.startsWith("code-promo"))
-  const needsDeadline = hasSlot(section, (name) => name.startsWith("compteur"))
-  const needsFigure = hasSlot(section, (name) => name === "valeur-cle")
-  if (!promo && (needsCode || needsDeadline || needsFigure || section.onlySurfaces)) {
-    return "réservée à un email promo"
-  }
-  // La lame exige une donnée que seul le brief peut fournir.
-  if (needsCode && !mentions(reading.text, codeCues)) return "aucun code promo dans le brief"
-  if (needsDeadline && !mentions(reading.text, deadlineCues)) return "aucune échéance dans le brief"
-  if (needsFigure && !/\d/.test(reading.text)) return "aucune valeur chiffrée dans le brief"
-  if (section.family === "Divider" && !mentions(reading.text, choiceCues)) return "aucun choix entre deux options"
+  if (has((name) => name.startsWith("temoignage")) && !available.testimonial) return "témoignage validé requis"
+  if (has((name) => /^produit-\d+-titre$/.test(name))) return "intitulés de formation exacts requis"
+  if (has((name) => name === "partenaire") && !available.partner) return "partenaire requis"
+  if (has((name) => name.startsWith("code-promo")) && !available.code) return "code promo requis"
+  if (has((name) => name.startsWith("compteur")) && !available.countdown) return "compte à rebours requis"
+  if (has((name) => name === "valeur-cle") && !available.figure) return "valeur ou fait validé requis"
+  if (section.onlySurfaces && !available.offer) return "détail d'une offre requis"
+
+  if (section.family === "Divider" && !mentions(available.text, choiceCues)) return "aucun choix entre deux options"
+  const promo = available.emailType === "promo"
   // Catalogue : le header newsletter s'évite quand la campagne a un libellé.
   if (type === "email-module-header-newsletter" && promo) return "promo : header de campagne"
-  if (
-    (type === "email-module-diagnostic-progress-list" || type === "email-module-hero-diagnostic-quiz") &&
-    promo &&
-    !mentions(reading.text, diagnosticCues)
-  ) {
-    return "promo sans quiz ni diagnostic"
-  }
-  if (type === "email-module-diagnostic-progress-list" && !mentions(reading.text, diagnosticCues)) {
-    return "aucun quiz ou diagnostic dans le brief"
-  }
+  const diagnostic = mentions(available.text, diagnosticCues)
+  if (type === "email-module-diagnostic-progress-list" && !diagnostic) return "aucun quiz ou diagnostic"
+  if (type === "email-module-hero-diagnostic-quiz" && promo && !diagnostic) return "promo sans quiz ni diagnostic"
   return null
 }
 
@@ -141,7 +126,7 @@ function exclusionReason(section: EmailPromptSection, reading: Reading): string 
 /** Liens du footer (libellés du template) : toujours proposés. */
 const footerDestinations: EmailDestinationId[] = ["catalogue-formations", "alternance", "trajectoire-magazine"]
 
-const objectiveDestinations: Record<EmailBrief["objective"], EmailDestinationId[]> = {
+const objectiveDestinations: Record<EmailGenerationRequest["objective"], EmailDestinationId[]> = {
   "decouverte-formations": ["metiers", "diplomes", "parcours-decouverte"],
   accompagnement: ["accompagnement", "methode", "coaching-carriere"],
   "evolution-carriere": ["coaching-carriere", "competences-360", "certificats"],
@@ -171,14 +156,14 @@ function citedFilieres(text: string): EmailDestinationId[] {
   })
 }
 
-function selectDestinations(brief: EmailBrief, reading: Reading): EmailDestinationId[] {
-  const ids: EmailDestinationId[] = [...footerDestinations, ...objectiveDestinations[brief.objective]]
-  if (mentions(reading.text, ["financ", "cpf"]) || mentions(brief.audience, empathyCues)) ids.push("financement")
-  if (mentions(reading.text, ["cpf"])) ids.push("cpf-formations-eligibles")
-  if (allowsBlog(reading.emailType)) {
-    ids.push(mentions(reading.text, ["reconversion"]) ? "blog-reconversion-professionnelle" : "blog-les-temoignages")
+function selectDestinations(request: EmailGenerationRequest, available: Available): EmailDestinationId[] {
+  const ids: EmailDestinationId[] = [...footerDestinations, ...objectiveDestinations[request.objective]]
+  if (mentions(available.text, ["financ", "cpf"]) || mentions(request.audience, empathyCues)) ids.push("financement")
+  if (mentions(available.text, ["cpf"])) ids.push("cpf-formations-eligibles")
+  if (allowsBlog(available.emailType)) {
+    ids.push(mentions(available.text, ["reconversion"]) ? "blog-reconversion-professionnelle" : "blog-les-temoignages")
   }
-  ids.push(...citedFilieres(`${brief.brief} ${brief.audience}`))
+  ids.push(...citedFilieres(`${request.brief} ${request.audience}`))
   return [...new Set(ids)]
 }
 
@@ -197,74 +182,43 @@ function recommendedSurface(emailType: EmailType | undefined, audience: string):
 export type EmailGenerationContext = ReturnType<typeof buildEmailGenerationContext>
 
 /**
- * Contexte minimal et sérialisable d'une génération. Déterministe : mêmes
- * entrées, même contexte. Les listes de vocabulaire (icônes, disclaimers,
- * types de slots) n'apparaissent que si une lame candidate en a besoin.
+ * Contexte minimal et sérialisable d'une génération, sans les données de la
+ * requête (transmises à part par le prompt). Déterministe : même requête,
+ * même contexte. Icônes, disclaimers et types de slots n'apparaissent que si
+ * une lame candidate les utilise.
  */
-export function buildEmailGenerationContext(
-  brief: EmailBrief,
-  { emailType, visuals }: EmailGenerationContextOptions = {}
-) {
+export function buildEmailGenerationContext(request: EmailGenerationRequest) {
   const catalog = getEmailSectionCatalogForPrompt()
-  const visualUrls = sendableVisuals(visuals)
-  const reading: Reading = {
-    text: `${brief.campaignName} ${brief.subject} ${brief.brief} ${brief.audience}`,
-    emailType,
-    visualCount: visualUrls.length,
-  }
+  const available = readRequest(request)
 
-  const sections = catalog.sections.filter((section) => exclusionReason(section, reading) === null)
+  const sections = catalog.sections.filter((section) => exclusionReason(section, available) === null)
   const kinds = new Set(sections.flatMap((section) => section.slots.map((slot) => slot.split(": ")[1]!)))
-  const needsDisclaimers = kinds.has("disclaimer")
 
   return {
-    brief: {
-      campaignName: brief.campaignName,
-      subject: brief.subject,
-      brief: brief.brief,
-      audience: brief.audience,
-      objective: emailObjectives.find((objective) => objective.value === brief.objective)!.label,
-      ...(emailType ? { emailType } : {}),
-    },
     rules: { structural: emailStructuralRules, editorial: emailEditorialGuidance },
     surfaces: {
       allowed: catalog.surfaces,
       neutral: catalog.neutralSurface,
-      recommended: recommendedSurface(emailType, brief.audience),
+      recommended: recommendedSurface(request.emailType, request.audience),
     },
-    slotKinds: Object.fromEntries(
-      Object.entries(catalog.slotKinds).filter(([kind]) => kinds.has(kind))
-    ),
+    slotKinds: Object.fromEntries(Object.entries(catalog.slotKinds).filter(([kind]) => kinds.has(kind))),
     sections,
-    links: selectDestinations(brief, reading).map((id) => {
+    links: selectDestinations(request, available).map((id) => {
       const destination = emailDestinations[id]
-      return {
-        id,
-        label: destination.label,
-        url: emailDestinationUrl(id),
-        usage: destination.usage ?? filiereUsage,
-      }
+      return { id, label: destination.label, url: emailDestinationUrl(id), usage: destination.usage ?? filiereUsage }
     }),
-    ...(kinds.has("asset:visuel") ? { visuals: visualUrls } : {}),
     ...(kinds.has("asset:icone") ? { iconNames: catalog.iconNames } : {}),
-    ...(needsDisclaimers ? { disclaimers: catalog.disclaimers } : {}),
+    ...(kinds.has("disclaimer") ? { disclaimers: catalog.disclaimers } : {}),
   }
 }
 
 /** Raisons d'exclusion, pour le diagnostic et les tests (pas pour le prompt). */
-export function explainEmailSectionSelection(
-  brief: EmailBrief,
-  { emailType, visuals }: EmailGenerationContextOptions = {}
-) {
-  const reading: Reading = {
-    text: `${brief.campaignName} ${brief.subject} ${brief.brief} ${brief.audience}`,
-    emailType,
-    visualCount: sendableVisuals(visuals).length,
-  }
+export function explainEmailSectionSelection(request: EmailGenerationRequest) {
+  const available = readRequest(request)
   return Object.fromEntries(
     getEmailSectionCatalogForPrompt().sections.map((section) => [
       section.type,
-      exclusionReason(section, reading) ?? "candidate",
+      exclusionReason(section, available) ?? "candidate",
     ])
   )
 }

@@ -10,6 +10,14 @@
  *   (guidelines §6.4).
  * - Suivi : la query `?[UTM À DÉFINIR — CRM]`, placeholder documenté
  *   (`sources-studi.md` §6), déjà accepté par le contrat EmailHref.
+ *
+ * Provenance vérifiée le 2026-09-29 : chaque chemin figure mot pour mot dans
+ * la source indiquée. Les sources du projet Email étant hors du repo, les
+ * tests contrôlent ce catalogue versionné (forme, hôte, UTM, provenance
+ * déclarée), pas les fichiers source.
+ *
+ * Filières : `sources-studi.md` annonce « 17 pages de filière », mais sa
+ * table en liste 34. Les 34 chemins sont repris : chacun est documenté.
  */
 import { emailHrefPlaceholders } from "./system"
 import type { EmailHttpsUrl } from "./types"
