@@ -6,7 +6,8 @@
 import assert from "node:assert/strict"
 import { describe, test } from "node:test"
 
-import { defaultEmailBrief, generateDemoEmail, toEmailId, type EmailBrief } from "../demo-generator"
+import { defaultEmailBrief, emailDemoPresets, generateDemoEmail, toEmailId, type EmailBrief } from "../demo-generator"
+import { emailDestinations, emailDestinationUrl } from "../destinations"
 import { runEmailGeneration } from "../generation"
 import { safeParseEmailConfig } from "../schemas"
 import { internalAttribute } from "./fixtures"
@@ -22,56 +23,95 @@ const slotText = (brief: EmailBrief, blockId: string, slot: string) => {
   return JSON.stringify((block?.slots as Record<string, unknown>)[slot])
 }
 
-describe("mode démo — EmailConfig", () => {
-  test("brief par défaut → config valide de 6 lames, footer en dernier", () => {
-    const config = generateDemoEmail(defaultEmailBrief)
-    assert.ok(safeParseEmailConfig(config).success)
-    assert.deepEqual(config.blocks.map((block) => block.type), [
-      "email-module-preheader",
-      "email-module-header-newsletter",
-      "email-module-hero-diagnostic-quiz",
-      "email-module-numbered-list",
-      "email-module-text-only",
-      "email-module-footer-compact-legal",
-    ])
-    assert.equal(config.subject, defaultEmailBrief.subject)
-    assert.equal(config.id, "reconversion-professionnelle")
+const presets = Object.fromEntries(emailDemoPresets.map((preset) => [preset.id, preset.brief])) as Record<string, EmailBrief>
+const types = (brief: EmailBrief) => generateDemoEmail(brief).blocks.map((block) => block.type)
+const allowedUrls = new Set<string>((Object.keys(emailDestinations) as (keyof typeof emailDestinations)[]).map((id) => emailDestinationUrl(id)))
+const zoneOf = (brief: EmailBrief) =>
+  generateDemoEmail(brief).blocks.flatMap((block) => ("surface" in block && block.surface ? [`${block.id}:${block.surface}`] : []))
+
+describe("mode démo — scénarios", () => {
+  test("trois exemples, un par objectif ; le premier est le brief initial", () => {
+    assert.deepEqual(emailDemoPresets.map((preset) => preset.brief.objective), ["decouverte-formations", "accompagnement", "evolution-carriere"])
+    assert.deepEqual(emailDemoPresets[0].brief, defaultEmailBrief)
+  })
+
+  test("chaque scénario : EmailConfig valide, 5 à 7 lames, footer unique et dernier", () => {
+    for (const [name, brief] of Object.entries(presets)) {
+      const config = generateDemoEmail(brief)
+      const parsed = safeParseEmailConfig(config)
+      assert.ok(parsed.success, `${name} : ${parsed.success ? "" : JSON.stringify(parsed.error.issues)}`)
+      assert.ok(config.blocks.length >= 5 && config.blocks.length <= 7, name)
+      assert.equal(config.blocks.at(-1)!.type, "email-module-footer-compact-legal")
+      assert.equal(config.blocks.filter((block) => block.type === "email-module-footer-compact-legal").length, 1)
+      assert.equal(config.subject, brief.subject)
+    }
+  })
+
+  test("trois compositions, zones colorées et préheaders distincts", () => {
+    const compositions = Object.values(presets).map((brief) => types(brief).join(" "))
+    assert.equal(new Set(compositions).size, 3)
+    assert.deepEqual(Object.values(presets).map(zoneOf), [["hero:marque"], ["encart:marque"], ["hero:encre"]])
+    assert.equal(new Set(Object.values(presets).map((brief) => generateDemoEmail(brief).preheader)).size, 3)
+    assert.ok(!Object.values(presets).some((brief) => types(brief).includes("email-module-icons-grid")))
+  })
+
+  test("l'objectif choisit le scénario, avant les mots du brief", () => {
+    const accompagnement = { ...presets.accompagnement!, brief: "Parler de reconversion et d'évolution de carrière." }
+    assert.deepEqual(types(accompagnement), types(presets.accompagnement!))
+    assert.match(slotText(accompagnement, "hero", "cta-1"), /\/fr\/accompagnement/)
+    assert.match(slotText(presets.evolution!, "hero", "cta-1"), /\/fr\/coaching-carriere/)
+    assert.match(slotText(defaultEmailBrief, "hero", "cta-1"), /\/fr\/formations/)
+  })
+
+  test("le brief choisit la variante d'accroche, dans le scénario", () => {
+    assert.match(slotText(defaultEmailBrief, "hero", "titre-principal"), /Changer de métier/)
+    assert.match(slotText({ ...defaultEmailBrief, brief: "Aider à reprendre des études." }, "hero", "titre-principal"), /Reprendre une formation/)
+    assert.match(slotText({ ...presets.accompagnement!, brief: "Présenter la méthode à distance." }, "hero", "titre-principal"), /méthode/)
+  })
+
+  test("données saisies reprises : campagne, objet, audience ; zone d'empathie", () => {
+    const custom = { ...presets.evolution!, campaignName: "Cap sur 2027", subject: "Votre prochaine étape", audience: "Managers en poste" }
+    const config = generateDemoEmail(custom)
+    assert.equal(config.subject, "Votre prochaine étape")
+    assert.equal(config.id, "cap-sur-2027")
+    assert.match(slotText(custom, "header", "label"), /Cap sur 2027/)
+    assert.match(slotText(custom, "leviers", "sous-titre"), /Managers en poste/)
+    assert.deepEqual(zoneOf({ ...presets.accompagnement!, audience: "Demandeurs d'emploi" }), ["encart:accent-2-soft"])
   })
 
   test("déterministe : même brief, même HTML", () => {
-    assert.equal(success(defaultEmailBrief).html, success(defaultEmailBrief).html)
+    for (const brief of Object.values(presets)) assert.equal(success(brief).html, success(brief).html)
   })
 
-  test("l'objectif choisit le CTA et la page de destination", () => {
-    assert.match(slotText(defaultEmailBrief, "hero", "cta-1"), /Découvrir les formations.*\/fr\/formations/)
-    assert.match(slotText({ ...defaultEmailBrief, objective: "accompagnement" }, "hero", "cta-1"), /\/fr\/accompagnement/)
-    assert.match(slotText({ ...defaultEmailBrief, objective: "evolution-carriere" }, "hero", "cta-1"), /\/fr\/coaching-carriere/)
-    assert.match(slotText({ ...defaultEmailBrief, objective: "evolution-carriere" }, "cloture", "titre-section"), /Préparez la suite/)
-  })
-
-  test("l'audience est reprise et choisit la surface du hero", () => {
-    assert.match(slotText(defaultEmailBrief, "etapes", "sous-titre"), /Professionnels en poste/)
-    const heroSurface = (brief: EmailBrief) => {
-      const hero = generateDemoEmail(brief).blocks.find((block) => block.id === "hero")
-      return hero && "surface" in hero ? hero.surface : undefined
+  test("uniquement des destinations contrôlées", () => {
+    for (const brief of Object.values(presets)) {
+      for (const [, href] of JSON.stringify(generateDemoEmail(brief)).matchAll(/"href":"([^"]+)"/g)) {
+        assert.ok(allowedUrls.has(href!), href)
+      }
     }
-    assert.equal(heroSurface(defaultEmailBrief), "marque")
-    assert.equal(heroSurface({ ...defaultEmailBrief, audience: "Demandeurs d'emploi" }), "accent-2-soft")
   })
 
-  test("le brief choisit le thème du hero", () => {
-    assert.match(slotText(defaultEmailBrief, "hero", "titre-principal"), /Changer de métier/)
-    assert.match(slotText({ ...defaultEmailBrief, brief: "Accompagner une évolution de carrière" }, "hero", "titre-principal"), /évoluer votre carrière/)
+  test("aucun fait inventé : ni chiffre, prix, pourcentage, date ou code", () => {
+    for (const [name, brief] of Object.entries(presets)) {
+      const values = generateDemoEmail(brief).blocks.flatMap((block) =>
+        Object.values(block.slots as Record<string, { text?: string; label?: string }>)
+          .flatMap((value) => [value.text, value.label])
+          .filter((value): value is string => typeof value === "string")
+      )
+      assert.ok(values.length > 8, name)
+      // « Compétences 360 » est un nom de service des sources, pas un chiffre.
+      for (const value of values) assert.ok(!/\d|€|%/.test(value.replace("Compétences 360", "")), `${name} : ${value}`)
+      assert.ok(!/garanti|gratuit|coach dédié|personnalisé|100 %/i.test(values.join(" ")), name)
+    }
   })
 
-  test("aucun chiffre, prix ni pourcentage inventé dans le contenu", () => {
-    const values = generateDemoEmail(defaultEmailBrief).blocks.flatMap((block) =>
-      Object.values(block.slots as Record<string, { text?: string; label?: string }>)
-        .flatMap((value) => [value.text, value.label])
-        .filter((text): text is string => typeof text === "string")
-    )
-    assert.ok(values.length > 10)
-    for (const text of values) assert.ok(!/\d|€|%/.test(text), text)
+  test("HTML renderable et aperçu transformable pour chaque scénario", () => {
+    for (const brief of Object.values(presets)) {
+      const result = success(brief)
+      assert.ok(result.html.startsWith("<!DOCTYPE html>") && !internalAttribute.test(result.html))
+      assert.ok(result.previewHtml.includes("/logos/logo_studi_sombre_lowres.png"))
+      assert.ok(!/\shref=/.test(result.previewHtml))
+    }
   })
 
   test("identifiant stable dérivé du nom de campagne", () => {

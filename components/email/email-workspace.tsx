@@ -16,6 +16,7 @@ type EmailWorkspaceProps = {
   initialBrief: EmailBrief
   initialResult: EmailGenerationResult
   objectives: readonly { value: EmailBrief["objective"]; label: string }[]
+  presets: readonly { id: string; label: string; brief: EmailBrief }[]
 }
 
 const networkError: EmailGenerationError = {
@@ -38,7 +39,7 @@ function isGenerationResult(value: unknown): value is EmailGenerationResult {
  * Seule partie client du générateur d'emails : état du brief, appel de
  * POST /api/generate-email, et aperçu du HTML rendu côté serveur.
  */
-export function EmailWorkspace({ initialBrief, initialResult, objectives }: EmailWorkspaceProps) {
+export function EmailWorkspace({ initialBrief, initialResult, objectives, presets }: EmailWorkspaceProps) {
   const [brief, setBrief] = useState(initialBrief)
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<EmailGenerationError | null>(
@@ -84,6 +85,7 @@ export function EmailWorkspace({ initialBrief, initialResult, objectives }: Emai
         <EmailBriefPanel
           brief={brief}
           objectives={objectives}
+          presets={presets}
           error={error}
           pending={pending}
           onBriefChange={setBrief}

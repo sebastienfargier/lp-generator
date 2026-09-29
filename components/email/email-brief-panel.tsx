@@ -20,6 +20,8 @@ import type { EmailGenerationError } from "@/lib/email/generation"
 type EmailBriefPanelProps = {
   brief: EmailBrief
   objectives: readonly { value: EmailBrief["objective"]; label: string }[]
+  /** Briefs d'exemple : un clic préremplit le formulaire. */
+  presets: readonly { id: string; label: string; brief: EmailBrief }[]
   /** Erreur de la dernière génération ; l'aperçu précédent reste affiché. */
   error: EmailGenerationError | null
   pending: boolean
@@ -30,6 +32,7 @@ type EmailBriefPanelProps = {
 export function EmailBriefPanel({
   brief,
   objectives,
+  presets,
   error,
   pending,
   onBriefChange,
@@ -55,6 +58,26 @@ export function EmailBriefPanel({
           Mode démo — email assemblé localement à partir des lames, sans IA.
         </p>
       </header>
+
+      <div role="group" aria-label="Exemples de brief" className="flex flex-wrap items-center gap-2">
+        <span className="text-caption text-muted-foreground">Exemples</span>
+        {presets.map((preset) => {
+          const active = JSON.stringify(preset.brief) === JSON.stringify(brief)
+          return (
+            <Button
+              key={preset.id}
+              type="button"
+              size="xs"
+              variant={active ? "secondary" : "outline"}
+              aria-pressed={active}
+              disabled={pending}
+              onClick={() => onBriefChange({ ...preset.brief })}
+            >
+              {preset.label}
+            </Button>
+          )
+        })}
+      </div>
 
       <FieldGroup className="gap-4">
         <Field>
