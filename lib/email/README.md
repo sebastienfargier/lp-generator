@@ -21,6 +21,9 @@ Pas encore d'IA.
 | `surfaces.ts` | les 7 surfaces fermées et les invariants de `recettes-couleur.md` |
 | `schemas.ts` | validation Zod d'EmailConfig, dérivée du manifeste (`parseEmailConfig`) |
 | `renderer.ts` | rendu HTML : `renderEmail`, `renderEmailFromUnknown` (serveur, hors `index.ts`) |
+| `section-catalog.ts` | catalogue métier des 36 lames et règles globales pour le futur prompt (`getEmailSectionCatalogForPrompt`) |
+| `destinations.ts` | 60 destinations Studi contrôlées, chacune avec sa source (`emailDestinationUrl`) |
+| `generation-context.ts` | contexte compact d'une génération : lames candidates, liens, vocabulaire (`buildEmailGenerationContext`) |
 | `demo-generator.ts` | mode démo : brief validé → EmailConfig déterministe, sans IA |
 | `generation.ts` | serveur : brief → démo → Zod → `renderEmail` (`runEmailGeneration`) |
 | `socle-email.html` | enveloppe du document, copie à l'identique du socle du projet Email |
@@ -363,6 +366,58 @@ la démo, en attendant une décision sur le design ou les assets.
 Next.js trace automatiquement `templates/` et `socle-email.html` pour la
 page et la route (vérifié dans les `.nft.json` du build). Il reste à tester
 sur Vercel.
+
+## Catalogue pour le prompt
+
+`section-catalog.ts` décrit chaque lame pour le modèle : rôle, cas d'usage,
+cas à éviter, consignes de contenu, limites et, si besoin, restriction de
+surface. Le fichier ne contient aucune donnée technique :
+`getEmailSectionCatalogForPrompt()` y ajoute depuis le manifeste la famille,
+les slots (avec leur type et les optionnels) et le mode de surface. Il
+fournit aussi le vocabulaire contrôlé : surfaces, icônes, identifiants et
+intitulés de disclaimers, sans leurs textes juridiques.
+
+Deux listes de règles sont séparées :
+- les contraintes garanties par Zod (`emailStructuralRules`) ;
+- les recommandations éditoriales des sources (`emailEditorialGuidance`),
+  que Zod ne vérifie pas.
+
+Les 36 entrées sont exhaustives dès le typage (`satisfies` sur
+`EmailBlockType`). La sortie compacte pèse environ 25 000 caractères.
+
+## Contexte compact
+
+`buildEmailGenerationContext(brief, { emailType?, visuals? })` prépare ce
+qu'un futur modèle doit recevoir pour une génération. Il réduit l'espace de
+choix sans composer l'email : le catalogue complet reste la source.
+
+- **Lames candidates.** Une lame est écartée si le brief ne fournit pas la
+  donnée que ses slots exigent :
+  - un visuel HTTPS par slot image ;
+  - un code, une échéance ou une valeur chiffrée, uniquement en promo ;
+  - un témoignage validé ;
+  - des intitulés de formation exacts ;
+  - un partenaire ;
+  - un quiz.
+
+  Sont aussi écartées les lames dont le catalogue signale une limite :
+  `icons-grid` pour son contraste, et `product-details` hors promo. Footer,
+  headers et contenu restent toujours disponibles ; les mentions légales ne
+  le sont que si le brief les appelle.
+- **Destinations.** Le contexte propose les liens du footer, ceux de
+  l'objectif et les filières citées par le brief. Le blog n'est proposé que
+  pour les types qui l'admettent (`copy-email.md` §4).
+- **Vocabulaire.** La liste des icônes, celle des disclaimers et les types
+  de slots ne sont envoyés que si une lame candidate les utilise. Les
+  disclaimers ne donnent que leur id et leur intitulé.
+
+Les chemins locaux (`/images`, `/logos`, `/icones`) ne sont jamais des
+visuels envoyables. Le contexte fait 9 000 à 15 000 caractères, contre
+25 400 pour le catalogue complet.
+
+`destinations.ts` recopie les chemins de `sources-studi.md` (§2, §4 bis, §5),
+avec l'hôte des guidelines (§6.4) et le placeholder UTM. Les destinations
+sans URL établie sont listées à part et ne sont pas proposables.
 
 ## Tests
 
