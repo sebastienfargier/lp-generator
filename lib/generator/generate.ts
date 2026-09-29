@@ -1,7 +1,11 @@
 import { z } from "zod"
 
-import { demoLandingPage } from "@/lib/landing/demo"
+import {
+  generateDemoLandingPage,
+  type DemoScenario,
+} from "@/lib/landing/demo-generator"
 import { safeParseLandingPage } from "@/lib/landing/schemas"
+import type { LandingPageConfig } from "@/lib/landing/types"
 
 /* -------------------------------------------------------------------------- */
 /* Brief                                                                      */
@@ -14,16 +18,13 @@ export const generatorObjectives = [
   { value: "contact", label: "Prise de contact" },
 ] as const
 
+const required = (message: string) => z.string().regex(/\S/, message)
+
 export const GeneratorBriefSchema = z.strictObject({
-  projectName: z.string().regex(/\S/, "Le nom du projet est requis."),
-  brief: z.string().regex(/\S/, "Le brief est requis."),
-  audience: z.string(),
-  objective: z.enum([
-    "discover-trainings",
-    "lead-generation",
-    "documentation-download",
-    "contact",
-  ]),
+  projectName: required("Le nom du projet est requis."),
+  brief: required("Le brief est requis."),
+  audience: required("L'audience est requise."),
+  objective: required("L'objectif est requis."),
 })
 
 export type GeneratorBrief = z.infer<typeof GeneratorBriefSchema>
@@ -37,23 +38,26 @@ export const defaultGeneratorBrief: GeneratorBrief = {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Génération                                                                 */
+/* Génération (mode démo)                                                     */
 /* -------------------------------------------------------------------------- */
 
 export type GenerationIssue = { path: string; message: string }
 
-export type GenerationResult =
-  | { status: "success"; revision: string; sectionCount: number }
-  | { status: "error"; title: string; issues: GenerationIssue[] }
-
-/**
- * Génération simulée : renvoie la démo telle qu'une source externe la
- * fournirait (`unknown`), pour emprunter le même chemin que les futures
- * réponses du modèle. Le brief sera utilisé quand l'API sera branchée.
- */
-export function simulateLandingPageGeneration(): unknown {
-  return structuredClone(demoLandingPage)
+export type GenerationSuccess = {
+  status: "success"
+  scenario: DemoScenario
+  config: LandingPageConfig
+  /** Document d'aperçu (iframe) correspondant à cette génération. */
+  previewUrl: string
 }
+
+export type GenerationError = {
+  status: "error"
+  title: string
+  issues: GenerationIssue[]
+}
+
+export type GenerationResult = GenerationSuccess | GenerationError
 
 function toIssues(error: z.ZodError): GenerationIssue[] {
   return error.issues.map((issue) => ({
@@ -62,7 +66,32 @@ function toIssues(error: z.ZodError): GenerationIssue[] {
   }))
 }
 
-/** Brief → génération → validation Zod. Ne lève jamais : renvoie un résultat. */
+/**
+ * URL du document d'aperçu. Le moteur de démo étant déterministe, le brief
+ * suffit à reproduire exactement la config côté serveur (aucun stockage) ;
+ * `revision` force le rechargement de l'iframe à chaque génération.
+ */
+export function buildPreviewUrl(brief: GeneratorBrief, revision: string) {
+  const params = new URLSearchParams({ ...brief, revision })
+  return `/generator/preview?${params.toString()}`
+}
+
+/** Brief validé → génération démo → validation Zod de la config. */
+export function generateValidatedPage(
+  brief: GeneratorBrief
+):
+  | { success: true; scenario: DemoScenario; config: LandingPageConfig }
+  | { success: false; issues: GenerationIssue[] } {
+  const { scenario, config } = generateDemoLandingPage(brief)
+  // Même chemin que les futures sorties du modèle : la config est une donnée
+  // externe tant qu'elle n'a pas passé LandingPageSchema.
+  const page = safeParseLandingPage(config)
+  return page.success
+    ? { success: true, scenario, config: page.data }
+    : { success: false, issues: toIssues(page.error) }
+}
+
+/** Point d'entrée de /api/generate : ne lève jamais, renvoie un résultat. */
 export function runGeneration(input: unknown): GenerationResult {
   const brief = GeneratorBriefSchema.safeParse(input)
   if (!brief.success) {
@@ -73,18 +102,19 @@ export function runGeneration(input: unknown): GenerationResult {
     }
   }
 
-  const page = safeParseLandingPage(simulateLandingPageGeneration())
+  const page = generateValidatedPage(brief.data)
   if (!page.success) {
     return {
       status: "error",
       title: "Configuration invalide",
-      issues: toIssues(page.error),
+      issues: page.issues,
     }
   }
 
   return {
     status: "success",
-    revision: crypto.randomUUID(),
-    sectionCount: page.data.sections.length,
+    scenario: page.scenario,
+    config: page.config,
+    previewUrl: buildPreviewUrl(brief.data, crypto.randomUUID()),
   }
 }

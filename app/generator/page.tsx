@@ -13,14 +13,14 @@ export const metadata: Metadata = {
 }
 
 export default function GeneratorPage() {
-  // L'aperçu initial emprunte le même chemin que les générations suivantes.
+  // Aperçu initial : même chemin (brief → génération démo → Zod) que /api/generate.
   const initialResult = runGeneration(defaultGeneratorBrief)
 
   return (
     <div className="flex min-h-dvh flex-col bg-background lg:h-dvh">
       <header className="flex h-12 shrink-0 items-center gap-3 border-b px-4">
         <h1 className="text-body font-semibold">Landing Page Generator</h1>
-        <Badge variant="secondary">Local</Badge>
+        <Badge variant="secondary">Demo</Badge>
       </header>
       <GeneratorWorkspace
         initialBrief={defaultGeneratorBrief}

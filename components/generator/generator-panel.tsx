@@ -19,14 +19,15 @@ import {
 import { Spinner } from "@/components/ui/spinner"
 import { Textarea } from "@/components/ui/textarea"
 import type {
-  GenerationResult,
+  GenerationError,
   GeneratorBrief,
 } from "@/lib/generator/generate"
 
 type GeneratorPanelProps = {
   brief: GeneratorBrief
-  objectives: readonly { value: GeneratorBrief["objective"]; label: string }[]
-  result: GenerationResult
+  objectives: readonly { value: string; label: string }[]
+  /** Erreur de la dernière génération ; l'aperçu précédent reste affiché. */
+  error: GenerationError | null
   pending: boolean
   onBriefChange: (brief: GeneratorBrief) => void
   onGenerate: () => void
@@ -35,7 +36,7 @@ type GeneratorPanelProps = {
 export function GeneratorPanel({
   brief,
   objectives,
-  result,
+  error,
   pending,
   onBriefChange,
   onGenerate,
@@ -59,8 +60,7 @@ export function GeneratorPanel({
           Brief
         </h2>
         <p className="text-caption text-muted-foreground">
-          Décrivez la landing page à générer. La génération est simulée
-          localement.
+          Mode démo — génération simulée localement.
         </p>
       </header>
 
@@ -126,12 +126,12 @@ export function GeneratorPanel({
         {pending ? "Génération…" : "Générer la landing page"}
       </Button>
 
-      {result.status === "error" && (
+      {error && (
         <Alert variant="destructive" aria-live="polite">
-          <AlertTitle>{result.title}</AlertTitle>
+          <AlertTitle>{error.title}</AlertTitle>
           <AlertDescription>
             <ul className="flex flex-col gap-2">
-              {result.issues.map((issue, index) => (
+              {error.issues.map((issue, index) => (
                 <li key={index}>
                   <code className="font-mono text-caption">{issue.path}</code>
                   <p>{issue.message}</p>

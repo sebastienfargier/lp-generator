@@ -1,9 +1,9 @@
 "use client"
 
-import { startTransition, useActionState, useState } from "react"
+import { useState } from "react"
 
-import { generateLandingPageAction } from "@/app/generator/actions"
 import type {
+  GenerationError,
   GenerationResult,
   GeneratorBrief,
 } from "@/lib/generator/generate"
@@ -14,13 +14,34 @@ import { LandingPreview } from "./landing-preview"
 type GeneratorWorkspaceProps = {
   initialBrief: GeneratorBrief
   initialResult: GenerationResult
-  objectives: readonly { value: GeneratorBrief["objective"]; label: string }[]
+  objectives: readonly { value: string; label: string }[]
+}
+
+const networkError: GenerationError = {
+  status: "error",
+  title: "Génération impossible",
+  issues: [
+    {
+      path: "réseau",
+      message: "Le service de génération n'a pas répondu. Réessayez.",
+    },
+  ],
+}
+
+/** Réponse de /api/generate (objet JSON produit par `runGeneration`). */
+function isGenerationResult(value: unknown): value is GenerationResult {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "status" in value &&
+    (value.status === "success" || value.status === "error")
+  )
 }
 
 /**
- * Seule partie client du générateur : état du brief, appel de la Server
- * Function et pilotage de l'iframe d'aperçu. La landing page elle-même reste
- * rendue côté serveur, dans le document chargé par l'iframe.
+ * Seule partie client du générateur : état du brief, appel de POST
+ * /api/generate et pilotage de l'iframe d'aperçu. La landing page reste rendue
+ * côté serveur, dans le document chargé par l'iframe.
  */
 export function GeneratorWorkspace({
   initialBrief,
@@ -28,17 +49,40 @@ export function GeneratorWorkspace({
   objectives,
 }: GeneratorWorkspaceProps) {
   const [brief, setBrief] = useState(initialBrief)
-  const [result, generate, pending] = useActionState(
-    generateLandingPageAction,
-    initialResult
+  const [pending, setPending] = useState(false)
+  const [error, setError] = useState<GenerationError | null>(
+    initialResult.status === "error" ? initialResult : null
   )
-  // Vrai entre un clic sur Générer et le chargement du nouvel aperçu.
+  // Dernier aperçu valide : conservé si une génération échoue.
+  const [previewUrl, setPreviewUrl] = useState<string | null>(
+    initialResult.status === "success" ? initialResult.previewUrl : null
+  )
   const [awaitingPreview, setAwaitingPreview] = useState(false)
 
-  const previewSrc =
-    result.status === "success"
-      ? `/generator/preview?revision=${result.revision}`
-      : null
+  async function generate() {
+    setPending(true)
+    setError(null)
+    try {
+      const response = await fetch("/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(brief),
+      })
+      const result: unknown = await response.json()
+      if (!isGenerationResult(result)) {
+        setError(networkError)
+      } else if (result.status === "success") {
+        setAwaitingPreview(true)
+        setPreviewUrl(result.previewUrl)
+      } else {
+        setError(result)
+      }
+    } catch {
+      setError(networkError)
+    } finally {
+      setPending(false)
+    }
+  }
 
   return (
     <div className="flex flex-1 flex-col lg:min-h-0 lg:flex-row">
@@ -49,21 +93,18 @@ export function GeneratorWorkspace({
         <GeneratorPanel
           brief={brief}
           objectives={objectives}
-          result={result}
+          error={error}
           pending={pending}
           onBriefChange={setBrief}
-          onGenerate={() => {
-            setAwaitingPreview(true)
-            startTransition(() => generate(brief))
-          }}
+          onGenerate={generate}
         />
       </aside>
 
       <div className="flex h-dvh min-w-0 flex-col bg-muted p-4 lg:h-auto lg:flex-1">
         <LandingPreview
-          src={previewSrc}
-          fullscreenHref="/examples/generated-landing"
-          loading={pending || (awaitingPreview && previewSrc !== null)}
+          src={previewUrl}
+          fullscreenHref={previewUrl}
+          loading={pending || (awaitingPreview && previewUrl !== null)}
           onLoad={() => setAwaitingPreview(false)}
         />
       </div>

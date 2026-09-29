@@ -24,8 +24,8 @@ type Viewport = (typeof viewports)[number]["value"]
 type LandingPreviewProps = {
   /** URL du document d'aperçu ; `null` si aucune génération valide. */
   src: string | null
-  /** Page seule, ouverte dans un nouvel onglet. */
-  fullscreenHref: string
+  /** Page seule, ouverte dans un nouvel onglet (même génération que l'aperçu). */
+  fullscreenHref: string | null
   loading: boolean
   onLoad: () => void
 }
@@ -101,7 +101,7 @@ export function LandingPreview({
               </ToggleGroupItem>
             ))}
           </ToggleGroup>
-          {src && (
+          {fullscreenHref && (
             <Button
               variant="ghost"
               size="icon-sm"
