@@ -87,7 +87,7 @@ describe("HTML d'aperçu", () => {
   test("structure inchangée : objet, préheader, MSO, media queries", () => {
     const head = (html: string) => html.slice(0, html.indexOf("<body"))
     assert.equal(head(preview), head(canonical))
-    assert.ok(preview.includes("<!--[if mso]>") && preview.includes("@media only screen and (max-width:640px)"))
+    assert.ok(preview.includes("<!--[if mso]>") && preview.includes("@media only screen and (max-width:599px)"))
     const preheader = (html: string) => html.slice(html.indexOf("<body"), html.indexOf("===== LAMES"))
     assert.equal(preheader(preview), preheader(canonical))
   })

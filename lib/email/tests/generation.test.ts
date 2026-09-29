@@ -6,7 +6,7 @@
 import assert from "node:assert/strict"
 import { describe, test } from "node:test"
 
-import { defaultEmailBrief, emailDemoPresets, generateDemoEmail, toEmailId, type EmailBrief } from "../demo-generator"
+import { defaultEmailBrief, emailDemoPresets, generateDemoEmail, promotionDemoOffer, toEmailId, type EmailBrief } from "../demo-generator"
 import { emailDestinations, emailDestinationUrl } from "../destinations"
 import { runEmailGeneration } from "../generation"
 import { safeParseEmailConfig } from "../schemas"
@@ -30,8 +30,8 @@ const zoneOf = (brief: EmailBrief) =>
   generateDemoEmail(brief).blocks.flatMap((block) => ("surface" in block && block.surface ? [`${block.id}:${block.surface}`] : []))
 
 describe("mode démo — scénarios", () => {
-  test("trois exemples, un par objectif ; le premier est le brief initial", () => {
-    assert.deepEqual(emailDemoPresets.map((preset) => preset.brief.objective), ["decouverte-formations", "accompagnement", "evolution-carriere"])
+  test("quatre exemples, un par objectif ; le premier est le brief initial", () => {
+    assert.deepEqual(emailDemoPresets.map((preset) => preset.brief.objective), ["decouverte-formations", "accompagnement", "evolution-carriere", "promotion"])
     assert.deepEqual(emailDemoPresets[0].brief, defaultEmailBrief)
   })
 
@@ -47,11 +47,11 @@ describe("mode démo — scénarios", () => {
     }
   })
 
-  test("trois compositions, zones colorées et préheaders distincts", () => {
+  test("quatre compositions, zones colorées et préheaders distincts", () => {
     const compositions = Object.values(presets).map((brief) => types(brief).join(" "))
-    assert.equal(new Set(compositions).size, 3)
-    assert.deepEqual(Object.values(presets).map(zoneOf), [["hero:marque"], ["encart:marque"], ["hero:encre"]])
-    assert.equal(new Set(Object.values(presets).map((brief) => generateDemoEmail(brief).preheader)).size, 3)
+    assert.equal(new Set(compositions).size, 4)
+    assert.deepEqual(Object.values(presets).map(zoneOf), [["hero:marque"], ["encart:marque"], ["hero:encre"], ["hero:accent-1"]])
+    assert.equal(new Set(Object.values(presets).map((brief) => generateDemoEmail(brief).preheader)).size, 4)
     assert.ok(!Object.values(presets).some((brief) => types(brief).includes("email-module-icons-grid")))
   })
 
@@ -91,7 +91,7 @@ describe("mode démo — scénarios", () => {
     }
   })
 
-  test("aucun fait inventé : ni chiffre, prix, pourcentage, date ou code", () => {
+  test("aucun fait inventé : ni chiffre, prix, pourcentage, date ou code (hors valeur fictive Promotion)", () => {
     for (const [name, brief] of Object.entries(presets)) {
       const values = generateDemoEmail(brief).blocks.flatMap((block) =>
         Object.values(block.slots as Record<string, { text?: string; label?: string }>)
@@ -99,8 +99,11 @@ describe("mode démo — scénarios", () => {
           .filter((value): value is string => typeof value === "string")
       )
       assert.ok(values.length > 8, name)
-      // « Compétences 360 » est un nom de service des sources, pas un chiffre.
-      for (const value of values) assert.ok(!/\d|€|%/.test(value.replace("Compétences 360", "")), `${name} : ${value}`)
+      // « Compétences 360 » est un nom de service des sources, pas un chiffre ;
+      // la valeur fictive n'est admise que dans le scénario Promotion.
+      const allowed = (value: string) =>
+        name === "promotion" ? value.replaceAll(promotionDemoOffer.value, "") : value.replace("Compétences 360", "")
+      for (const value of values) assert.ok(!/\d|€|%/.test(allowed(value)), `${name} : ${value}`)
       assert.ok(!/garanti|gratuit|coach dédié|personnalisé|100 %/i.test(values.join(" ")), name)
     }
   })

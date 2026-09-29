@@ -31,8 +31,8 @@ export const emailManifestSource = {
   version: "0.1",
   generatedOn: "2026-09-23",
   normalization: "1.5",
-  /** Largeur de lame, en px. */
-  width: 640,
+  /** Largeur canonique de l'email (et de chaque lame), en px. */
+  width: 600,
 } as const
 
 export const emailSlotKinds = [

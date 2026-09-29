@@ -1,17 +1,20 @@
 import { z } from "zod"
 
+import { emailDemoImage } from "./demo-assets"
 import { emailDestinationUrl, type EmailDestinationId } from "./destinations"
 import type { EmailSurface } from "./surfaces"
 import type { EmailBlock, EmailConfig } from "./types"
 
 /**
  * Générateur de démonstration : brief → EmailConfig, sans IA et sans aléa.
- * Même brief, même email. Trois scénarios, un par objectif, avec chacun sa
- * composition de lames, sa zone colorée et ses textes. Il n'emploie que des
- * lames utilisables sans visuel, témoignage, partenaire ni donnée promo, et
- * du contenu générique : aucun prix, remise, chiffre, financement,
- * partenaire, certification ni date. Les liens sont des destinations
- * contrôlées (`destinations.ts`).
+ * Même brief, même email. Quatre scénarios, un par objectif, avec chacun sa
+ * composition de lames, son hero à photo, sa zone colorée et ses textes. Il
+ * n'emploie que des lames utilisables sans témoignage, partenaire ni donnée
+ * promo, et du contenu générique : aucun prix, remise, chiffre, financement,
+ * partenaire, certification ni date. Seule exception : la valeur fictive du
+ * scénario Promotion (`promotionDemoOffer`), décidée pour la démo. Les liens sont des destinations
+ * contrôlées (`destinations.ts`) ; les photos, les visuels de démonstration
+ * de `demo-assets.ts` (URL `.invalid` dans le HTML canonique).
  */
 
 export const emailObjectives = [
@@ -22,6 +25,18 @@ export const emailObjectives = [
 
 export type EmailObjective = (typeof emailObjectives)[number]["value"]
 
+/**
+ * Objectifs du mode démo : ceux du contrat de génération, plus Promotion.
+ * Promotion reste propre à la démo : `EmailGenerationRequest` garde ses
+ * trois objectifs et porte une promo par `emailType` et `offer`.
+ */
+export const emailDemoObjectives = [
+  ...emailObjectives,
+  { value: "promotion", label: "Promotion" },
+] as const
+
+export type EmailDemoObjective = (typeof emailDemoObjectives)[number]["value"]
+
 const required = (label: string) =>
   z.string().trim().min(1, `${label} est requis.`)
 
@@ -31,7 +46,7 @@ export const EmailBriefSchema = z.strictObject({
   brief: required("Le brief"),
   audience: required("L'audience"),
   objective: z.enum(
-    emailObjectives.map((objective) => objective.value) as [EmailObjective, ...EmailObjective[]],
+    emailDemoObjectives.map((objective) => objective.value) as [EmailDemoObjective, ...EmailDemoObjective[]],
     { error: "Objectif inconnu." }
   ),
 })
@@ -74,6 +89,17 @@ export const emailDemoPresets = [
       brief: "Encourager des salariés à développer leurs compétences pour préparer une évolution professionnelle.",
       audience: "Salariés qui veulent évoluer dans leur métier",
       objective: "evolution-carriere",
+    },
+  },
+  {
+    id: "promotion",
+    label: "Promotion",
+    brief: {
+      campaignName: "Promotion",
+      subject: "-50 % pour lancer votre projet de formation",
+      brief: "Présenter une offre promotionnelle de -50 % (valeur fictive de démonstration) et orienter vers le catalogue des formations.",
+      audience: "Personnes qui envisagent de se former",
+      objective: "promotion",
     },
   },
 ] as const satisfies readonly { id: string; label: string; brief: EmailBrief }[]
@@ -134,8 +160,17 @@ type Scenario = {
 /* Scénarios                                                                  */
 /* -------------------------------------------------------------------------- */
 
-const scenarios: Record<EmailObjective, Scenario> = {
-  /** Réflexion, étapes, découverte : bandeau + hero coloré + étapes + clôture. */
+/**
+ * Donnée FICTIVE de démonstration, décidée par l'utilisateur pour la démo :
+ * ce n'est ni une offre Studi vérifiée, ni une donnée des sources. Aucun code
+ * promo, date de fin, compte à rebours, prix ni condition n'a été fourni :
+ * aucun n'est rédigé, et aucun disclaimer du catalogue ne s'applique.
+ * La provenance reste ici, hors du contrat EmailConfig.
+ */
+export const promotionDemoOffer = { value: "-50 %", source: "demo" } as const
+
+const scenarios: Record<EmailDemoObjective, Scenario> = {
+  /** Réflexion, étapes, découverte : bandeau + hero panoramique + étapes + clôture. */
   "decouverte-formations": {
     zone: "marque",
     preheader: "Trois étapes pour y voir plus clair et explorer les formations qui correspondent à votre projet",
@@ -148,7 +183,7 @@ const scenarios: Record<EmailObjective, Scenario> = {
       return [
         { id: "bandeau", type: "email-module-preheader", slots: { label: text(brief.campaignName.toUpperCase()), "lien-1": link("Voir les fiches métiers", "metiers") } },
         header,
-        { id: "hero", type: "email-module-hero-diagnostic-quiz", surface: zone, slots: { "sous-titre": text(brief.campaignName), "titre-principal": text(hero.title), "texte-descriptif": text(hero.text), "cta-1": link("Découvrir les formations", "catalogue-formations") } },
+        { id: "hero", type: "email-module-hero-promotional-image-medium", surface: zone, slots: { "titre-principal": text(hero.title), "texte-descriptif": text(hero.text), "cta-1": link("Découvrir les formations", "catalogue-formations"), "image-1": emailDemoImage("reconversion") } },
         {
           id: "etapes",
           type: "email-module-numbered-list",
@@ -162,13 +197,13 @@ const scenarios: Record<EmailObjective, Scenario> = {
             "texte-descriptif-3": text("Organisez votre formation autour de vos contraintes."),
           },
         },
-        { id: "cloture", type: "email-module-text-only", slots: { "titre-section": text("Explorez les formations à votre rythme"), "texte-descriptif": text("Parcourez les domaines de formation et repérez ceux qui font écho à votre projet. Vous pouvez avancer étape par étape.") } },
+        { id: "cloture", type: "email-module-text-only", slots: { "titre-section": text("Prenez le temps d'explorer"), "texte-descriptif": text("Parcourez les fiches métiers et les domaines de formation pour repérer ce qui fait écho à votre projet.") } },
         footer,
       ]
     },
   },
 
-  /** Soutien et méthode : hero sobre + appuis à icônes + encart coloré. */
+  /** Soutien et méthode : hero texte + portrait, appuis à icônes, encart coloré. */
   accompagnement: {
     zone: "marque",
     preheader: "Formateurs, conseillers et méthode : découvrez comment Studi vous accompagne pendant votre formation",
@@ -180,7 +215,7 @@ const scenarios: Record<EmailObjective, Scenario> = {
       )
       return [
         header,
-        { id: "hero", type: "email-module-hero-diagnostic-quiz", slots: { "sous-titre": text(brief.campaignName), "titre-principal": text(hero.title), "texte-descriptif": text(hero.text), "cta-1": link("Découvrir l'accompagnement", "accompagnement") } },
+        { id: "hero", type: "email-module-hero-split-image", slots: { "sous-titre": text(brief.campaignName), "titre-principal": text(hero.title), "texte-descriptif": text(hero.text), "cta-1": link("Découvrir l'accompagnement", "accompagnement"), "image-1": emailDemoImage("accompagnement") } },
         {
           id: "appuis",
           type: "email-module-icons-list",
@@ -190,8 +225,8 @@ const scenarios: Record<EmailObjective, Scenario> = {
             "item-1-titre": text("Des formateurs et des conseillers"),
             "texte-descriptif-1": text("Des interlocuteurs pour répondre à vos questions pendant la formation."),
             "icone-2": { icon: "lightbulb" },
-            "item-2-titre": text("Une méthode pour apprendre"),
-            "texte-descriptif-2": text("Des cours, des exercices et des repères pour progresser régulièrement."),
+            "item-2-titre": text("Des repères pour progresser"),
+            "texte-descriptif-2": text("Des cours et des exercices pour avancer régulièrement."),
             "icone-3": { icon: "stopwatch" },
             "item-3-titre": text("Un rythme qui vous ressemble"),
             "texte-descriptif-3": text("Vous organisez vos sessions selon vos disponibilités."),
@@ -202,11 +237,11 @@ const scenarios: Record<EmailObjective, Scenario> = {
           type: "email-module-text-and-feature-card",
           surface: zone,
           slots: {
-            "titre-section": text("Un accompagnement tout au long du parcours"),
-            "texte-descriptif-1": text("Se former à distance ne veut pas dire se former seul. Découvrez les niveaux d'accompagnement proposés par Studi."),
-            "titre-principal": text("Trouvez l'accompagnement qui vous convient"),
-            "texte-descriptif-2": text("Comparez les formules et choisissez celle qui correspond à votre projet."),
-            "cta-1": link("Découvrir l'accompagnement", "accompagnement"),
+            "titre-section": text("Progresser dans votre parcours"),
+            "texte-descriptif-1": text("Se former à distance ne veut pas dire se former seul. Des interlocuteurs peuvent vous accompagner au fil de votre formation."),
+            "titre-principal": text("Comment apprend-on chez Studi ?"),
+            "texte-descriptif-2": text("Découvrez la pédagogie Studi et la façon dont elle s'organise tout au long de votre parcours."),
+            "cta-1": link("Découvrir la pédagogie", "methode"),
           },
         },
         footer,
@@ -214,7 +249,7 @@ const scenarios: Record<EmailObjective, Scenario> = {
     },
   },
 
-  /** Compétences et progression : header de campagne + hero Encre + grille. */
+  /** Compétences et progression : header de campagne + grand visuel + grille. */
   "evolution-carriere": {
     zone: "encre",
     preheader: "Compétences, certificats, coaching : les leviers pour préparer la prochaine étape de votre parcours",
@@ -226,7 +261,7 @@ const scenarios: Record<EmailObjective, Scenario> = {
       )
       return [
         { id: "header", type: "email-module-header-seasonal-campaign", slots: { label: text(brief.campaignName) } },
-        { id: "hero", type: "email-module-hero-diagnostic-quiz", surface: zone, slots: { "sous-titre": text("Évolution professionnelle"), "titre-principal": text(hero.title), "texte-descriptif": text(hero.text), "cta-1": link("Découvrir le coaching carrière", "coaching-carriere") } },
+        { id: "hero", type: "email-module-hero-promotional-image-large", surface: zone, slots: { "sous-titre": text("Évolution professionnelle"), "titre-principal": text(hero.title), "texte-descriptif": text(hero.text), "cta-1": link("Découvrir le coaching carrière", "coaching-carriere"), "image-1": emailDemoImage("evolution") } },
         {
           id: "leviers",
           type: "email-module-numbererd-grid",
@@ -243,12 +278,54 @@ const scenarios: Record<EmailObjective, Scenario> = {
             "texte-descriptif-4": text("Préparer votre prochaine étape professionnelle."),
           },
         },
-        { id: "cloture", type: "email-module-text-only", slots: { "titre-section": text("Préparez la suite de votre parcours"), "texte-descriptif": text("Chaque étape compte. Explorez les leviers qui correspondent à votre projet et avancez à votre rythme.") } },
+        { id: "cloture", type: "email-module-text-only", slots: { "titre-section": text("Préparez la suite de votre parcours"), "texte-descriptif": text("Faites le point sur les compétences que vous souhaitez développer, puis explorez les leviers qui correspondent à votre projet.") } },
+        footer,
+      ]
+    },
+  },
+
+  /** Offre fictive : header de campagne + hero photo Accent 1 + bandeau -50 % + atouts. */
+  promotion: {
+    zone: "accent-1",
+    preheader: "Une offre promotionnelle pour lancer votre projet de formation, en ligne et à votre rythme",
+    blocks: (brief, zone) => {
+      const offer = promotionDemoOffer.value
+      return [
+        { id: "header", type: "email-module-header-seasonal-campaign", slots: { label: text(brief.campaignName) } },
+        { id: "hero", type: "email-module-hero-promotional-image-medium", surface: zone, slots: { "titre-principal": text(`${offer} pour vous former`), "texte-descriptif": text("Lancez votre projet de formation, en ligne et à votre rythme."), "cta-1": link("Découvrir les formations", "catalogue-formations"), "image-1": emailDemoImage("reconversion") } },
+        {
+          id: "offre",
+          type: "email-module-banner-full",
+          slots: {
+            "sous-titre": text("Offre promotionnelle"),
+            "valeur-cle": text(offer),
+            "texte-descriptif-1": text("Choisissez votre formation"),
+            "texte-descriptif-2": text("Parcourez le catalogue Studi et repérez la formation qui correspond à votre projet."),
+            "cta-1": link("Découvrir les formations", "catalogue-formations"),
+          },
+        },
+        {
+          id: "atouts",
+          type: "email-module-icons-list",
+          slots: {
+            "titre-section": text(`Pour vous : ${brief.audience}`),
+            "icone-1": { icon: "laptop" },
+            "item-1-titre": text("Des formations en ligne"),
+            "texte-descriptif-1": text("Vous suivez vos cours à distance, depuis chez vous."),
+            "icone-2": { icon: "stopwatch" },
+            "item-2-titre": text("À votre rythme"),
+            "texte-descriptif-2": text("Vous avancez selon votre emploi du temps."),
+            "icone-3": { icon: "graduation-cap" },
+            "item-3-titre": text("De nombreux domaines"),
+            "texte-descriptif-3": text("Parcourez les formations par domaine et par niveau."),
+          },
+        },
         footer,
       ]
     },
   },
 }
+
 
 /* -------------------------------------------------------------------------- */
 /* Génération                                                                 */

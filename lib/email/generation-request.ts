@@ -1,6 +1,6 @@
 import { z } from "zod"
 
-import { emailObjectives, type EmailBrief } from "./demo-generator"
+import { emailObjectives, type EmailBrief, type EmailObjective } from "./demo-generator"
 import { emailDisclaimers, type EmailDisclaimerId } from "./disclaimers"
 import { ImageAssetSlotSchema } from "./schemas"
 
@@ -79,7 +79,7 @@ export const EmailGenerationRequestSchema = z.strictObject({
   brief: text("Le brief"),
   audience: text("L'audience"),
   objective: z.enum(
-    emailObjectives.map((objective) => objective.value) as [EmailBrief["objective"], ...EmailBrief["objective"][]],
+    emailObjectives.map((objective) => objective.value) as [EmailObjective, ...EmailObjective[]],
     { error: "Objectif inconnu." }
   ),
   emailType: z.enum(emailTypes, { error: "Type d'email inconnu." }).optional(),
@@ -99,13 +99,19 @@ export function safeParseEmailGenerationRequest(input: unknown) {
   return EmailGenerationRequestSchema.safeParse(input, { error: z.locales.fr().localeError })
 }
 
-/** Brief du mode démo → requête sans fait structuré (aucune donnée inventée). */
+/**
+ * Brief du mode démo → requête sans fait structuré (aucune donnée inventée).
+ * L'objectif Promotion, propre à la démo, devient `emailType: "promo"` ; sa
+ * valeur fictive n'est pas transmise comme une offre validée.
+ */
 export function emailBriefToGenerationRequest(brief: EmailBrief): EmailGenerationRequest {
-  return {
+  const request = {
     campaignName: brief.campaignName,
     subject: brief.subject,
     brief: brief.brief,
     audience: brief.audience,
-    objective: brief.objective,
   }
+  return brief.objective === "promotion"
+    ? { ...request, objective: "decouverte-formations", emailType: "promo" }
+    : { ...request, objective: brief.objective }
 }

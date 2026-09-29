@@ -60,7 +60,7 @@ describe("renderer — document", () => {
     assert.equal(head(html), head(socle).replace("[OBJET DE L'EMAIL]", "Studi &amp; vous : rentrée le 12/10"))
     assert.ok(html.includes("<!--[if mso]>") && html.includes("<![endif]-->"))
     assert.ok(html.includes('xmlns:v="urn:schemas-microsoft-com:vml"'))
-    assert.ok(html.includes("@media only screen and (max-width:640px)"))
+    assert.ok(html.includes("@media only screen and (max-width:599px)"))
   })
 
   test("aucun script, aucun on*, aucun attribut interne", () => {
@@ -90,7 +90,7 @@ describe("renderer — slots", () => {
   })
 
   test("image : src et alt injectés, dimensions du template", () => {
-    assert.ok(lames.includes('<img src="https://cdn.studi.com/visuels/hero.jpg?w=246&amp;h=456" alt="Apprenante &quot;concentrée&quot; devant son ordinateur" width="246" height="456"'))
+    assert.ok(lames.includes('<img src="https://cdn.studi.com/visuels/hero.jpg?w=246&amp;h=456" alt="Apprenante &quot;concentrée&quot; devant son ordinateur" width="229" height="456"'))
   })
 
   test("éléments système préservés", () => {

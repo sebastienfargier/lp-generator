@@ -2,7 +2,7 @@ import type { Metadata } from "next"
 
 import { EmailWorkspace } from "@/components/email/email-workspace"
 import { Badge } from "@/components/ui/badge"
-import { defaultEmailBrief, emailDemoPresets, emailObjectives } from "@/lib/email/demo-generator"
+import { defaultEmailBrief, emailDemoObjectives, emailDemoPresets } from "@/lib/email/demo-generator"
 import { runEmailGeneration } from "@/lib/email/generation"
 
 export const metadata: Metadata = {
@@ -23,7 +23,7 @@ export default function EmailGeneratorPage() {
       <EmailWorkspace
         initialBrief={defaultEmailBrief}
         initialResult={initialResult}
-        objectives={emailObjectives}
+        objectives={emailDemoObjectives}
         presets={emailDemoPresets}
       />
     </div>

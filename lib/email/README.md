@@ -27,6 +27,7 @@ Pas encore d'IA.
 | `generation-request.ts` | contrat d'entrée d'une génération par modèle : faits structurés et validés (`EmailGenerationRequest`) |
 | `ai-prompt.ts` | prompt système, assemblage du prompt, schéma de sortie, validation de la réponse (sans réseau) |
 | `demo-generator.ts` | mode démo : brief validé → EmailConfig déterministe, sans IA |
+| `demo-assets.ts` | trois photos de démo : URL `.invalid` canonique, fichier local pour l'aperçu seulement |
 | `generation.ts` | serveur : brief → démo → Zod → `renderEmail` (`runEmailGeneration`) |
 | `socle-email.html` | enveloppe du document, copie à l'identique du socle du projet Email |
 | `index.ts` | exports publics |
@@ -319,10 +320,13 @@ se rendent ; les deux `product-details` lèvent l'erreur du rôle
 
 - **Enveloppe pleine largeur.** `recettes-couleur.md` §3 attribue
   explicitement le Fond à la « table pleine largeur », qui est donc colorée.
-  Les références font toutes 640 px de large et ne montrent pas ce qu'il y a
-  au-delà.
+  Les références font toutes 640 px de large (ancien standard), et ne
+  montrent pas ce qu'il y a au-delà.
 - **Visuels en mobile.** Avec `height:auto`, les images dépassent les hauteurs
-  `phNNN` prévues pour le mobile. Un audit visuel séparé est prévu.
+  `phNNN` prévues pour le mobile. Un audit visuel séparé est prévu. Exception
+  corrigée : `.ph270` (hero promotionnel moyen, seule lame qui l'emploie) passe
+  à `height:auto`. À 190 px, la cellule dépassait l'image pleine largeur
+  (176 px à 390 px de large) et laissait une bande de la surface sous la photo.
 - **Première intégration serveur ou Vercel.** Il faudra vérifier que
   `templates/` et `socle-email.html` sont bien inclus dans le bundle.
   `next.config` n'est pas modifié à ce stade.
@@ -337,8 +341,10 @@ La route est propre au domaine Email : `/api/generate` reste réservé aux
 landing pages. L'aperçu affiche le HTML de `renderEmail` tel quel :
 - dans une iframe `srcDoc`, `sandbox="allow-same-origin"`, donc sans script
   ni popup ;
-- à 720 px en Desktop (au-dessus du seuil mobile de 640 px du socle) et à
-  390 px en Mobile, réduit si la surface est plus étroite.
+- à 600 px en Desktop, la largeur canonique, et à 390 px en Mobile. L'aperçu
+  est réduit si la surface est plus étroite ;
+- à la hauteur de son document : sans barre de défilement interne, qui
+  ferait passer la largeur utile sous 600 px. C'est la surface qui défile.
 
 **HTML canonique ou aperçu.** `renderEmail()` produit le seul HTML
 exportable : jetons système et vrais liens. `preview.ts` (`toPreviewHtml`)
@@ -347,19 +353,57 @@ en dérive le HTML d'aperçu, affiché dans l'iframe :
 - les 40 icônes deviennent `/icones/<nom>.png`. Un autre nom est une erreur ;
 - les réseaux sociaux deviennent un pixel transparent : aucun réseau n'est
   attribué à ces positions ;
+- les trois photos de démo deviennent `/images/email-demo-….jpg` (voir
+  ci-dessous) ;
 - les `href` deviennent `data-preview-href`, sans script : les liens sont
   inertes et leur destination reste inspectable.
 
-Les chemins `/logos` et `/icones` ne sont jamais des URLs envoyables, et
-n'entrent ni dans EmailConfig ni dans le HTML canonique.
+Les chemins `/logos`, `/icones` et `/images` ne sont jamais des URLs
+envoyables, et n'entrent ni dans EmailConfig ni dans le HTML canonique.
 
-**Largeur au-delà de 640 px.** Chaque lame commence par une table
-`width="100%"` avec `background:#FFFFFF`, qui contient la table `.lame` de
-640 px. `recettes-couleur.md` §3 attribue le Fond à cette « table pleine
-largeur ». Chaque lame forme donc une bande pleine largeur, blanche ou à la
-couleur de sa surface, qui recouvre le fond neutre `#F5F5F4` du socle. Le
-comportement est conforme aux sources ; le changer suppose une décision de
-design.
+**Photos de démo (`demo-assets.ts`).** Chaque scénario ouvre sur un hero à
+photo, d'une architecture différente :
+
+| Scénario | Lame | Cadre | Fichier (2x) | Source |
+| --- | --- | --- | --- | --- |
+| Reconversion | `hero-promotional-image-medium` | 600 × 270 | `email-demo-reconversion.jpg`, 1200 × 540 | `audience-3.jpg` |
+| Accompagnement | `hero-split-image` | 229 × 456 | `email-demo-accompagnement.jpg`, 458 × 912 | `content-2.jpg` |
+| Évolution | `hero-promotional-image-large` | 600 × 534 | `email-demo-evolution.jpg`, 1200 × 1068 | `hero-apprenante.jpg` |
+
+Les fichiers sont des recadrages des photos de `public/images/`, dont les
+originaux ne sont pas modifiés. Dans l'EmailConfig et le HTML canonique,
+chaque photo est `https://demo-assets.invalid/<fichier>` : une URL HTTPS
+acceptée par `ImageAssetSlot`, mais sur un TLD réservé (RFC 2606), jamais
+résolu. Le HTML exporté reste donc visiblement non envoyable. Seul
+`toPreviewHtml` remplace ces trois URLs, par un mapping fermé : une autre URL
+de `demo-assets.invalid` reste telle quelle. `ImageAssetSlot` et
+`EmailGenerationRequest` refusent toujours les chemins locaux.
+
+**Scénario Promotion (démo uniquement).** Quatrième objectif du mode démo
+(`emailDemoObjectives`). `EmailGenerationRequest` garde ses trois objectifs :
+le pont `emailBriefToGenerationRequest` convertit Promotion en
+`emailType: "promo"`, sans offre. Sa seule donnée commerciale est
+`promotionDemoOffer` (`-50 %`, `source: "demo"`) : une valeur fictive,
+décidée pour la démo, qui n'est ni une offre Studi ni une donnée des sources.
+Elle est injectée dans le titre du hero et dans le slot `valeur-cle` de
+`banner-full`. Aucun code promo, date de fin, compte à rebours, prix ni
+condition n'a été fourni : les lames qui en exigent (`discount-banner-*`,
+`hero-offer-image-top`, countdowns) ne sont pas utilisées, et aucun
+disclaimer n'est ajouté, faute d'entrée du catalogue qui corresponde. C'est
+une limite de la démo. Le hero réutilise la photo Reconversion, déjà au ratio
+exact de `hero-promotional-image-medium`.
+
+**Largeur : 600 px.** La largeur canonique est de 600 px :
+- `.lame` et les 36 tables `class="lame"` font 600 px (`emailManifestSource.width`) ;
+- la bascule mobile se fait sous 600 px (`@media (max-width:599px)`) ;
+- les colonnes fixes et les images ont été recalculées pour 600 px.
+
+Chaque lame commence par une table `width="100%"`, à laquelle
+`recettes-couleur.md` §3 attribue le Fond. Dans un client plus large que
+600 px, chaque lame forme donc une bande pleine largeur, comme le prévoient
+les sources. L'aperçu Desktop fait exactement 600 px : ces bandes y
+coïncident avec l'email, qui apparaît comme un document de 600 px sur le
+fond neutre de l'application.
 
 **`icons-grid`.** Ses icônes PNG au trait sombre sont posées sur un carré
 `#1D1916` : le contraste est insuffisant. Cette lame n'est pas utilisée par
@@ -466,6 +510,8 @@ socle ; seuls les cas de corruption injectent une source modifiée.
   chaque template identiques au manifeste.
 - `renderer.test.ts` : document, slots, échappement, surfaces, intégrité, et
   rendu des 36 lames sur Page.
+- `demo-assets.test.ts` : photos de démo, URL `.invalid` canonique, mapping
+  fermé de l'aperçu, dimensions des fichiers.
 
 Les deux `product-details` ne sont volontairement pas supportés sur une
 surface colorée, tant qu'aucune règle de design ne fixe le rendu de leur
