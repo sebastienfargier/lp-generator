@@ -2,8 +2,8 @@
  * Catalogue fermé des disclaimers obligatoires : `guidelines-communication.md`,
  * chapitre 12, textes recopiés au caractère près. Une config choisit un
  * identifiant, jamais un texte ; le renderer écrit `*` suivi de `text`.
- * Une même lame ne peut pas porter deux fois le même disclaimer (règle du
- * futur schéma).
+ * Une même lame ne peut pas porter deux fois le même disclaimer
+ * (`./schemas`).
  *
  * Seule substitution autorisée : `JJ/MM/AAAA` dans l'offre promotionnelle,
  * remplacé par `endDate` au format JJ/MM/AAAA.

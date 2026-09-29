@@ -18,10 +18,12 @@
  *
  * Tout slot est requis, sauf ceux listés dans `optional`, dont le renderer
  * connaît le comportement en cas d'absence. `system` liste les éléments
- * résolus par le système (`./system`), jamais par une config.
+ * résolus par le système (`./system`), jamais par une config. `surfaceMode`
+ * dit si la lame accepte une surface de couleur.
  *
  * Aucun HTML ici : les templates restent dans `./templates`.
  */
+import type { emailSurfaceRules } from "./surfaces"
 import type { EmailSystemElement } from "./system"
 
 export const emailManifestSource = {
@@ -61,8 +63,19 @@ export const emailBlockFamilies = [
 
 export type EmailBlockFamily = (typeof emailBlockFamilies)[number]
 
+/**
+ * `configurable` : la table de substitution de `recettes-couleur.md` §3
+ * s'applique à la lame, qui accepte une `surface`.
+ * `fixed` : la lame garde ses couleurs ; une config ne fournit pas de surface.
+ * Header et footer (disclaimer inclus) restent en Page, toujours (§4), ainsi
+ * que les lames dont le panneau principal a un fond absent de la table §3
+ * (`#45413B`, `#2F2A28`) : leurs couleurs ne sont pas substituables.
+ */
+export type EmailSurfaceMode = "configurable" | "fixed"
+
+type PageOnlyFamily = (typeof emailSurfaceRules)["pageOnlyFamilies"][number]
+
 type EmailManifestEntry = {
-  family: EmailBlockFamily
   /** Nom du composant Figma d'origine. */
   figma: string
   /** Fichier du template dans `./templates`. */
@@ -70,13 +83,18 @@ type EmailManifestEntry = {
   slots: Readonly<Record<string, EmailSlotKind>>
   optional?: readonly string[]
   system?: readonly EmailSystemElement[]
-}
+} & (
+  | { family: Exclude<EmailBlockFamily, PageOnlyFamily>; surfaceMode: EmailSurfaceMode }
+  // Un header ou un footer configurable ne compile pas.
+  | { family: PageOnlyFamily; surfaceMode: "fixed" }
+)
 
 export const emailBlockManifest = {
   "email-hero-newsletter-variant-01": {
     family: "Hero",
     figma: "Email Hero / Newsletter / Variant 01",
     file: "email-hero-newsletter-variant-01.html",
+    surfaceMode: "configurable",
     slots: {
       "sur-titre": "texte", "titre-principal": "texte", "texte-descriptif-1": "texte",
       "cta-1": "cta:fleche", "image-1": "asset:visuel", "image-2": "asset:visuel",
@@ -87,6 +105,7 @@ export const emailBlockManifest = {
     family: "Hero",
     figma: "Email Hero / Newsletter / Variant 02",
     file: "email-hero-newsletter-variant-02.html",
+    surfaceMode: "configurable",
     slots: {
       "sur-titre": "texte", "titre-principal": "texte", "texte-descriptif-1": "texte",
       "cta-1": "cta:fleche", "image-1": "asset:visuel",
@@ -96,6 +115,7 @@ export const emailBlockManifest = {
     family: "Offer",
     figma: "Email Module / Banner Full",
     file: "email-module-banner-full.html",
+    surfaceMode: "fixed",
     slots: {
       "sous-titre": "texte", "valeur-cle": "texte", "texte-descriptif-1": "texte",
       "texte-descriptif-2": "texte", "cta-1": "cta:fleche",
@@ -105,6 +125,7 @@ export const emailBlockManifest = {
     family: "Benefits",
     figma: "Email Module / Benefits and Testimonial",
     file: "email-module-benefits-and-testimonial.html",
+    surfaceMode: "configurable",
     slots: {
       "titre-section-1": "texte", "texte-descriptif-1": "texte",
       "titre-section-2": "texte", "item-1-titre": "texte", "item-1-texte": "texte",
@@ -117,12 +138,14 @@ export const emailBlockManifest = {
     family: "Benefits",
     figma: "Email Module / Benefits / Compact Highlights",
     file: "email-module-benefits-compact-highlights.html",
+    surfaceMode: "fixed",
     slots: { "valeur-cle": "texte", "label": "texte" },
   },
   "email-module-cta-and-testimonial": {
     family: "Benefits",
     figma: "Email Module / CTA and Testimonial",
     file: "email-module-cta-and-testimonial.html",
+    surfaceMode: "configurable",
     slots: {
       "texte-descriptif": "texte", "cta-1": "cta", "icone-1": "asset:icone",
       "temoignage": "texte", "temoignage-auteur": "texte",
@@ -132,6 +155,7 @@ export const emailBlockManifest = {
     family: "Diagnostic",
     figma: "Email Module / Diagnostic / Progress List",
     file: "email-module-diagnostic-progress-list.html",
+    surfaceMode: "configurable",
     slots: {
       "label-1": "texte", "label-2": "texte", "label-3": "texte", "label-4": "texte",
       "label-5": "texte",
@@ -141,6 +165,7 @@ export const emailBlockManifest = {
     family: "Offer",
     figma: "Email Module / Discount Banner Cards",
     file: "email-module-discount-banner-cards.html",
+    surfaceMode: "configurable",
     slots: {
       "sous-titre": "texte", "titre-principal": "texte", "texte-descriptif-1": "texte",
       "code-promo-1": "texte", "texte-descriptif-2": "texte",
@@ -150,6 +175,7 @@ export const emailBlockManifest = {
     family: "Offer",
     figma: "Email Module / Discount Banner Full",
     file: "email-module-discount-banner-full.html",
+    surfaceMode: "fixed",
     slots: {
       "sous-titre": "texte", "valeur-cle": "texte", "texte-descriptif": "texte",
       "code-promo-1": "texte", "cta-1": "cta:fleche", "lien-1": "lien",
@@ -159,12 +185,14 @@ export const emailBlockManifest = {
     family: "Divider",
     figma: "Email Module / Divider / Choice",
     file: "email-module-divider-choice.html",
+    surfaceMode: "configurable",
     slots: { "texte-separation": "texte" },
   },
   "email-module-footer-compact-legal": {
     family: "Footer",
     figma: "Email Module / Footer / Compact Legal",
     file: "email-module-footer-compact-legal.html",
+    surfaceMode: "fixed",
     slots: { "lien-1": "lien", "lien-2": "lien", "lien-3": "lien" },
     system: [
       "logo", "social-1", "social-2", "social-3", "social-4",
@@ -175,6 +203,7 @@ export const emailBlockManifest = {
     family: "Header",
     figma: "Email Module / Header / Newsletter",
     file: "email-module-header-newsletter.html",
+    surfaceMode: "fixed",
     slots: {},
     system: ["logo"],
   },
@@ -182,6 +211,7 @@ export const emailBlockManifest = {
     family: "Header",
     figma: "Email Module / Header / Seasonal Campaign",
     file: "email-module-header-seasonal-campaign.html",
+    surfaceMode: "fixed",
     slots: { "label": "texte" },
     system: ["logo"],
   },
@@ -189,6 +219,7 @@ export const emailBlockManifest = {
     family: "Hero",
     figma: "Email Module / Hero / Cards",
     file: "email-module-hero-cards.html",
+    surfaceMode: "configurable",
     slots: {
       "label": "texte", "valeur-cle": "texte", "texte-descriptif-1": "texte",
       "image-1": "asset:visuel", "titre-principal": "texte",
@@ -199,6 +230,7 @@ export const emailBlockManifest = {
     family: "Hero",
     figma: "Email Module / Hero / Countdown / Variant 01",
     file: "email-module-hero-countdown-variant-01.html",
+    surfaceMode: "configurable",
     slots: {
       "compteur-1": "texte", "label-1": "texte", "compteur-2": "texte",
       "label-2": "texte", "compteur-3": "texte", "label-3": "texte",
@@ -209,6 +241,7 @@ export const emailBlockManifest = {
     family: "Hero",
     figma: "Email Module / Hero / Countdown / Variant 02",
     file: "email-module-hero-countdown-variant-02.html",
+    surfaceMode: "configurable",
     slots: {
       "compteur-1": "texte", "label-1": "texte", "compteur-2": "texte",
       "label-2": "texte", "compteur-3": "texte", "label-3": "texte",
@@ -219,6 +252,7 @@ export const emailBlockManifest = {
     family: "Hero",
     figma: "Email Module / Hero / Diagnostic Quiz",
     file: "email-module-hero-diagnostic-quiz.html",
+    surfaceMode: "configurable",
     slots: {
       "sous-titre": "texte", "titre-principal": "texte", "texte-descriptif": "texte",
       "cta-1": "cta:fleche",
@@ -228,6 +262,7 @@ export const emailBlockManifest = {
     family: "Hero",
     figma: "Email Module / Hero / Offer / Image-top",
     file: "email-module-hero-offer-image-top.html",
+    surfaceMode: "fixed",
     slots: {
       "image-1": "asset:visuel", "sous-titre": "texte", "valeur-cle": "texte",
       "texte-descriptif": "texte", "code-promo-1": "texte", "cta-1": "cta:fleche",
@@ -238,6 +273,7 @@ export const emailBlockManifest = {
     family: "Hero",
     figma: "Email Module / Hero / Promotional / Image-large",
     file: "email-module-hero-promotional-image-large.html",
+    surfaceMode: "configurable",
     slots: {
       "sous-titre": "texte", "titre-principal": "texte", "texte-descriptif": "texte",
       "cta-1": "cta:fleche", "image-1": "asset:visuel",
@@ -247,6 +283,7 @@ export const emailBlockManifest = {
     family: "Hero",
     figma: "Email Module / Hero / Promotional / Image-medium",
     file: "email-module-hero-promotional-image-medium.html",
+    surfaceMode: "configurable",
     slots: {
       "titre-principal": "texte", "texte-descriptif": "texte", "cta-1": "cta:fleche",
       "image-1": "asset:visuel",
@@ -256,6 +293,7 @@ export const emailBlockManifest = {
     family: "Hero",
     figma: "Email Module / Hero / Split Image / Dark",
     file: "email-module-hero-split-image-dark.html",
+    surfaceMode: "fixed",
     slots: {
       "partenaire": "texte", "titre-principal": "texte", "cta-1": "cta:fleche",
       "image-1": "asset:visuel", "texte-descriptif-1": "texte",
@@ -266,6 +304,7 @@ export const emailBlockManifest = {
     family: "Hero",
     figma: "Email Module / Hero / Split Image",
     file: "email-module-hero-split-image.html",
+    surfaceMode: "configurable",
     slots: {
       "sous-titre": "texte", "titre-principal": "texte", "texte-descriptif": "texte",
       "cta-1": "cta:fleche", "image-1": "asset:visuel",
@@ -275,6 +314,7 @@ export const emailBlockManifest = {
     family: "Features",
     figma: "Email Module / Icons Grid",
     file: "email-module-icons-grid.html",
+    surfaceMode: "configurable",
     slots: {
       "sous-titre": "texte", "titre-principal": "texte", "icone-1": "asset:icone",
       "item-1-titre": "texte", "texte-descriptif-1": "texte", "icone-2": "asset:icone",
@@ -287,6 +327,7 @@ export const emailBlockManifest = {
     family: "Features",
     figma: "Email Module / Icons List",
     file: "email-module-icons-list.html",
+    surfaceMode: "configurable",
     slots: {
       "titre-section": "texte", "icone-1": "asset:icone", "item-1-titre": "texte",
       "texte-descriptif-1": "texte", "icone-2": "asset:icone", "item-2-titre": "texte",
@@ -298,6 +339,7 @@ export const emailBlockManifest = {
     family: "Features",
     figma: "Email Module / Numbered List",
     file: "email-module-numbered-list.html",
+    surfaceMode: "configurable",
     slots: {
       "sous-titre": "texte", "item-1-titre": "texte", "texte-descriptif-1": "texte",
       "item-2-titre": "texte", "texte-descriptif-2": "texte", "item-3-titre": "texte",
@@ -308,6 +350,7 @@ export const emailBlockManifest = {
     family: "Features",
     figma: "Email Module / Numbererd Grid",
     file: "email-module-numbererd-grid.html",
+    surfaceMode: "configurable",
     slots: {
       "sous-titre": "texte", "titre-principal": "texte", "item-1-titre": "texte",
       "texte-descriptif-1": "texte", "item-2-titre": "texte",
@@ -320,12 +363,14 @@ export const emailBlockManifest = {
     family: "Header",
     figma: "Email Module / Preheader",
     file: "email-module-preheader.html",
+    surfaceMode: "fixed",
     slots: { "label": "texte", "lien-1": "lien" },
   },
   "email-module-product-details-variant-01": {
     family: "Benefits",
     figma: "Email Module / Product details / Variant 01",
     file: "email-module-product-details-variant-01.html",
+    surfaceMode: "configurable",
     slots: {
       "label": "texte", "titre-principal": "texte", "titre-section": "texte",
       "texte-descriptif": "texte", "cta-1": "cta",
@@ -335,6 +380,7 @@ export const emailBlockManifest = {
     family: "Benefits",
     figma: "Email Module / Product details / Variant 02",
     file: "email-module-product-details-variant-02.html",
+    surfaceMode: "configurable",
     slots: {
       "titre-principal-1": "texte", "label": "texte", "titre-principal-2": "texte",
       "texte-descriptif": "texte", "cta-1": "cta",
@@ -344,6 +390,7 @@ export const emailBlockManifest = {
     family: "Products",
     figma: "Email Module / Products / Four-column Grid",
     file: "email-module-products-four-column-grid.html",
+    surfaceMode: "configurable",
     slots: {
       "image-1": "asset:visuel", "produit-1-titre": "texte",
       "texte-descriptif-1": "texte", "lien-1": "lien", "image-2": "asset:visuel",
@@ -357,6 +404,7 @@ export const emailBlockManifest = {
     family: "Products",
     figma: "Email Module / Products / Three-column Grid",
     file: "email-module-products-three-column-grid.html",
+    surfaceMode: "configurable",
     slots: {
       "image-1": "asset:visuel", "produit-1-titre": "texte",
       "texte-descriptif-1": "texte", "lien-1": "lien", "image-2": "asset:visuel",
@@ -369,6 +417,7 @@ export const emailBlockManifest = {
     family: "Story",
     figma: "Email Module / Text and CTA / Variant 01",
     file: "email-module-text-and-cta-variant-01.html",
+    surfaceMode: "configurable",
     slots: {
       "titre-section": "texte", "texte-descriptif": "texte", "cta-1": "cta:fleche",
     },
@@ -377,6 +426,7 @@ export const emailBlockManifest = {
     family: "Story",
     figma: "Email Module / Text and CTA / Variant 02",
     file: "email-module-text-and-cta-variant-02.html",
+    surfaceMode: "configurable",
     slots: {
       "titre-section": "texte", "image-1": "asset:visuel", "texte-descriptif": "texte",
       "cta-1": "cta:fleche",
@@ -386,6 +436,7 @@ export const emailBlockManifest = {
     family: "Story",
     figma: "Email Module / Text and Feature Card",
     file: "email-module-text-and-feature-card.html",
+    surfaceMode: "configurable",
     slots: {
       "titre-section": "texte", "texte-descriptif-1": "texte",
       "titre-principal": "texte", "texte-descriptif-2": "texte", "cta-1": "cta:fleche",
@@ -395,12 +446,14 @@ export const emailBlockManifest = {
     family: "Story",
     figma: "Email Module / Text Only",
     file: "email-module-text-only.html",
+    surfaceMode: "configurable",
     slots: { "titre-section": "texte", "texte-descriptif": "texte" },
   },
   "email-module-legal-disclaimer": {
     family: "Footer",
     figma: "Ajout projet — hors catalogue Figma",
     file: "lame-disclaimer.html",
+    surfaceMode: "fixed",
     slots: { "disclaimer-1": "disclaimer", "disclaimer-2": "disclaimer" },
     optional: ["disclaimer-2"],
   },

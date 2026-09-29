@@ -7,8 +7,8 @@ Ce domaine est indépendant du Landing Page Generator :
 
 Supprimer ce dossier ne change rien au générateur de landing pages.
 
-Étape actuelle : contrat, catalogue et templates normalisés (étape 1.5). Pas
-encore de schéma Zod, de renderer, d'UI, d'API ni de génération.
+Étape actuelle : contrat, catalogue, templates normalisés et validation
+runtime (étape 2). Pas encore de renderer, d'UI, d'API ni de génération.
 
 | Fichier | Rôle |
 |---|---|
@@ -18,6 +18,7 @@ encore de schéma Zod, de renderer, d'UI, d'API ni de génération.
 | `system.ts` | éléments et jetons résolus par le système, jamais par une config |
 | `disclaimers.ts` | catalogue fermé des 9 disclaimers (guidelines, chapitre 12) |
 | `surfaces.ts` | les 7 surfaces fermées et les invariants de `recettes-couleur.md` |
+| `schemas.ts` | validation Zod d'EmailConfig, dérivée du manifeste (`parseEmailConfig`) |
 | `index.ts` | exports publics |
 
 ## Principe : le HTML des lames est maîtrisé
@@ -117,7 +118,7 @@ Une config choisit un identifiant, jamais un texte :
 
 Seule l'offre promotionnelle prend un paramètre : `endDate` remplace
 `JJ/MM/AAAA`. Le renderer ajoute l'astérisque devant le texte. Deux
-disclaimers identiques dans la même lame seront refusés par le futur schéma.
+disclaimers identiques dans la même lame sont refusés par le schéma.
 
 **Transformation structurelle autorisée, unique :**
 - **Lame et slot :** `email-module-legal-disclaimer`, `disclaimer-2`.
@@ -131,12 +132,21 @@ Il n'existe aucune autre suppression, et pas de mécanisme générique.
 
 `EmailHref` accepte trois formes :
 
-- une URL `https://…`, avec la query `?[UTM À DÉFINIR — CRM]` admise ;
+- une URL `https://…` avec un hôte. Elle peut interpoler du Liquid
+  `{{ … }}` dans son chemin, sa query ou son fragment, jamais dans l'hôte.
+  La query `?[UTM À DÉFINIR — CRM]` (ou `&…`) est admise en fin d'URL ;
 - une expression Liquid complète `{{ … }}` ;
 - le placeholder explicite `[URL À CONFIRMER]`.
 
 `javascript:`, `data:`, `http:` et les URL relatives sont refusés dès le
-typage. `[URL À CONFIRMER]` et le placeholder UTM sont valides
+typage. Le runtime refuse en plus :
+
+- un Liquid mal fermé ou vide ;
+- un espace, un guillemet ou un chevron hors Liquid ;
+- une URL sans hôte.
+
+Liquid n'est jamais exécuté : c'est une chaîne destinée à la plateforme
+d'envoi. `[URL À CONFIRMER]` et le placeholder UTM sont valides
 structurellement ; l'envoyabilité sera contrôlée séparément.
 
 Les liens `lien-1..3` du footer restent éditoriaux, fournis par la config. Les liens système (désabonnement, préférences) ne reçoivent ni `href`
@@ -148,15 +158,76 @@ bandeau `email-module-preheader` reste donc un lien éditorial.
 
 ## Surfaces
 
-`surface` prend l'une des sept surfaces fermées. Header et footer (disclaimer
-inclus) n'acceptent que `page`, et ce dès le typage. Le futur schéma
-appliquera en plus la règle de `emailSurfaceRules` : jamais deux zones
-colorées à la suite.
+Chaque lame déclare `surfaceMode` dans le manifeste.
+
+- **`configurable` (26 lames)** : la table de substitution de
+  `recettes-couleur.md` §3 s'applique. La lame accepte `surface`, l'une des
+  sept surfaces fermées (`page` si absente).
+- **`fixed` (10 lames)** : la lame garde ses couleurs, et la config ne peut
+  pas fournir `surface`, que le renderer ignorerait. Ces lames sont :
+  - les 3 Header et les 2 Footer (disclaimer inclus), qui restent en Page
+    toujours (§4). Le manifeste ne compile pas autrement ;
+  - `banner-full`, `discount-banner-full`, `hero-offer-image-top` et
+    `hero-split-image-dark`, dont le panneau principal est en `#45413B` ;
+  - `benefits-compact-highlights`, dont toute la table est en `#2F2A28`.
+
+  Aucune de ces deux valeurs n'est un fond de la table §3 : elles n'y
+  figurent qu'en texte et en filet.
+
+Le schéma applique en plus la règle de `emailSurfaceRules` : jamais deux
+surfaces configurées colorées à la suite. Les couleurs intrinsèques des lames
+`fixed` ne comptent pas.
 
 Restent des consignes de génération, hors validation V1 :
 
 - « exactement une zone colorée » (`recettes-couleur.md`) ;
 - le choix de la surface selon le type d'email.
+
+## Validation runtime (`schemas.ts`)
+
+Toute config d'origine inconnue passe par `parseEmailConfig` (lève une
+`ZodError`) ou `safeParseEmailConfig` (erreurs détaillées, à renvoyer au
+modèle) avant d'être un `EmailConfig`.
+
+- Les 36 schémas de lame sont construits en parcourant `emailBlockManifest` :
+  aucune liste de lames n'est recopiée.
+- Les slots sont un objet strict par lame : slot inconnu ou élément système
+  refusés, slots requis obligatoires, `optional` acceptés absents.
+- Les valeurs viennent des catalogues : icônes, disclaimers, surfaces.
+- Règles entre lames : ids uniques, pas de surfaces colorées consécutives,
+  exactement un footer en dernière position, et au plus une lame de mentions
+  légales (optionnelle), immédiatement avant le footer.
+- Le footer est la lame qui porte le lien de désabonnement, exigé par
+  `README-assets-projet.md` (« un footer avec son lien de désabonnement »).
+  `instructions-projet.md` le place en fin de séquence, et le disclaimer
+  « juste avant le footer ».
+- Aucune source n'impose le header : il n'apparaît que dans la séquence
+  indicative de 5 à 8 lames. Il n'est donc pas obligatoire.
+
+Règles que seul le runtime peut vérifier :
+
+- textes visibles non vides, sans balisage HTML réel. Sont refusés :
+  - les balises nommées : `<strong>`, `</a>`, `<a href="…">`, `<br/>` ;
+  - les commentaires et le doctype.
+
+  Un `<` ou `>` isolé est accepté (« Réponse en <5 min », « x > 5 »).
+  Limites connues : `a<b et c>d` écrit sans espaces, ou `<Nom>`, ont la forme
+  d'une balise et sont refusés ;
+- ids au format `^[a-z][a-z0-9-]*$` ;
+- URL HTTPS bien formées, avec un hôte ;
+- dates calendaires réelles ;
+- disclaimers distincts dans une même lame ;
+- `blocks` non vide.
+
+Hors validation : longueurs d'objet et de préheader, nombre de lames, CTA
+unique, lexique, envoyabilité, et le choix entre alt descriptif et alt vide
+(moteur de génération, accessibilité).
+
+Aucun effet global sur Zod : les messages intégrés passent en français à
+chaque appel de `parseEmailConfig` et `safeParseEmailConfig`, sans
+`z.config`. Les messages métier sont écrits dans les schémas.
+`EmailConfigSchema.parse` est une API bas niveau : appelée directement, elle
+garde la locale globale et ne garantit pas le français.
 
 ## Arbitrages V1
 

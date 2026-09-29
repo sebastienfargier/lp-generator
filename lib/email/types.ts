@@ -18,7 +18,7 @@ import type {
   EmailSlotKind,
   emailBlockManifest,
 } from "./manifest"
-import type { EmailSurface, emailSurfaceRules } from "./surfaces"
+import type { EmailSurface } from "./surfaces"
 import type { emailHrefPlaceholders } from "./system"
 
 type EmailManifest = typeof emailBlockManifest
@@ -45,7 +45,8 @@ export type EmailLiquidExpression = `{{${string}}}`
 
 /**
  * Cible d'un lien. Jamais `javascript:`, `data:`, `mailto:` ni URL relative ;
- * le futur schéma interdira en plus espaces, guillemets et chevrons.
+ * `./schemas` exige en plus une URL bien formée, avec un hôte, sans espace,
+ * guillemet ni chevron ; Liquid `{{ … }}` y est admis hors de l'hôte.
  */
 export type EmailHref =
   | EmailHttpsUrl
@@ -147,22 +148,25 @@ export type EmailBlockSlots<Type extends EmailBlockType> = [
 
 /* Blocs et email */
 
-type PageOnlyFamily = (typeof emailSurfaceRules)["pageOnlyFamilies"][number]
-
-/** Header et footer n'acceptent que la surface neutre. */
-type AllowedSurface<Type extends EmailBlockType> =
-  EmailManifest[Type]["family"] extends PageOnlyFamily
-    ? (typeof emailSurfaceRules)["neutral"]
-    : EmailSurface
+/**
+ * Surface de couleur : seulement pour une lame `configurable`. Une lame
+ * `fixed` (header, footer, lames à fond sombre intrinsèque) n'a pas de clé
+ * `surface` : le renderer ne l'appliquerait pas.
+ */
+type BlockSurface<Type extends EmailBlockType> =
+  EmailManifest[Type]["surfaceMode"] extends "configurable"
+    ? {
+        /** Surface de la lame ; `page` si absente. */
+        surface?: EmailSurface
+      }
+    : unknown
 
 export type EmailBlockOf<Type extends EmailBlockType> = {
   /** Identifiant unique dans l'email. */
   id: string
   type: Type
-  /** Surface de la lame ; `page` si absente. */
-  surface?: AllowedSurface<Type>
   slots: EmailBlockSlots<Type>
-}
+} & BlockSurface<Type>
 
 /** Union discriminée par `type` : une entrée par lame du manifeste. */
 export type EmailBlock = {
