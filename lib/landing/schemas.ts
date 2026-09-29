@@ -2,6 +2,10 @@ import { z } from "zod"
 
 import type { LandingPageConfig } from "./types"
 
+// Messages d'erreur intégrés de Zod en français (erreurs lisibles par
+// l'utilisateur du générateur et, plus tard, renvoyées au modèle).
+z.config(z.locales.fr())
+
 /**
  * Schémas Zod du contrat LandingPageConfig : source de vérité runtime.
  * Les types publics de `./types` en sont dérivés (`z.infer`).
@@ -17,6 +21,8 @@ import type { LandingPageConfig } from "./types"
 
 /** Texte obligatoire : au moins un caractère non blanc. */
 const text = z.string().regex(/\S/, "Ne doit pas être vide.")
+
+const atLeastOne = "Au moins un élément est requis."
 
 /** Identifiant utilisable comme ancre HTML (`#formations-rh`). */
 export const LandingIdSchema = z
@@ -105,7 +111,7 @@ export const LandingTextItemSchema = z.strictObject({
 
 export const LandingHighlightSchema = z.strictObject({
   title: text,
-  items: z.array(text).min(1),
+  items: z.array(text).min(1, atLeastOne),
   icon: LandingIconNameSchema.optional(),
 })
 
@@ -139,7 +145,7 @@ export const LandingAudienceItemSchema = z.strictObject({
 export const ProductHeroConfigSchema = z.strictObject({
   title: text,
   description: text.optional(),
-  badges: z.array(LandingBadgeSchema).min(1).optional(),
+  badges: z.array(LandingBadgeSchema).min(1, atLeastOne).optional(),
   pricing: LandingPricingSchema.optional(),
   primaryAction: LandingActionSchema.optional(),
   secondaryAction: LandingActionSchema.optional(),
@@ -157,7 +163,7 @@ export const EditorialHeroConfigSchema = z.strictObject({
 
 export const ImmersiveHeroConfigSchema = z.strictObject({
   /** Une entrée par ligne : le découpage fait partie de la direction artistique. */
-  headline: z.array(text).min(1),
+  headline: z.array(text).min(1, atLeastOne),
   visual: z.strictObject({
     ...imageShape,
     position: LandingImagePositionSchema.optional(),
@@ -170,31 +176,31 @@ export const ImmersiveHeroConfigSchema = z.strictObject({
 
 export const ProductGridConfigSchema = z.strictObject({
   label: text.optional(),
-  products: z.array(LandingProductSchema).min(1),
+  products: z.array(LandingProductSchema).min(1, atLeastOne),
 })
 
 export const ValuePropsConfigSchema = z.strictObject({
   label: text.optional(),
-  items: z.array(LandingTextItemSchema).min(1),
+  items: z.array(LandingTextItemSchema).min(1, atLeastOne),
 })
 
 export const PillarsConfigSchema = z.strictObject({
   eyebrow: text.optional(),
   title: text,
   description: text.optional(),
-  items: z.array(LandingTextItemSchema).min(1),
+  items: z.array(LandingTextItemSchema).min(1, atLeastOne),
 })
 
 export const ContentCarouselConfigSchema = z.strictObject({
   label: text.optional(),
-  items: z.array(LandingContentItemSchema).min(1),
+  items: z.array(LandingContentItemSchema).min(1, atLeastOne),
 })
 
 export const AudienceSwitcherConfigSchema = z
   .strictObject({
     label: text.optional(),
     defaultValue: LandingIdSchema.optional(),
-    items: z.array(LandingAudienceItemSchema).min(1),
+    items: z.array(LandingAudienceItemSchema).min(1, atLeastOne),
   })
   .superRefine((config, ctx) => {
     const seen = new Set<string>()
@@ -288,7 +294,7 @@ export const LandingPageSchema = z
     version: z.literal(1),
     id: LandingIdSchema,
     title: text,
-    sections: z.array(LandingPageSectionSchema).min(1),
+    sections: z.array(LandingPageSectionSchema).min(1, atLeastOne),
   })
   .superRefine((page, ctx) => {
     const ids = new Set<string>()
