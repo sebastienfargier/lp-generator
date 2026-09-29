@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# banque d'images source (volumineuse, non versionnée)
+/images-banq/

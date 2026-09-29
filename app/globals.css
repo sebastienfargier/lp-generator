@@ -1,26 +1,207 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Charte Studi (Brand OS) — https://brand-os-orcin-two.vercel.app/design-tokens
+ * La palette est fermée : seules les couleurs de la marque existent en utilitaires.
+ * Rayons : sm 6 · md 8 · lg 10 · xl 14 · full.
+ */
+@theme {
+  --color-*: initial;
+  --radius-*: initial;
 }
 
 @theme inline {
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-heading: var(--font-sans);
+
+  /* Tokens de marque (noms identiques à studi-colors.json) */
+  --color-brand-green: var(--brand-green);
+  --color-brand-green-soft: var(--brand-green-soft);
+  --color-accent-1: var(--accent-1);
+  --color-accent-1-hover: var(--accent-1-hover);
+  --color-accent-1-active: var(--accent-1-active);
+  --color-accent-2: var(--accent-2);
+  --color-accent-2-soft: var(--accent-2-soft);
+  --color-neutral-0: var(--neutral-0);
+  --color-neutral-50: var(--neutral-50);
+  --color-neutral-100: var(--neutral-100);
+  --color-neutral-200: var(--neutral-200);
+  --color-neutral-300: var(--neutral-300);
+  --color-neutral-400: var(--neutral-400);
+  --color-neutral-500: var(--neutral-500);
+  --color-neutral-600: var(--neutral-600);
+  --color-neutral-700: var(--neutral-700);
+  --color-neutral-800: var(--neutral-800);
+  --color-neutral-900: var(--neutral-900);
+  --color-neutral-950: var(--neutral-950);
+  --color-orange-50: var(--orange-50);
+  --color-orange-100: var(--orange-100);
+  --color-orange-200: var(--orange-200);
+  --color-orange-300: var(--orange-300);
+  --color-orange-400: var(--orange-400);
+  --color-orange-500: var(--orange-500);
+  --color-orange-600: var(--orange-600);
+  --color-orange-700: var(--orange-700);
+  --color-orange-800: var(--orange-800);
+  --color-orange-900: var(--orange-900);
+  --color-orange-950: var(--orange-950);
+  /* Sémantiques : retours d'état uniquement, jamais décoratif */
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-info: var(--info);
+
+  /* Rôles shadcn/ui, mappés sur les tokens de marque */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-surface: var(--surface);
+  --color-surface-foreground: var(--surface-foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-active: var(--primary-active);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-strong: var(--muted-strong);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Typographie : Inter, cinq styles, aucun autre corps ni graisse */
+  --text-display: 3rem;
+  --text-display--line-height: 3.5rem;
+  --text-display--font-weight: 600;
+  --text-h1: 1.875rem;
+  --text-h1--line-height: 2.375rem;
+  --text-h1--font-weight: 600;
+  --text-h2: 1.25rem;
+  --text-h2--line-height: 1.75rem;
+  --text-h2--font-weight: 600;
+  --text-body: 0.875rem;
+  --text-body--line-height: 1.375rem;
+  --text-body--font-weight: 400;
+  --text-caption: 0.75rem;
+  --text-caption--line-height: 1rem;
+  --text-caption--font-weight: 500;
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-full: calc(infinity * 1px);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+:root {
+  --brand-green: #0d302d;
+  --brand-green-soft: #e9f6f5;
+  --accent-1: #edf878;
+  --accent-1-hover: #dae46e;
+  --accent-1-active: #c7d065;
+  --accent-2: #f87363;
+  --accent-2-soft: #ffccd1;
+  --neutral-0: #ffffff;
+  --neutral-50: #fafaf9;
+  --neutral-100: #f5f5f4;
+  --neutral-200: #e7e5e4;
+  --neutral-300: #d7d3d0;
+  --neutral-400: #a9a39d;
+  --neutral-500: #79726b;
+  --neutral-600: #58544d;
+  --neutral-700: #45413b;
+  --neutral-800: #2f2a28;
+  --neutral-900: #1d1916;
+  --neutral-950: #0c0a09;
+  --orange-50: #fef2f3;
+  --orange-100: #ffe3e6;
+  --orange-200: #ffccd1;
+  --orange-300: #ffa8a7;
+  --orange-400: #f87363;
+  --orange-500: #f04a33;
+  --orange-600: #dc2d0d;
+  --orange-700: #b82307;
+  --orange-800: #981f0f;
+  --orange-900: #7e2016;
+  --orange-950: #450c06;
+  --success: #16a34a;
+  --warning: #f59e0b;
+  --danger: #dc2626;
+  --info: #2563eb;
+
+  /* Mapping identique à celui du Brand OS */
+  --background: var(--neutral-0);
+  --foreground: var(--neutral-900);
+  --surface: var(--neutral-50);
+  --surface-foreground: var(--neutral-900);
+  --card: var(--neutral-0);
+  --card-foreground: var(--neutral-900);
+  --popover: var(--neutral-0);
+  --popover-foreground: var(--neutral-900);
+  --primary: var(--neutral-900);
+  --primary-hover: var(--neutral-800);
+  --primary-active: var(--neutral-950);
+  --primary-foreground: var(--neutral-0);
+  --secondary: var(--neutral-100);
+  --secondary-foreground: var(--neutral-900);
+  --muted: var(--neutral-100);
+  --muted-strong: var(--neutral-200);
+  --muted-foreground: var(--neutral-600);
+  --accent: var(--brand-green-soft);
+  --accent-foreground: var(--brand-green);
+  --destructive: var(--danger);
+  --border: var(--neutral-200);
+  --input: var(--neutral-200);
+  --ring: var(--brand-green);
+  --chart-1: var(--neutral-300);
+  --chart-2: var(--neutral-400);
+  --chart-3: var(--neutral-500);
+  --chart-4: var(--neutral-600);
+  --chart-5: var(--neutral-800);
+  --radius: 0.625rem;
+  --sidebar: var(--neutral-50);
+  --sidebar-foreground: var(--neutral-900);
+  --sidebar-primary: var(--brand-green);
+  --sidebar-primary-foreground: var(--neutral-0);
+  --sidebar-accent: var(--brand-green-soft);
+  --sidebar-accent-foreground: var(--brand-green);
+  --sidebar-border: var(--neutral-200);
+  --sidebar-ring: var(--brand-green);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
   }
-}
-
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
 }
