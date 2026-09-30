@@ -369,29 +369,68 @@ photo, d'une architecture différente :
 | Reconversion | `hero-promotional-image-medium` | 600 × 270 | `email-demo-reconversion.jpg`, 1200 × 540 | `audience-3.jpg` |
 | Accompagnement | `hero-split-image` | 229 × 456 | `email-demo-accompagnement.jpg`, 458 × 912 | `content-2.jpg` |
 | Évolution | `hero-promotional-image-large` | 600 × 534 | `email-demo-evolution.jpg`, 1200 × 1068 | `hero-apprenante.jpg` |
+| Promotion | `hero-offer-image-top` | 600 × 300 | `email-demo-promotion.jpg`, 1200 × 600 | `content-4.jpg` |
+| Black Friday (campagne) | `hero-promotional-image-large` | 600 × 534 | `email-demo-black-friday.jpg`, 690 × 614 | `campaign-black-friday-640.jpg` |
+| Studi Days (campagne) | `hero-promotional-image-large` | 600 × 534 | `email-demo-studi-days.jpg`, 640 × 570 | `campaign-studi-days-640.jpg` |
+| Studi Meet (campagne) | `hero-promotional-image-medium` | 600 × 270 | `email-demo-studi-meet.jpg`, 640 × 288 | `service-studi-meet-640.jpg` |
 
 Les fichiers sont des recadrages des photos de `public/images/`, dont les
 originaux ne sont pas modifiés. Dans l'EmailConfig et le HTML canonique,
 chaque photo est `https://demo-assets.invalid/<fichier>` : une URL HTTPS
 acceptée par `ImageAssetSlot`, mais sur un TLD réservé (RFC 2606), jamais
 résolu. Le HTML exporté reste donc visiblement non envoyable. Seul
-`toPreviewHtml` remplace ces trois URLs, par un mapping fermé : une autre URL
+`toPreviewHtml` remplace ces quatre URLs, par un mapping fermé : une autre URL
 de `demo-assets.invalid` reste telle quelle. `ImageAssetSlot` et
 `EmailGenerationRequest` refusent toujours les chemins locaux.
 
 **Scénario Promotion (démo uniquement).** Quatrième objectif du mode démo
 (`emailDemoObjectives`). `EmailGenerationRequest` garde ses trois objectifs :
 le pont `emailBriefToGenerationRequest` convertit Promotion en
-`emailType: "promo"`, sans offre. Sa seule donnée commerciale est
-`promotionDemoOffer` (`-50 %`, `source: "demo"`) : une valeur fictive,
-décidée pour la démo, qui n'est ni une offre Studi ni une donnée des sources.
-Elle est injectée dans le titre du hero et dans le slot `valeur-cle` de
-`banner-full`. Aucun code promo, date de fin, compte à rebours, prix ni
-condition n'a été fourni : les lames qui en exigent (`discount-banner-*`,
-`hero-offer-image-top`, countdowns) ne sont pas utilisées, et aucun
-disclaimer n'est ajouté, faute d'entrée du catalogue qui corresponde. C'est
-une limite de la démo. Le hero réutilise la photo Reconversion, déjà au ratio
-exact de `hero-promotional-image-medium`.
+`emailType: "promo"`, sans offre. Ses seules données commerciales sont
+`promotionDemoOffer` (`-50 %`, code `DEMO50`, `source: "demo"`) : des valeurs
+fictives, décidées pour la démo, qui ne sont ni une offre Studi ni des faits
+validés pour le contrat de génération. Composition : header de campagne,
+`hero-offer-image-top` (photo, `valeur-cle`, `code-promo-1`, CTA catalogue,
+lien Parcours Découverte), `icons-list` en Accent 1, footer. Aucune date de
+fin, compte à rebours, prix ni condition n'a été fourni : les countdowns ne
+sont pas utilisés, et aucun disclaimer n'est ajouté (`offre-promotionnelle`
+exige une date de fin). C'est une limite de la démo.
+
+**Campagnes visuelles (démo uniquement).** Deux exemples construits autour
+d'une création fournie, choisis par le champ interne `visual` d'`EmailBrief`
+(absent de l'EmailConfig, du HTML et d'`EmailGenerationRequest`). Le texte
+des créations leur appartient : il n'est ni extrait, ni recopié dans le HTML,
+ni transformé en données. Les créations, fournies à 640 px, ne sont ni
+étirées ni recadrées dans leur contenu : seul du fond uni est retiré ou
+ajouté, aux couleurs exactes de la palette (Accent 1 pour Black Friday,
+Marque pour Studi Days).
+
+- **Black Friday** : header newsletter, grand visuel en Accent 1, footer ;
+  CTA catalogue. Le « -40 % » du visuel n'est pas une offre : aucune offre,
+  code, date ni disclaimer. Le visuel comporte un astérisque dont le renvoi
+  n'a pas été fourni : l'interface le signale, et l'email n'est pas prêt pour
+  un envoi réel.
+- **Studi Days** : header newsletter, grand visuel en Marque, atouts,
+  footer ; CTA « Découvrir Studi » vers `methode` (aucune page Studi Days).
+- **Studi Meet** : header newsletter, visuel moyen en Encre, atouts, footer ;
+  CTA « Découvrir Studi Meet » vers la destination `studi-meet`
+  (`https://meet.studi.fr/`). C'est un service d'apprentissage en ligne, pas
+  un événement : les textes ne reprennent que ce que présente le site
+  (catégories de cours, cours de groupe, chat vidéo en direct, tuteurs), sans
+  date, lieu, programme ni réservation. Recadrage : 640 × 288 à partir de
+  y = 60 (haut du mur et bas de la table retirés).
+
+**Destinations hors studi.com.** `destinations.ts` accepte une origine
+externe seulement si elle figure dans `emailExternalOrigins` (liste fermée :
+`https://meet.studi.fr`), avec pour source la page officielle. Les 60
+destinations studi.com sont inchangées (empreinte testée). Le contrat
+EmailConfig ne change pas : il n'a jamais filtré l'hôte des liens ; c'est la
+validation de la réponse du modèle (`validateGeneratedEmail`) qui refuse tout
+lien hors du contexte, et `studi-meet` n'entre dans aucun contexte.
+
+En mobile, `.ph300` laisse une bande d'environ 5 px sous la photo 2:1 du
+hero : `height:auto` n'est pas appliqué, car il dégraderait
+`product-details-variant-02`, qui partage la classe.
 
 **Largeur : 600 px.** La largeur canonique est de 600 px :
 - `.lame` et les 36 tables `class="lame"` font 600 px (`emailManifestSource.width`) ;

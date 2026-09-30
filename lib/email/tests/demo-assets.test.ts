@@ -21,6 +21,10 @@ const expected: Record<string, { asset: EmailDemoAssetId; lame: string }> = {
   reconversion: { asset: "reconversion", lame: "email-module-hero-promotional-image-medium" },
   accompagnement: { asset: "accompagnement", lame: "email-module-hero-split-image" },
   evolution: { asset: "evolution", lame: "email-module-hero-promotional-image-large" },
+  promotion: { asset: "promotion", lame: "email-module-hero-offer-image-top" },
+  "black-friday": { asset: "black-friday", lame: "email-module-hero-promotional-image-large" },
+  "studi-days": { asset: "studi-days", lame: "email-module-hero-promotional-image-large" },
+  "studi-meet": { asset: "studi-meet", lame: "email-module-hero-promotional-image-medium" },
 }
 const presets = Object.fromEntries(emailDemoPresets.map((preset) => [preset.id, preset.brief])) as Record<string, EmailBrief>
 const srcs = (html: string) => [...html.matchAll(/<img\b[^>]*\ssrc="([^"]*)"/g)].map((match) => match[1]!)
@@ -31,9 +35,9 @@ const success = (brief: EmailBrief) => {
 }
 
 describe("photos de démo — contrat canonique", () => {
-  test("trois URLs HTTPS sur demo-assets.invalid, valides pour ImageAssetSlot", () => {
+  test("sept URLs HTTPS sur demo-assets.invalid, valides pour ImageAssetSlot", () => {
     assert.equal(emailDemoAssetHost, "demo-assets.invalid")
-    assert.deepEqual(Object.keys(emailDemoAssets), ["reconversion", "accompagnement", "evolution"])
+    assert.deepEqual(Object.keys(emailDemoAssets), ["reconversion", "accompagnement", "evolution", "promotion", "black-friday", "studi-days", "studi-meet"])
     for (const asset of Object.values(emailDemoAssets)) {
       const url = new URL(asset.src)
       assert.equal(url.protocol, "https:")
@@ -62,12 +66,13 @@ describe("photos de démo — contrat canonique", () => {
     }
   })
 
-  test("trois architectures de hero distinctes", () => {
-    const heroes = Object.keys(expected).map((name) => generateDemoEmail(presets[name]!).blocks.find((block) => block.id === "hero")?.type)
-    assert.equal(new Set(heroes).size, 3)
+  test("quatre architectures de hero distinctes pour les scénarios photo", () => {
+    const photos = Object.entries(expected).filter(([, { asset }]) => emailDemoAssets[asset].kind === "photo")
+    const heroes = photos.map(([name]) => generateDemoEmail(presets[name]!).blocks.find((block) => block.id === "hero")?.type)
+    assert.equal(new Set(heroes).size, 4)
   })
 
-  test("chaque photo est au ratio 2x de son cadre, et le cadre est celui du template", () => {
+  test("aucun visuel déformé : photos à 2x du cadre, créations au ratio exact ; cadre du template", () => {
     for (const asset of Object.values(emailDemoAssets)) {
       const file = join(process.cwd(), "public", asset.preview)
       assert.ok(existsSync(file), file)
@@ -81,7 +86,15 @@ describe("photos de démo — contrat canonique", () => {
         if (marker >= 0xc0 && marker <= 0xc3) size = { height: jpeg.readUInt16BE(offset + 5), width: jpeg.readUInt16BE(offset + 7) }
         offset += 2 + length
       }
-      assert.deepEqual(size, { width: asset.frame.width * 2, height: asset.frame.height * 2 }, asset.preview)
+      if (asset.kind === "photo") {
+        assert.deepEqual(size, { width: asset.frame.width * 2, height: asset.frame.height * 2 }, asset.preview)
+      } else {
+        // Création fournie à 640 px : ratio du cadre à 0,1 % près, jamais plus étroite que lui.
+        const ratio = size!.width / size!.height
+        const frame = asset.frame.width / asset.frame.height
+        assert.ok(Math.abs(ratio - frame) / frame < 0.001, `${asset.preview} : ${size!.width}×${size!.height}`)
+        assert.ok(size!.width >= asset.frame.width, asset.preview)
+      }
       const template = readFileSync(join(process.cwd(), "lib/email/templates", emailBlockManifest[asset.lame].file), "utf8")
       assert.ok(template.includes(`width="${asset.frame.width}" height="${asset.frame.height}"`), asset.lame)
     }
@@ -106,8 +119,8 @@ describe("photos de démo — rendu et aperçu", () => {
     }
   })
 
-  test("toPreviewHtml résout exactement les trois mappings", () => {
-    assert.equal(emailDemoAssetPreviews.size, 3)
+  test("toPreviewHtml résout exactement les sept mappings", () => {
+    assert.equal(emailDemoAssetPreviews.size, 7)
     for (const asset of Object.values(emailDemoAssets)) {
       assert.equal(toPreviewHtml(`<img src="${asset.src}" alt="">`), `<img src="${asset.preview}" alt="">`)
     }
@@ -116,6 +129,8 @@ describe("photos de démo — rendu et aperçu", () => {
   test("une autre URL demo-assets.invalid n'est pas résolue", () => {
     for (const src of [
       "https://demo-assets.invalid/autre.jpg",
+      "https://demo-assets.invalid/email-demo-studi-meet.png",
+      "https://demo-assets.invalid/email-demo-black-friday.png",
       "https://demo-assets.invalid/email-demo-reconversion.jpg?v=2",
       "https://demo-assets.invalid/images/email-demo-evolution.jpg",
       "https://cdn.studi.com/email-demo-evolution.jpg",

@@ -14,7 +14,7 @@ import { emailSystemElements } from "./system"
  *   catalogue uniquement (un autre nom est une erreur)
  * - `[URL_CDN_SOCIAL_01…04]` → pixel transparent : aucun réseau n'est
  *   attribué à ces positions, l'emplacement reste vide sans image cassée
- * - les trois visuels du mode démo (`https://demo-assets.invalid/…`) →
+ * - les quatre visuels du mode démo (`https://demo-assets.invalid/…`) →
  *   `/images/email-demo-….jpg`, par un mapping fermé (`demo-assets.ts`) :
  *   une autre URL, même sur ce domaine, reste telle quelle
  * - `<a href="…">` → `<a data-preview-href="…">` : lien inerte, destination

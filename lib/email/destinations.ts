@@ -18,13 +18,18 @@
  *
  * Filières : `sources-studi.md` annonce « 17 pages de filière », mais sa
  * table en liste 34. Les 34 chemins sont repris : chacun est documenté.
+ *
+ * Services Studi sur un autre hôte : seule une origine de
+ * `emailExternalOrigins`, liste fermée, peut porter une destination, avec
+ * pour source la page officielle fournie. Les destinations studi.com ne
+ * changent pas.
  */
 import { emailHrefPlaceholders } from "./system"
 import type { EmailHttpsUrl } from "./types"
 
 export type EmailDestinationGroup = "catalogue" | "filiere" | "service" | "blog"
 
-type EmailDestinationEntry = {
+type EmailStudiDestination = {
   label: string
   path: `/fr/${string}`
   group: EmailDestinationGroup
@@ -35,6 +40,19 @@ type EmailDestinationEntry = {
 }
 
 export const studiOrigin = "https://www.studi.com"
+
+/** Origines HTTPS hors studi.com explicitement contrôlées. */
+export const emailExternalOrigins = ["https://meet.studi.fr"] as const
+
+export type EmailExternalOrigin = (typeof emailExternalOrigins)[number]
+
+/** Service Studi sur une origine contrôlée ; `source` : sa page officielle. */
+type EmailExternalDestination = Omit<EmailStudiDestination, "path"> & {
+  origin: EmailExternalOrigin
+  path: `/${string}`
+}
+
+type EmailDestinationEntry = EmailStudiDestination | EmailExternalDestination
 
 /** Usage commun des pages de filière (`sources-studi.md` §2). */
 export const filiereUsage =
@@ -108,13 +126,18 @@ export const emailDestinations = {
   "blog-les-tips-et-conseils": { label: "Blog — Les tips et conseils", path: "/fr/blog/les-tips-et-conseils", group: "blog", usage: "Parle aux jeunes.", source: "sources-studi.md §4 bis" },
   "blog-reconversion-professionnelle": { label: "Blog — Reconversion professionnelle", path: "/fr/blog/reconversion-professionnelle", group: "blog", usage: "Parle aux personnes en poste qui envisagent une reconversion.", source: "sources-studi.md §4 bis" },
   "blog-studi-team": { label: "Blog — Studi Team", path: "/fr/blog/studi-team", group: "blog", usage: "Marque employeur : jamais dans un email d'acquisition.", source: "sources-studi.md §4 bis" },
+
+  /* Services Studi hors studi.com (origine contrôlée, source officielle) */
+  "studi-meet": { label: "Studi Meet", origin: "https://meet.studi.fr", path: "/", group: "service", usage: "Découvrir Studi Meet et accéder au service.", source: "https://meet.studi.fr/" },
 } as const satisfies Record<string, EmailDestinationEntry>
 
 export type EmailDestinationId = keyof typeof emailDestinations
 
 /** URL d'une destination contrôlée, avec le placeholder UTM du CRM. */
 export function emailDestinationUrl(id: EmailDestinationId): EmailHttpsUrl {
-  return `${studiOrigin}${emailDestinations[id].path}?${emailHrefPlaceholders.utm}`
+  const destination: EmailDestinationEntry = emailDestinations[id]
+  const origin = "origin" in destination ? destination.origin : studiOrigin
+  return `${origin}${destination.path}?${emailHrefPlaceholders.utm}`
 }
 
 /**

@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 
-import type { EmailBrief } from "@/lib/email/demo-generator"
+import type { EmailBrief, EmailDemoPreset, EmailDemoVisual } from "@/lib/email/demo-generator"
 import type {
   EmailGenerationError,
   EmailGenerationResult,
@@ -16,7 +16,8 @@ type EmailWorkspaceProps = {
   initialBrief: EmailBrief
   initialResult: EmailGenerationResult
   objectives: readonly { value: EmailBrief["objective"]; label: string }[]
-  presets: readonly { id: string; label: string; brief: EmailBrief }[]
+  presets: readonly EmailDemoPreset[]
+  notices: Partial<Record<EmailDemoVisual, string>>
 }
 
 const networkError: EmailGenerationError = {
@@ -39,7 +40,7 @@ function isGenerationResult(value: unknown): value is EmailGenerationResult {
  * Seule partie client du générateur d'emails : état du brief, appel de
  * POST /api/generate-email, et aperçu du HTML rendu côté serveur.
  */
-export function EmailWorkspace({ initialBrief, initialResult, objectives, presets }: EmailWorkspaceProps) {
+export function EmailWorkspace({ initialBrief, initialResult, objectives, presets, notices }: EmailWorkspaceProps) {
   const [brief, setBrief] = useState(initialBrief)
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<EmailGenerationError | null>(
@@ -86,6 +87,7 @@ export function EmailWorkspace({ initialBrief, initialResult, objectives, preset
           brief={brief}
           objectives={objectives}
           presets={presets}
+          notices={notices}
           error={error}
           pending={pending}
           onBriefChange={setBrief}

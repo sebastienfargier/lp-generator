@@ -6,7 +6,9 @@ import assert from "node:assert/strict"
 import { describe, test } from "node:test"
 
 import { defaultEmailBrief } from "../demo-generator"
-import { emailDestinations, emailDestinationUrl, emailUnconfirmedDestinations, studiOrigin } from "../destinations"
+import { createHash } from "node:crypto"
+
+import { emailDestinations, emailDestinationUrl, emailExternalOrigins, emailUnconfirmedDestinations, studiOrigin } from "../destinations"
 import { emailDisclaimers } from "../disclaimers"
 import { buildEmailGenerationContext, explainEmailSectionSelection } from "../generation-context"
 import { emailBriefToGenerationRequest, type EmailGenerationRequest } from "../generation-request"
@@ -21,23 +23,53 @@ const contexts = Object.fromEntries(
 const fullSize = JSON.stringify(getEmailSectionCatalogForPrompt()).length
 const manifestTypes = new Set(Object.keys(emailBlockManifest))
 const destinationIds = Object.keys(emailDestinations) as (keyof typeof emailDestinations)[]
+const isExternal = (id: (typeof destinationIds)[number]) => "origin" in emailDestinations[id]
+const studiIds = destinationIds.filter((id) => !isExternal(id))
+const externalIds = destinationIds.filter(isExternal)
 const types = (context: (typeof contexts)[string]): string[] => context.sections.map((section) => section.type)
 
 describe("destinations contrôlées", () => {
-  test("chaque URL : hôte des sources, chemin /fr/, placeholder UTM, EmailHref valide", () => {
+  test("chaque URL studi.com : hôte des sources, chemin /fr/, placeholder UTM, EmailHref valide", () => {
     assert.equal(studiOrigin, "https://www.studi.com")
-    for (const id of destinationIds) {
+    for (const id of studiIds) {
       const url = emailDestinationUrl(id)
       assert.ok(url.startsWith(`${studiOrigin}/fr/`) && url.endsWith("?[UTM À DÉFINIR — CRM]") && isEmailHref(url), url)
     }
   })
 
-  test("60 destinations, chacune avec sa provenance ; 34 filières", () => {
-    assert.equal(destinationIds.length, 60)
+  test("60 destinations studi.com, chacune avec sa provenance ; 34 filières", () => {
+    assert.equal(studiIds.length, 60)
     assert.equal(Object.values(emailDestinations).filter((destination) => destination.group === "filiere").length, 34)
-    for (const destination of Object.values(emailDestinations)) {
-      assert.match(destination.source, /^(sources-studi\.md|guidelines-communication\.md) §/)
+    for (const id of studiIds) assert.match(emailDestinations[id].source, /^(sources-studi\.md|guidelines-communication\.md) §/, id)
+  })
+
+  test("non-régression : les 60 destinations studi.com sont identiques à l'état précédent", () => {
+    const snapshot = JSON.stringify(studiIds.map((id) => {
+      const destination = emailDestinations[id]
+      return [id, emailDestinationUrl(id), destination.label, destination.group, destination.usage, destination.source]
+    }))
+    // Empreinte relevée avant l'ajout des destinations externes (2026-09-30).
+    assert.equal(createHash("sha256").update(snapshot).digest("hex"), "4987ad9c1372004cad6a03588d642ce467ffb749cf7985676c4aeafcc8cfe9ee")
+  })
+
+  test("destinations externes : uniquement les origines contrôlées, source officielle", () => {
+    assert.deepEqual([...emailExternalOrigins], ["https://meet.studi.fr"])
+    assert.deepEqual(externalIds, ["studi-meet"])
+    for (const id of externalIds) {
+      const destination = emailDestinations[id]
+      assert.ok("origin" in destination && (emailExternalOrigins as readonly string[]).includes(destination.origin), id)
+      assert.equal(destination.source, `${"origin" in destination ? destination.origin : ""}/`)
+      const url = emailDestinationUrl(id)
+      assert.ok(url.endsWith("?[UTM À DÉFINIR — CRM]") && isEmailHref(url), url)
     }
+    assert.equal(emailDestinationUrl("studi-meet"), "https://meet.studi.fr/?[UTM À DÉFINIR — CRM]")
+    // Toute URL du catalogue a pour hôte studi.com ou une origine contrôlée.
+    const hosts = new Set(destinationIds.map((id) => new URL(emailDestinationUrl(id).split("?")[0]!).origin))
+    assert.deepEqual([...hosts].sort(), [studiOrigin, ...emailExternalOrigins].sort())
+  })
+
+  test("Studi Meet n'entre dans aucun contexte de génération (mode démo seulement)", () => {
+    for (const context of Object.values(contexts)) assert.ok(!context.links.some((link) => link.id === "studi-meet"))
   })
 
   test("les destinations non confirmées ne sont pas proposables", () => {

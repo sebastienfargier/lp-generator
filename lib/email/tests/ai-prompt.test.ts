@@ -151,6 +151,15 @@ describe("validation de la réponse", () => {
     assert.match(JSON.stringify(validateGeneratedEmail(outsider, prompt)), /hors des candidates/)
   })
 
+  test("URL HTTPS externe hors contexte refusée, même une origine contrôlée", () => {
+    const output = simulatedOutput(prompt)
+    const hero = output.blocks[1]!
+    for (const href of ["https://exemple.com/", "https://meet.studi.fr/?[UTM À DÉFINIR — CRM]"]) {
+      const external = { ...output, blocks: [output.blocks[0], { ...hero, slots: { ...hero.slots, "cta-1": { label: "Go", href } } }, ...output.blocks.slice(2)] }
+      assert.match(JSON.stringify(validateGeneratedEmail(external, prompt)), /destinations contrôlées/, href)
+    }
+  })
+
   test("fait recopié différent de la requête : refusé", () => {
     const promo = prompts.promo!
     const link = promo.context.links[0]!.url

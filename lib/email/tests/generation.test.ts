@@ -23,7 +23,9 @@ const slotText = (brief: EmailBrief, blockId: string, slot: string) => {
   return JSON.stringify((block?.slots as Record<string, unknown>)[slot])
 }
 
-const presets = Object.fromEntries(emailDemoPresets.map((preset) => [preset.id, preset.brief])) as Record<string, EmailBrief>
+// Scénarios par objectif ; les campagnes visuelles ont leurs tests (campaigns.test.ts).
+const scenarioPresets = emailDemoPresets.filter((preset) => preset.group === "scenario")
+const presets = Object.fromEntries(scenarioPresets.map((preset) => [preset.id, preset.brief])) as Record<string, EmailBrief>
 const types = (brief: EmailBrief) => generateDemoEmail(brief).blocks.map((block) => block.type)
 const allowedUrls = new Set<string>((Object.keys(emailDestinations) as (keyof typeof emailDestinations)[]).map((id) => emailDestinationUrl(id)))
 const zoneOf = (brief: EmailBrief) =>
@@ -31,16 +33,17 @@ const zoneOf = (brief: EmailBrief) =>
 
 describe("mode démo — scénarios", () => {
   test("quatre exemples, un par objectif ; le premier est le brief initial", () => {
-    assert.deepEqual(emailDemoPresets.map((preset) => preset.brief.objective), ["decouverte-formations", "accompagnement", "evolution-carriere", "promotion"])
+    assert.deepEqual(scenarioPresets.map((preset) => preset.brief.objective), ["decouverte-formations", "accompagnement", "evolution-carriere", "promotion"])
     assert.deepEqual(emailDemoPresets[0].brief, defaultEmailBrief)
   })
 
-  test("chaque scénario : EmailConfig valide, 5 à 7 lames, footer unique et dernier", () => {
+  test("chaque scénario : EmailConfig valide, 4 à 7 lames, footer unique et dernier", () => {
     for (const [name, brief] of Object.entries(presets)) {
       const config = generateDemoEmail(brief)
       const parsed = safeParseEmailConfig(config)
       assert.ok(parsed.success, `${name} : ${parsed.success ? "" : JSON.stringify(parsed.error.issues)}`)
-      assert.ok(config.blocks.length >= 5 && config.blocks.length <= 7, name)
+      // Promotion : 4 lames (hero Offer complet), aucune ajoutée pour le compte.
+      assert.ok(config.blocks.length >= (name === "promotion" ? 4 : 5) && config.blocks.length <= 7, name)
       assert.equal(config.blocks.at(-1)!.type, "email-module-footer-compact-legal")
       assert.equal(config.blocks.filter((block) => block.type === "email-module-footer-compact-legal").length, 1)
       assert.equal(config.subject, brief.subject)
@@ -50,7 +53,7 @@ describe("mode démo — scénarios", () => {
   test("quatre compositions, zones colorées et préheaders distincts", () => {
     const compositions = Object.values(presets).map((brief) => types(brief).join(" "))
     assert.equal(new Set(compositions).size, 4)
-    assert.deepEqual(Object.values(presets).map(zoneOf), [["hero:marque"], ["encart:marque"], ["hero:encre"], ["hero:accent-1"]])
+    assert.deepEqual(Object.values(presets).map(zoneOf), [["hero:marque"], ["encart:marque"], ["hero:encre"], ["atouts:accent-1"]])
     assert.equal(new Set(Object.values(presets).map((brief) => generateDemoEmail(brief).preheader)).size, 4)
     assert.ok(!Object.values(presets).some((brief) => types(brief).includes("email-module-icons-grid")))
   })
@@ -91,7 +94,7 @@ describe("mode démo — scénarios", () => {
     }
   })
 
-  test("aucun fait inventé : ni chiffre, prix, pourcentage, date ou code (hors valeur fictive Promotion)", () => {
+  test("aucun fait inventé : ni chiffre, prix, pourcentage, date ou code (hors valeurs fictives Promotion)", () => {
     for (const [name, brief] of Object.entries(presets)) {
       const values = generateDemoEmail(brief).blocks.flatMap((block) =>
         Object.values(block.slots as Record<string, { text?: string; label?: string }>)
@@ -100,9 +103,11 @@ describe("mode démo — scénarios", () => {
       )
       assert.ok(values.length > 8, name)
       // « Compétences 360 » est un nom de service des sources, pas un chiffre ;
-      // la valeur fictive n'est admise que dans le scénario Promotion.
+      // les valeurs fictives ne sont admises que dans le scénario Promotion.
       const allowed = (value: string) =>
-        name === "promotion" ? value.replaceAll(promotionDemoOffer.value, "") : value.replace("Compétences 360", "")
+        name === "promotion"
+          ? value.replaceAll(promotionDemoOffer.value, "").replaceAll(promotionDemoOffer.code, "")
+          : value.replace("Compétences 360", "")
       for (const value of values) assert.ok(!/\d|€|%/.test(allowed(value)), `${name} : ${value}`)
       assert.ok(!/garanti|gratuit|coach dédié|personnalisé|100 %/i.test(values.join(" ")), name)
     }
