@@ -1,11 +1,8 @@
 "use client"
 
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
-import {
-  Field,
-  FieldGroup,
-  FieldLabel,
-} from "@/components/ui/field"
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import {
   Select,
@@ -15,23 +12,38 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Spinner } from "@/components/ui/spinner"
 import { Textarea } from "@/components/ui/textarea"
 import type { GeneratorBrief } from "@/lib/landing/brief"
+import type { PublicGenerationError } from "@/lib/landing/public-api"
 
 type GeneratorPanelProps = {
   brief: GeneratorBrief
   objectives: readonly { value: string; label: string }[]
+  /** Erreur de la dernière génération ; l'aperçu précédent reste affiché. */
+  error: PublicGenerationError | null
+  pending: boolean
+  /** Validation légère pour l'UX : le serveur reste l'autorité. */
+  canGenerate: boolean
   onBriefChange: (brief: GeneratorBrief) => void
+  onGenerate: () => void
 }
 
-/**
- * Brief de la landing page. La génération n'est pas encore branchée : le
- * bouton reste désactivé et le formulaire n'envoie aucune requête.
- */
+const fieldLabels: Record<string, string> = {
+  projectName: "Nom du projet",
+  brief: "Brief",
+  audience: "Audience",
+  objective: "Objectif",
+}
+
 export function GeneratorPanel({
   brief,
   objectives,
+  error,
+  pending,
+  canGenerate,
   onBriefChange,
+  onGenerate,
 }: GeneratorPanelProps) {
   const update = <Key extends keyof GeneratorBrief>(
     key: Key,
@@ -42,7 +54,10 @@ export function GeneratorPanel({
     <form
       aria-labelledby="brief-title"
       className="flex flex-col gap-4"
-      onSubmit={(event) => event.preventDefault()}
+      onSubmit={(event) => {
+        event.preventDefault()
+        onGenerate()
+      }}
     >
       <header className="flex flex-col gap-1">
         <h2 id="brief-title" className="text-body font-semibold">
@@ -112,13 +127,44 @@ export function GeneratorPanel({
       </FieldGroup>
 
       <div className="flex flex-col gap-2">
-        <Button type="submit" disabled className="w-full" aria-describedby="generator-status">
-          Générer la landing page
+        <Button
+          type="submit"
+          disabled={pending || !canGenerate}
+          aria-busy={pending}
+          className="w-full"
+        >
+          {pending && (
+            <Spinner data-icon="inline-start" aria-label="Génération en cours" />
+          )}
+          {pending ? "Génération…" : "Générer la landing page"}
         </Button>
-        <p id="generator-status" className="text-caption text-muted-foreground">
-          La génération par IA arrive au prochain checkpoint.
-        </p>
+        {pending && (
+          <p className="text-caption text-muted-foreground" aria-live="polite">
+            La génération prend en général une dizaine de secondes.
+          </p>
+        )}
       </div>
+
+      {error && (
+        <Alert variant="destructive" aria-live="polite">
+          <AlertTitle>Génération impossible</AlertTitle>
+          <AlertDescription>
+            <p>{error.message}</p>
+            {error.fields && (
+              <ul className="mt-2 flex flex-col gap-1">
+                {error.fields.map((field, index) => (
+                  <li key={index}>
+                    <span className="font-medium">
+                      {fieldLabels[field.path] ?? field.path}
+                    </span>{" "}
+                    : {field.message}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </AlertDescription>
+        </Alert>
+      )}
     </form>
   )
 }

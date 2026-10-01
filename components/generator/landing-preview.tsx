@@ -1,16 +1,13 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import {
-  ExternalLinkIcon,
-  MonitorIcon,
-  SmartphoneIcon,
-  TabletIcon,
-} from "lucide-react"
+import { MonitorIcon, SmartphoneIcon, TabletIcon } from "lucide-react"
 
-import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+import type { LandingPageConfig } from "@/lib/landing/types"
+
+import { PreviewFrame } from "./preview-frame"
 
 /** Viewports simulés : réglages de l'outil, jamais des données de la page. */
 const viewports = [
@@ -22,27 +19,24 @@ const viewports = [
 type Viewport = (typeof viewports)[number]["value"]
 
 type LandingPreviewProps = {
-  /** URL du document d'aperçu ; `null` si aucune génération valide. */
-  src: string | null
-  /** Page seule, ouverte dans un nouvel onglet (même génération que l'aperçu). */
-  fullscreenHref: string | null
+  /** Dernière configuration valide ; `null` avant la première génération réussie. */
+  config: LandingPageConfig | null
+  /** Une génération est en cours : l'aperçu précédent, s'il existe, reste dessous. */
   loading: boolean
-  onLoad: () => void
 }
 
 /**
- * La landing page est rendue dans une iframe à la largeur du viewport cible
- * (ses breakpoints réagissent à 1440 / 768 / 390 px), puis réduite
- * visuellement pour tenir dans la surface : scale = min(1, disponible / cible).
- * Sa hauteur logique est recalculée pour remplir la surface ; elle défile
- * dans son propre document, indépendamment de l'interface du générateur.
+ * La landing page est rendue, par le vrai `LandingPageRenderer`, dans une
+ * iframe à la largeur du viewport cible (ses breakpoints réagissent à
+ * 1440 / 768 / 390 px), puis réduite visuellement pour tenir dans la surface :
+ * scale = min(1, disponible / cible). Sa hauteur logique est recalculée pour
+ * remplir la surface ; elle défile dans son propre document, indépendamment de
+ * l'interface du générateur.
+ *
+ * Changer de viewport ne modifie que la largeur : aucune requête, aucune
+ * nouvelle génération. Cette zone ne génère rien et ne fait aucun appel.
  */
-export function LandingPreview({
-  src,
-  fullscreenHref,
-  loading,
-  onLoad,
-}: LandingPreviewProps) {
+export function LandingPreview({ config, loading }: LandingPreviewProps) {
   const [viewport, setViewport] = useState<Viewport>("desktop")
   const surfaceRef = useRef<HTMLDivElement>(null)
   const [surface, setSurface] = useState<{ width: number; height: number }>()
@@ -50,6 +44,12 @@ export function LandingPreview({
   useEffect(() => {
     const element = surfaceRef.current
     if (!element) return
+    // Mesure initiale synchrone : l'observateur peut tarder (onglet masqué).
+    const style = getComputedStyle(element)
+    setSurface({
+      width: element.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight),
+      height: element.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom),
+    })
     const observer = new ResizeObserver(([entry]) => {
       setSurface({
         width: entry.contentRect.width,
@@ -68,6 +68,7 @@ export function LandingPreview({
   return (
     <section
       aria-labelledby="preview-title"
+      aria-busy={loading}
       className="flex min-h-0 flex-1 flex-col gap-3"
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -101,23 +102,6 @@ export function LandingPreview({
               </ToggleGroupItem>
             ))}
           </ToggleGroup>
-          {fullscreenHref && (
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              nativeButton={false}
-              render={
-                <a
-                  href={fullscreenHref}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                />
-              }
-              aria-label="Ouvrir la landing page seule dans un nouvel onglet"
-            >
-              <ExternalLinkIcon aria-hidden />
-            </Button>
-          )}
         </div>
       </div>
 
@@ -126,26 +110,21 @@ export function LandingPreview({
         ref={surfaceRef}
         className="relative flex min-h-0 flex-1 justify-center overflow-hidden rounded-lg bg-neutral-200 p-4 sm:p-6"
       >
-        {src && surface && scale > 0 ? (
+        {config && surface && scale > 0 ? (
           <div
             className="relative shrink-0 overflow-hidden border bg-background"
             style={{ width: target.width * scale, height: surface.height }}
           >
-            <iframe
-              key={src}
-              src={src}
-              title="Aperçu de la landing page générée"
-              onLoad={onLoad}
-              className="absolute top-0 left-0 origin-top-left border-0"
-              style={{
-                width: target.width,
-                height: surface.height / scale,
-                transform: `scale(${scale})`,
-              }}
+            <PreviewFrame
+              config={config}
+              width={target.width}
+              height={surface.height / scale}
+              scale={scale}
             />
           </div>
         ) : (
-          !src && (
+          !config &&
+          !loading && (
             <p className="self-center text-center text-body text-muted-foreground">
               Votre landing page apparaîtra ici après génération.
             </p>
@@ -158,7 +137,7 @@ export function LandingPreview({
             className="absolute inset-0 flex items-center justify-center gap-2 bg-background/70 text-body text-muted-foreground"
           >
             <Spinner aria-hidden />
-            Génération de l&apos;aperçu…
+            Génération de la landing page…
           </div>
         )}
       </div>
