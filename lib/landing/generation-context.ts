@@ -62,10 +62,10 @@ export function explainLandingSectionSelection(
 }
 
 const resourceRules = [
-  { id: "images-only", rule: "Une image vient de context.images, avec son src exact. Son alt est une suggestion : reprends-le, ou reformule-le sans ajouter ce que l'image ne montre pas. Aucun logo, partenaire, prix ni produit n'est disponible." },
+  { id: "images-only", rule: "Une image se désigne par son id, pris dans context.images. Aucun partenaire, prix ni produit n'est disponible." },
   { id: "image-reuse", rule: "Ne pas répéter une image dans plusieurs sections sans nécessité." },
-  { id: "image-framing", rule: "Les images sont des photos paysage 3:2. Un immersive-hero la rogne en plein cadre : le subject de l'image est une aide pour choisir visual.position." },
-  { id: "href-only", rule: "Un href est soit une ancre #id vers une section de la page, soit l'url exacte d'une entrée de context.destinations. Aucun autre lien." },
+  { id: "image-framing", rule: "Les images sont des photos paysage 3:2 ; le cadrage est géré par l'application." },
+  { id: "destination-only", rule: "La destination d'un CTA se désigne par son id, pris dans context.destinations. Aucun lien n'est écrit." },
   { id: "cta-label", rule: "Le libellé d'un CTA décrit sa destination, sans promettre davantage." },
   { id: "no-contact", rule: "Aucune destination de contact, de formulaire ni de téléchargement n'existe : aucun CTA ne promet un contact, un formulaire ou un téléchargement." },
   { id: "facts-only", rule: "Un prix, une remise, un pourcentage, une durée, une statistique, un effectif, une certification, un classement, une garantie, un témoignage, un partenaire, une date limite ou un code promo n'apparaît que s'il figure dans request.facts, repris à l'identique." },

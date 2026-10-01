@@ -133,7 +133,7 @@ describe("images contrôlées", () => {
 
 describe("indépendance des domaines", () => {
   test("la génération Landing n'importe ni Email ni les données d'exemple", () => {
-    for (const file of ["destinations", "image-catalog", "generation-request", "generation-context", "ai-prompt", "generation-validation"]) {
+    for (const file of ["destinations", "image-catalog", "generation-request", "generation-context", "generation-draft", "draft-resolver", "ai-prompt", "generation-validation", "anthropic-schema", "anthropic"]) {
       const source = readFileSync(join(root, "lib/landing", `${file}.ts`), "utf8")
       const imports = [...source.matchAll(/from "([^"]+)"/g)].map((match) => match[1]!)
       for (const specifier of imports) assert.ok(!/email|\.\/demo$|\/demo"/.test(specifier), `${file} : ${specifier}`)

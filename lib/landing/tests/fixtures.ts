@@ -65,3 +65,54 @@ export const validOutput = () =>
     section("parcours", "pillars", props.pillars()),
     section("atouts", "value-props", props["value-props"]()),
   ])
+
+/* -------------------------------------------------------------------------- */
+/* Brouillons (LandingGenerationDraft)                                        */
+/* -------------------------------------------------------------------------- */
+
+export const draftCta = { label: "Découvrir les formations", destination: "catalogue-formations" } as const
+
+/** Brouillon minimal valide, par lame. */
+export const draftSection = {
+  "editorial-hero": () => ({
+    section: "editorial-hero",
+    title: "Changer de métier, étape par étape",
+    supportingText: "Une reconversion se prépare.",
+    image: "hero-apprenante",
+    cta: { ...draftCta },
+  }),
+  "immersive-hero": () => ({
+    section: "immersive-hero",
+    headline: ["Une nouvelle voie", "se construit"],
+    description: "Explorez les formations à votre rythme.",
+    image: "hero-bilan",
+    cta: { ...draftCta },
+  }),
+  "value-props": () => ({
+    section: "value-props",
+    label: "Pourquoi se former",
+    items: [{ title: "En ligne", description: "Vous suivez vos cours à distance." }],
+  }),
+  pillars: () => ({
+    section: "pillars",
+    eyebrow: "Votre parcours",
+    title: "Un parcours en trois temps",
+    description: "Chaque étape prépare la suivante.",
+    items: [{ title: "Faire le point", description: "Clarifier votre projet." }],
+  }),
+  "content-carousel": () => ({
+    section: "content-carousel",
+    label: "À découvrir",
+    items: [{ eyebrow: "Conseil", title: "Reprendre une formation", image: "content-1" }],
+  }),
+  "audience-switcher": () => ({
+    section: "audience-switcher",
+    label: "Vous êtes",
+    items: [{ eyebrow: "En poste", title: "Salarié", description: "Se former sans tout arrêter.", image: "audience-1" }],
+  }),
+} as const
+
+export const draftOf = (...sections: unknown[]) => ({ sections })
+
+/** Brouillon de modèle simulé, valide : un hero, un parcours, des bénéfices. */
+export const validDraft = () => draftOf(draftSection["editorial-hero"](), draftSection.pillars(), draftSection["value-props"]())

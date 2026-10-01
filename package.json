@@ -8,9 +8,11 @@
     "start": "next start",
     "lint": "eslint",
     "test:email": "node --import ./lib/email/tests/resolve-ts.mjs --test \"lib/email/tests/*.test.ts\"",
-    "test:landing": "node --import ./lib/landing/tests/resolve-ts.mjs --test \"lib/landing/tests/*.test.ts\""
+    "test:landing": "node --import ./lib/landing/tests/resolve-ts.mjs --test \"lib/landing/tests/*.test.ts\"",
+    "smoke:landing": "node --env-file-if-exists=.env.local --import ./lib/landing/tests/resolve-ts.mjs lib/landing/smoke-test.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.131.0",
     "@base-ui/react": "^1.8.0",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.4.0",

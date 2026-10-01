@@ -47,7 +47,8 @@ describe("LandingGenerationRequest", () => {
     assert.equal(safeParseLandingGenerationRequest(emptyGeneratorBrief).success, false)
     for (const key of ["projectName", "brief", "audience", "objective"] as const) {
       assert.equal(safeParseLandingGenerationRequest({ ...request, [key]: "   " }).success, false, key)
-      const { [key]: _removed, ...partial } = request
+      const partial: Record<string, unknown> = { ...request }
+      delete partial[key]
       assert.equal(safeParseLandingGenerationRequest(partial).success, false, `${key} absent`)
     }
   })

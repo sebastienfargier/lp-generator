@@ -1,22 +1,20 @@
 /**
  * Prompt de génération Landing et schéma de sortie, sans réseau : union
- * discriminée, déterminisme, schéma dérivé de LandingPageSchema.
+ * discriminée, déterminisme, schéma dérivé du LandingGenerationDraft, et vue
+ * du contexte qui ne montre pas au modèle ce que le résolveur ajoute.
  */
 import assert from "node:assert/strict"
 import { describe, test } from "node:test"
 
-import { z } from "zod"
-
 import {
   assessLandingComposability,
   buildLandingAiPrompt,
-  buildLandingOutputJsonSchema,
-  buildLandingOutputSchema,
+  buildLandingPromptContext,
   landingSystemPrompt,
 } from "../ai-prompt"
 import { emptyGeneratorBrief } from "../brief"
-import { LandingPageSchema } from "../schemas"
-import { context, prompt, request, validOutput } from "./fixtures"
+import { buildLandingDraftJsonSchema, buildLandingDraftSchema, LandingGenerationDraftSchema } from "../generation-draft"
+import { context, draftOf, draftSection, prompt, request, validDraft } from "./fixtures"
 
 type Node = { [key: string]: unknown }
 
@@ -30,6 +28,8 @@ function nodes(value: unknown): Node[] {
 const schema = prompt.outputSchema as unknown as Node
 const serialized = JSON.stringify(schema)
 const count = (pattern: RegExp) => (serialized.match(pattern) ?? []).length
+const candidates = context.sections.map((section) => section.type)
+const view = buildLandingPromptContext(context)
 
 describe("buildLandingAiPrompt", () => {
   test("ready sur un brief valide, avec system, user, contexte et schéma", () => {
@@ -71,78 +71,115 @@ describe("buildLandingAiPrompt", () => {
     assert.equal(JSON.stringify(again.outputSchema), JSON.stringify(prompt.outputSchema))
   })
 
-  test("message utilisateur : { request, context } en JSON, sans répéter le système", () => {
-    assert.deepEqual(JSON.parse(prompt.user), { request: prompt.request, context: prompt.context })
+  test("message utilisateur : { request, vue du contexte } en JSON, sans répéter le système", () => {
+    assert.deepEqual(JSON.parse(prompt.user), { request: prompt.request, context: view })
     assert.ok(!prompt.user.includes("Tu es un moteur"))
     assert.deepEqual(JSON.parse(JSON.stringify(prompt.outputSchema)), prompt.outputSchema)
   })
 
   test("tailles mesurées et bornées : système compact, schéma non recopié dans le prompt", () => {
     assert.ok(prompt.system.length < 2500, `système : ${prompt.system.length}`)
-    assert.ok(prompt.user.length < 10000, `user : ${prompt.user.length}`)
-    assert.ok(serialized.length < 8000, `schéma : ${serialized.length}`)
+    assert.ok(prompt.user.length < 9000, `user : ${prompt.user.length}`)
+    assert.ok(serialized.length < 4500, `schéma : ${serialized.length}`)
     assert.ok(!/\$defs|additionalProperties|oneOf|"type":"object"/.test(prompt.system))
   })
+})
 
-  test("le système présente l'alt du catalogue comme une suggestion", () => {
-    assert.match(prompt.system, /alt est une suggestion/)
-    assert.ok(context.rules.resources.some((entry) => /alt est une suggestion/.test(entry.rule)))
+describe("ce que le modèle voit", () => {
+  test("le système présente un LandingGenerationDraft et la désignation par id", () => {
+    assert.match(prompt.system, /LandingGenerationDraft/)
+    assert.match(prompt.system, /id, pris dans context\.images/)
+    assert.match(prompt.system, /id, pris dans context\.destinations/)
+    assert.match(prompt.system, /tu n'écris aucun lien/)
   })
 
   test("le système interdit HTML, JSX, CSS, className, style et les inventions", () => {
-    for (const word of ["HTML", "JSX", "React", "CSS", "Tailwind", "className", "style", "URL", "request.facts"]) {
+    for (const word of ["HTML", "JSX", "React", "CSS", "Tailwind", "className", "style", "request.facts"]) {
       assert.ok(prompt.system.includes(word), word)
     }
   })
 
+  test("vue du contexte : id et description des images, id, libellé et usage des destinations", () => {
+    assert.deepEqual(view.images, context.images.map(({ id, alt }) => ({ id, description: alt })))
+    assert.deepEqual(view.destinations, context.destinations.map(({ id, label, usage }) => ({ id, label, usage })))
+    assert.deepEqual(view.sections, context.sections)
+    assert.equal(view.images.length, 10)
+    assert.equal(view.destinations.length, 8)
+  })
+
+  test("ni chemin d'image, ni URL, ni cadrage, ni règles d'ids et d'ancres : les détails du résolveur restent cachés", () => {
+    // Ressources et règles : tout ce que l'application contrôle. (Les descriptions de sections viennent
+    // du catalogue de la bibliothèque, partagé avec les composants : celle de l'immersive-hero cite un badge,
+    // que le schéma fermé du brouillon empêche de produire.)
+    const seen = JSON.stringify({ images: view.images, destinations: view.destinations, rules: view.rules })
+    assert.ok(!/\/images\/|https?:\/\/|"src"|"url"|"href"|"alt"|"subject"|"position"|"version"|defaultValue|"logo"|"badge"|"icon"/i.test(seen), seen.slice(0, 200))
+    assert.ok(!/\bhref\b|\bsrc\b|\balt\b|\bversion\b|ancre|\bposition\b|defaultValue|\blogo\b|\bbadge\b|icône/i.test(prompt.system))
+    const ruleIds = [...view.rules.composition, ...view.rules.resources].map((entry) => entry.id)
+    assert.ok(!ruleIds.includes("internal-anchors") && !ruleIds.includes("section-ids"))
+    assert.ok(ruleIds.includes("single-hero") && ruleIds.includes("destination-only") && ruleIds.includes("no-contact"))
+    assert.ok(context.rules.composition.some((entry) => entry.id === "internal-anchors"), "le contexte complet garde la règle")
+  })
+
+  test("le contexte complet reste celui de l'application : il garde src, url et subject pour la résolution", () => {
+    assert.ok(context.images.every((image) => image.src && image.alt && image.subject))
+    assert.ok(context.destinations.every((destination) => destination.url.startsWith("https://")))
+    assert.equal(prompt.context, prompt.context)
+    assert.deepEqual(prompt.context, context)
+  })
+
   test("aucun HTML, JSX ni CSS dans les ressources fournies", () => {
-    const resources = JSON.stringify({ images: context.images, destinations: context.destinations, rules: context.rules })
+    const resources = JSON.stringify({ images: view.images, destinations: view.destinations, rules: view.rules })
     assert.ok(!/<\/?[a-z]|className|tailwind|style=|\{\{|=>/i.test(resources))
   })
 })
 
-describe("schéma de sortie", () => {
-  test("dérivé de LandingPageSchema : mêmes champs de page, sections restreintes", () => {
-    const restricted = buildLandingOutputSchema(context.sections.map((section) => section.type))
-    assert.deepEqual(Object.keys(restricted.shape), Object.keys(LandingPageSchema.shape))
-    assert.ok(restricted.safeParse(validOutput()).success)
-    assert.ok(LandingPageSchema.safeParse(validOutput()).success)
-    assert.deepEqual(buildLandingOutputJsonSchema(context.sections.map((section) => section.type)), prompt.outputSchema)
+describe("schéma de sortie : le LandingGenerationDraft", () => {
+  test("dérivé du Draft Zod, restreint aux lames candidates, sans schéma parallèle", () => {
+    assert.deepEqual(buildLandingDraftJsonSchema(candidates), prompt.outputSchema)
+    const restricted = buildLandingDraftSchema(candidates)
+    assert.ok(restricted.safeParse(validDraft()).success)
+    assert.ok(LandingGenerationDraftSchema.safeParse(validDraft()).success)
+    assert.deepEqual(Object.keys(schema.properties as object), ["sections"])
   })
 
-  test("sections du schéma = sections candidates, pas les sections commerciales", () => {
+  test("les sections du schéma sont exactement les candidates, discriminées par `section`", () => {
     const consts = nodes(schema).flatMap((node) => (typeof node.const === "string" ? [node.const] : []))
-    for (const type of context.sections.map((section) => section.type)) assert.ok(consts.includes(type), type)
+    assert.deepEqual([...consts].sort(), [...candidates].sort())
     assert.ok(!consts.includes("product-hero") && !consts.includes("product-grid"))
-    const stricter = buildLandingOutputSchema(["value-props"])
-    assert.equal(stricter.safeParse(validOutput()).success, false)
-    assert.throws(() => buildLandingOutputSchema([]), /Aucune section candidate/)
+    const stricter = buildLandingDraftSchema(["value-props"])
+    assert.equal(stricter.safeParse(validDraft()).success, false)
+    assert.ok(stricter.safeParse(draftOf(draftSection["value-props"]())).success)
+    assert.throws(() => buildLandingDraftSchema([]), /Aucune section candidate/)
   })
 
-  test("inspection : un oneOf (sections), un anyOf (icône nullable), pas de allOf, patterns connus", () => {
+  test("le schéma complet de LandingPageConfig n'est plus le schéma de sortie", () => {
+    const keys = new Set(nodes(schema).flatMap((node) => Object.keys((node.properties as object) ?? {})))
+    for (const technical of ["version", "id", "props", "type", "visual", "primaryAction", "href", "src", "alt", "logo", "badge", "icon", "position", "defaultValue"]) {
+      assert.ok(!keys.has(technical), technical)
+    }
+    for (const editorial of ["section", "sections", "image", "cta", "destination", "label", "title", "items"]) assert.ok(keys.has(editorial), editorial)
+  })
+
+  test("inspection : un oneOf (sections), pas d'anyOf ni de allOf, un seul pattern (`\\S`)", () => {
     assert.equal(count(/"oneOf"/g), 1)
-    assert.equal(count(/"anyOf"/g), 1)
+    assert.equal(count(/"anyOf"/g), 0)
     assert.equal(count(/"allOf"/g), 0)
     const patterns = [...new Set(nodes(schema).flatMap((node) => (typeof node.pattern === "string" ? [node.pattern] : [])))]
-    assert.deepEqual(patterns.sort(), ["\\S", "^[a-z][a-z0-9-]*$"].sort())
+    assert.deepEqual(patterns, ["\\S"])
   })
 
-  test("inspection : tout objet est fermé (additionalProperties: false)", () => {
+  test("inspection : tout objet est fermé, aucune propriété optionnelle", () => {
     const objects = nodes(schema).filter((node) => node.type === "object")
-    assert.ok(objects.length > 15)
+    assert.ok(objects.length >= 10)
     for (const node of objects) assert.equal(node.additionalProperties, false)
+    for (const node of objects.filter((object) => object.properties)) {
+      assert.deepEqual([...(node.required as string[])].sort(), Object.keys(node.properties as object).sort())
+    }
   })
 
-  test("limites : ce que JSON Schema n'exprime pas reste à Zod", () => {
-    const restricted = buildLandingOutputSchema(context.sections.map((section) => section.type))
-    const hero = validOutput().sections[0] as { props: object }
-    // Ids en double, deux heroes, ancre sans cible : acceptés par le schéma, refusés par Zod.
-    const duplicate = { ...validOutput(), sections: [hero, hero] }
-    const anchor = { ...validOutput(), sections: [{ ...hero, props: { ...hero.props, primaryAction: { label: "Aller", href: "#absente" } } }] }
-    for (const output of [duplicate, anchor]) {
-      assert.ok(restricted.safeParse(output).success)
-      assert.equal(LandingPageSchema.safeParse(output).success, false)
-    }
-    assert.equal(z.toJSONSchema(LandingPageSchema, { reused: "ref" }).type, "object")
+  test("les ressources sont des énumérations : images et destinations ne peuvent pas être inventées", () => {
+    const enums = nodes(schema).flatMap((node) => (Array.isArray(node.enum) ? [node.enum as string[]] : []))
+    assert.ok(enums.some((values) => values.length === 10 && values.includes("hero-bilan")))
+    assert.ok(enums.some((values) => values.length === 8 && values.includes("catalogue-formations")))
   })
 })
