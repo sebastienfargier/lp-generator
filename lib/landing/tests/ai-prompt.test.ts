@@ -109,8 +109,7 @@ describe("ce que le modèle voit", () => {
 
   test("ni chemin d'image, ni URL, ni cadrage, ni règles d'ids et d'ancres : les détails du résolveur restent cachés", () => {
     // Ressources et règles : tout ce que l'application contrôle. (Les descriptions de sections viennent
-    // du catalogue de la bibliothèque, partagé avec les composants : celle de l'immersive-hero cite un badge,
-    // que le schéma fermé du brouillon empêche de produire.)
+    // du catalogue ; hero-selection.test.ts vérifie qu'aucune ne cite un badge ou un logo impossible à produire.)
     const seen = JSON.stringify({ images: view.images, destinations: view.destinations, rules: view.rules })
     assert.ok(!/\/images\/|https?:\/\/|"src"|"url"|"href"|"alt"|"subject"|"position"|"version"|defaultValue|"logo"|"badge"|"icon"/i.test(seen), seen.slice(0, 200))
     assert.ok(!/\bhref\b|\bsrc\b|\balt\b|\bversion\b|ancre|\bposition\b|defaultValue|\blogo\b|\bbadge\b|icône/i.test(prompt.system))

@@ -58,16 +58,20 @@ const catalog = {
     category: "hero",
     placement: "first",
     description:
-      "Hero éditorial centré sur une audience, une problématique ou une promesse : grand titre, visuel, un CTA principal et une phrase de réassurance.",
+      "Hero éditorial : un grand titre centré qui pose la proposition, un visuel encadré, un CTA principal et une phrase de réassurance. Le message est expliqué, pas seulement affirmé.",
     bestFor: [
-      "campagne",
-      "reconversion",
-      "audience spécifique",
-      "message éditorial",
-      "découverte",
+      "le visiteur a besoin de comprendre la proposition avant d'agir",
+      "le message demande du contexte ou de la réassurance",
+      "approche pédagogique ou explicative",
+      "le texte secondaire joue un rôle important",
     ],
     avoidWhen: [
+      "le message tient en une promesse très courte, portée surtout par l'image",
       "le prix ou les détails d'une formation précise constituent le message principal",
+    ],
+    guidance: [
+      "title : une phrase complète qui pose la proposition ; elle n'est pas découpée en lignes",
+      "supportingText : une phrase qui rassure ou précise, jamais purement décorative",
     ],
   },
   "immersive-hero": {
@@ -76,18 +80,22 @@ const catalog = {
     category: "hero",
     placement: "first",
     description:
-      "Hero très visuel : image plein cadre en arrière-plan, titre découpé ligne par ligne (direction artistique), badge, description courte et CTA.",
+      "Hero à fort impact visuel : image plein cadre en arrière-plan, titre découpé ligne par ligne (direction artistique), description courte et CTA.",
     bestFor: [
-      "campagne visuelle",
-      "message de marque",
-      "promesse forte",
-      "communication émotionnelle",
+      "l'impact visuel est prioritaire",
+      "le message repose sur une promesse courte et forte",
+      "la campagne cherche une réaction émotionnelle",
+      "le titre se découpe naturellement en quelques lignes courtes",
+      "une grande image participe fortement au message",
+      "une campagne dynamique, y compris promotionnelle, lorsque le brief l'exprime",
     ],
     avoidWhen: [
+      "le message a besoin d'être expliqué ou nuancé avant l'action",
       "beaucoup d'informations produit doivent apparaître immédiatement",
     ],
     guidance: [
       "headline : 2 à 4 lignes courtes, chaque entrée est une ligne affichée telle quelle",
+      "description : une phrase courte qui prolonge la promesse, pas un paragraphe",
     ],
   },
   "value-props": {
@@ -199,6 +207,7 @@ export function getSectionCatalogEntry<Type extends LandingSectionType>(
 export const compositionRules = [
   { id: "single-hero", rule: "Au maximum un hero par landing page." },
   { id: "hero-first", rule: "Si un hero est présent, il est toujours la première section." },
+  { id: "hero-by-message", rule: "Le type de hero se choisit d'après la manière dont le message doit être présenté (explication et réassurance, ou impact visuel et promesse courte), jamais parce qu'un hero est listé en premier : aucun n'est un choix par défaut. Interpréter le brief." },
   { id: "no-exhaustive-use", rule: "Ne pas utiliser toutes les sections par défaut : ne choisir que celles utiles au brief." },
   { id: "editorial-purpose", rule: "Chaque section doit avoir une raison éditoriale claire dans le parcours." },
   { id: "no-redundancy", rule: "Éviter deux sections consécutives qui disent essentiellement la même chose." },
