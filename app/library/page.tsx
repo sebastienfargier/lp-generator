@@ -4,6 +4,9 @@ import Link from "next/link"
 import { PageContainer } from "@/components/layout/page-container"
 import {
   libraryCategories,
+  libraryShellCategory,
+  libraryShellNote,
+  libraryShellParts,
   librarySections,
 } from "@/components/library/registry"
 import { GenerationStatus } from "@/components/library/generation-status"
@@ -72,6 +75,39 @@ export default function LibraryPage() {
             </section>
           )
         })}
+
+        <section className="flex flex-col gap-4">
+          <h2 className="text-h2">{libraryShellCategory}</h2>
+          <ul
+            role="list"
+            className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3"
+          >
+            {libraryShellParts.map((part) => (
+              <li key={part.slug}>
+                <Card className="relative h-full gap-4 pt-0 transition-shadow hover:shadow-lg hover:shadow-foreground/5 has-[a:focus-visible]:ring-3 has-[a:focus-visible]:ring-ring/50 motion-reduce:transition-none">
+                  <SectionThumbnail src={part.example} />
+                  <CardHeader className="gap-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <CardTitle role="heading" aria-level={3}>
+                        <Link
+                          href={`/library/${part.slug}`}
+                          className="outline-none after:absolute after:inset-0"
+                        >
+                          {part.name}
+                        </Link>
+                      </CardTitle>
+                      <Badge variant="secondary">{libraryShellCategory}</Badge>
+                    </div>
+                    <CardDescription>{part.description}</CardDescription>
+                    <p className="text-caption text-muted-foreground">
+                      {libraryShellNote}
+                    </p>
+                  </CardHeader>
+                </Card>
+              </li>
+            ))}
+          </ul>
+        </section>
       </PageContainer>
     </main>
   )

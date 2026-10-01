@@ -192,7 +192,7 @@ describe("/library affiche le statut IA", () => {
 
   test("carte et page de détail utilisent le même composant, la raison seulement sur le détail", () => {
     assert.match(code("app/library/page.tsx"), /<GenerationStatus type=\{section\.type\} \/>/)
-    assert.match(code("app/library/[slug]/page.tsx"), /<GenerationStatus type=\{section\.type\} showReason \/>/)
+    assert.match(code("app/library/[slug]/page.tsx"), /<GenerationStatus type=\{lame\.type\} showReason \/>/)
   })
 
   test("le statut reste côté serveur : aucun composant client n'importe la décision, ni le registre, ni le moteur", () => {

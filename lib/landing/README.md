@@ -1,3 +1,19 @@
+# Landing : shell global et sections
+
+Une landing page est composée de deux choses distinctes :
+
+**SHELL GLOBAL** (`LandingHeader`, futur footer)
+- automatiquement présent, rendu par `LandingPageRenderer` autour des sections ;
+- hors de `sections[]` : ni `LandingPageSchema`, ni `LandingGenerationDraft`, ni `section-catalog`, ni `nonGenerableSections` ne le connaissent ;
+- non choisi par Claude : son contenu (logo, CTA vers une destination contrôlée) est fixé dans le code ;
+- présenté à part dans `/library`, sous « Shell global » (`libraryShellParts` dans le registre), sans statut « Générable par IA » ni « Bibliothèque uniquement ».
+
+**SECTIONS** (les lames)
+- composables, présentes dans `LandingPageConfig.sections` ;
+- éventuellement générables par Claude (voir ci-dessous).
+
+Ce qui suit concerne l'ajout d'une **section**. Une nouvelle pièce du shell global suit un autre chemin : composant dans `components/landing/`, intégration dans le renderer, page `app/examples/<slug>`, entrée `libraryShellParts`, test (`landing-header.test.ts` sert de modèle).
+
 # Ajouter une lame Landing
 
 Une lame a deux statuts, **indépendants** :

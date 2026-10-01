@@ -180,3 +180,40 @@ export const librarySections: LibrarySection[] = [
 export function getLibrarySection(slug: string) {
   return librarySections.find((section) => section.slug === slug)
 }
+
+/**
+ * Pièces du shell global : présentes automatiquement sur chaque landing page
+ * (rendues par `LandingPageRenderer`), hors de `sections[]`. Ce ne sont pas des
+ * lames : elles n'ont pas de type au contrat, ne sont pas dans
+ * `section-catalog` ni dans le Draft, et n'ont donc ni statut « générable par
+ * IA » ni « bibliothèque uniquement » : Claude ne les choisit jamais.
+ */
+export const libraryShellCategory = "Shell global"
+
+export const libraryShellNote = "Présent automatiquement sur chaque landing page"
+
+export type LibraryShellPart = {
+  slug: string
+  name: string
+  description: string
+  importPath: string
+  /** Route de la page de démonstration, affichée dans les aperçus. */
+  example: string
+  usage: string
+}
+
+export const libraryShellParts: LibraryShellPart[] = [
+  {
+    slug: "landing-header",
+    name: "LandingHeader",
+    description:
+      "Header global : logo Studi à gauche, un bouton CTA (placeholder, non navigant) à droite, sur fond de page.",
+    importPath: "@/components/landing/landing-header",
+    example: "/examples/landing-header",
+    usage: `<LandingHeader />`,
+  },
+]
+
+export function getLibraryShellPart(slug: string) {
+  return libraryShellParts.find((part) => part.slug === slug)
+}
