@@ -147,7 +147,7 @@ export function LandingPreview({
         ) : (
           !src && (
             <p className="self-center text-center text-body text-muted-foreground">
-              Aucun aperçu : la dernière génération est invalide.
+              Votre landing page apparaîtra ici après génération.
             </p>
           )
         )}

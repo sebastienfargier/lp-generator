@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:email": "node --import ./lib/email/tests/resolve-ts.mjs --test \"lib/email/tests/*.test.ts\""
+    "test:email": "node --import ./lib/email/tests/resolve-ts.mjs --test \"lib/email/tests/*.test.ts\"",
+    "test:landing": "node --import ./lib/landing/tests/resolve-ts.mjs --test \"lib/landing/tests/*.test.ts\""
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",

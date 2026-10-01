@@ -1,30 +1,21 @@
 import type { Metadata } from "next"
 
 import { GeneratorWorkspace } from "@/components/generator/generator-workspace"
-import { Badge } from "@/components/ui/badge"
-import {
-  defaultGeneratorBrief,
-  generatorObjectives,
-  runGeneration,
-} from "@/lib/generator/generate"
+import { emptyGeneratorBrief, generatorObjectives } from "@/lib/landing/brief"
 
 export const metadata: Metadata = {
   title: "Landing Page Generator",
 }
 
 export default function GeneratorPage() {
-  // Aperçu initial : même chemin (brief → génération démo → Zod) que /api/generate.
-  const initialResult = runGeneration(defaultGeneratorBrief)
-
+  // Aucune génération au chargement : formulaire vide, aperçu vide.
   return (
     <div className="flex min-h-dvh flex-col bg-background lg:h-dvh">
       <header className="flex h-12 shrink-0 items-center gap-3 border-b px-4">
         <h1 className="text-body font-semibold">Landing Page Generator</h1>
-        <Badge variant="secondary">Demo</Badge>
       </header>
       <GeneratorWorkspace
-        initialBrief={defaultGeneratorBrief}
-        initialResult={initialResult}
+        initialBrief={emptyGeneratorBrief}
         objectives={generatorObjectives}
       />
     </div>
