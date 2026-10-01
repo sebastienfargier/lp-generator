@@ -6,6 +6,7 @@ import {
   libraryCategories,
   librarySections,
 } from "@/components/library/registry"
+import { GenerationStatus } from "@/components/library/generation-status"
 import { SectionThumbnail } from "@/components/library/section-thumbnail"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -60,6 +61,9 @@ export default function LibraryPage() {
                           <Badge variant="secondary">{section.category}</Badge>
                         </div>
                         <CardDescription>{section.description}</CardDescription>
+                        <div>
+                          <GenerationStatus type={section.type} />
+                        </div>
                       </CardHeader>
                     </Card>
                   </li>

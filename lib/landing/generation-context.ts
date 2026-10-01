@@ -2,6 +2,7 @@ import { landingDestinations, landingDestinationUrl, type LandingDestinationId }
 import type { LandingGenerationRequest } from "./generation-request"
 import { landingImages, type LandingCatalogImage } from "./image-catalog"
 import { getSectionCatalogForPrompt } from "./section-catalog"
+import { nonGenerableSections } from "./section-generation"
 import type { LandingSectionType } from "./types"
 
 /**
@@ -31,17 +32,6 @@ export const landingResources: LandingGenerationResources = {
   })),
 }
 
-/**
- * Sections qui portent des données commerciales structurées : formation
- * nommée, prix, financement, partenaire, badges. Aucune source produit
- * contrôlée n'existe : elles ne sont pas proposées. Le contrat, les
- * composants et les exemples les gardent.
- */
-const commercialSections = {
-  "product-hero": "Porte une formation nommée, un prix, un financement et un partenaire : aucune source produit contrôlée.",
-  "product-grid": "Exige des produits nommés, avec lien, image et prix : aucune source produit contrôlée.",
-} as const satisfies Partial<Record<LandingSectionType, string>>
-
 /** Sections dont les données exigent au moins une image du catalogue. */
 const sectionsNeedingImages: ReadonlySet<LandingSectionType> = new Set([
   "editorial-hero",
@@ -54,7 +44,7 @@ const sectionsNeedingImages: ReadonlySet<LandingSectionType> = new Set([
 export function explainLandingSectionSelection(
   resources: LandingGenerationResources = landingResources
 ): Partial<Record<LandingSectionType, string>> {
-  const excluded: Partial<Record<LandingSectionType, string>> = { ...commercialSections }
+  const excluded: Partial<Record<LandingSectionType, string>> = { ...nonGenerableSections }
   if (resources.images.length === 0) {
     for (const type of sectionsNeedingImages) excluded[type] = "Exige une image du catalogue : aucune image disponible."
   }

@@ -40,8 +40,9 @@ describe("LandingPageConfig → Zod", () => {
 })
 
 describe("bibliothèque de sections", () => {
-  test("8 sections : contrat, catalogue et renderer alignés", () => {
-    assert.equal(sectionTypes.length, 8)
+  test("sections : contrat, catalogue et renderer alignés (nombre dérivé du contrat)", () => {
+    assert.ok(sectionTypes.length > 0)
+    assert.equal(new Set(sectionTypes).size, sectionTypes.length)
     assert.deepEqual(sectionCatalog.map((entry) => entry.type).sort(), [...sectionTypes].sort())
     const renderer = readFileSync(join(root, "components/landing/section-renderer.tsx"), "utf8")
     for (const type of sectionTypes) assert.ok(renderer.includes(`case "${type}"`), type)
@@ -56,7 +57,7 @@ describe("bibliothèque de sections", () => {
 
   test("catalogue pour le prompt : sérialisable, sans design", () => {
     const catalog = getSectionCatalogForPrompt()
-    assert.equal(catalog.sections.length, 8)
+    assert.equal(catalog.sections.length, sectionTypes.length)
     const serialized = JSON.stringify(catalog)
     assert.deepEqual(JSON.parse(serialized), catalog)
     assert.ok(!/className|tailwind|style=|#[0-9a-f]{6}\b/i.test(serialized))

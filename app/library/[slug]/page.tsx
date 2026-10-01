@@ -5,6 +5,7 @@ import { ArrowLeftIcon, ExternalLinkIcon } from "lucide-react"
 
 import { PageContainer } from "@/components/layout/page-container"
 import { CopyButton } from "@/components/library/copy-button"
+import { GenerationStatus } from "@/components/library/generation-status"
 import {
   getLibrarySection,
   librarySections,
@@ -60,6 +61,9 @@ export default async function LibrarySectionPage(
               <p className="text-body text-muted-foreground">
                 {section.description}
               </p>
+              <div className="flex flex-col items-start gap-2">
+                <GenerationStatus type={section.type} showReason />
+              </div>
             </div>
             <Button
               variant="outline"

@@ -72,9 +72,10 @@ describe("sections candidates", () => {
     assert.deepEqual(Object.keys(explainLandingSectionSelection()).sort(), ["product-grid", "product-hero"])
   })
 
-  test("le contrat garde les 8 sections : seul le moteur IA en propose moins", () => {
-    assert.equal(LandingPageSectionSchema.options.length, 8)
-    assert.equal(sectionCatalog.length, 8)
+  test("le contrat garde toutes ses sections : seul le moteur IA en propose moins", () => {
+    // Le nombre vient des sources ; la décision lame par lame est vérifiée dans section-alignment.test.ts.
+    assert.equal(sectionCatalog.length, LandingPageSectionSchema.options.length)
+    assert.ok(types.length < LandingPageSectionSchema.options.length)
   })
 
   test("sans image disponible, les sections qui en exigent sont écartées", () => {

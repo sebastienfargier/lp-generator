@@ -1,8 +1,12 @@
 /**
  * Registre des lames de la bibliothèque : source unique pour la galerie
  * `/library` et les pages de détail. Ajouter une lame = ajouter une entrée ici
- * (et sa page de démo dans `app/examples/<slug>`).
+ * (et sa page de démo dans `app/examples/<slug>`). Le statut IA n'est pas
+ * stocké ici : il est dérivé de `lib/landing/section-generation`. Procédure
+ * complète : `lib/landing/README.md`.
  */
+
+import type { LandingSectionType } from "@/lib/landing/types"
 
 export const libraryCategories = ["Hero", "Listing", "Contenu"] as const
 
@@ -10,6 +14,8 @@ export type LibraryCategory = (typeof libraryCategories)[number]
 
 export type LibrarySection = {
   slug: string
+  /** Type de section du contrat `LandingPageConfig` que cette entrée documente. */
+  type: LandingSectionType
   name: string
   category: LibraryCategory
   description: string
@@ -22,6 +28,7 @@ export type LibrarySection = {
 export const librarySections: LibrarySection[] = [
   {
     slug: "product-hero",
+    type: "product-hero",
     name: "ProductHero",
     category: "Hero",
     description:
@@ -42,6 +49,7 @@ export const librarySections: LibrarySection[] = [
   },
   {
     slug: "editorial-hero",
+    type: "editorial-hero",
     name: "EditorialHero",
     category: "Hero",
     description:
@@ -57,6 +65,7 @@ export const librarySections: LibrarySection[] = [
   },
   {
     slug: "immersive-hero",
+    type: "immersive-hero",
     name: "ImmersiveHero",
     category: "Hero",
     description:
@@ -73,6 +82,7 @@ export const librarySections: LibrarySection[] = [
   },
   {
     slug: "product-grid",
+    type: "product-grid",
     name: "ProductGrid",
     category: "Listing",
     description:
@@ -95,6 +105,7 @@ export const librarySections: LibrarySection[] = [
   },
   {
     slug: "value-props",
+    type: "value-props",
     name: "ValueProps",
     category: "Contenu",
     description:
@@ -108,6 +119,7 @@ export const librarySections: LibrarySection[] = [
   },
   {
     slug: "pillars",
+    type: "pillars",
     name: "PillarsSection",
     category: "Contenu",
     description:
@@ -123,6 +135,7 @@ export const librarySections: LibrarySection[] = [
   },
   {
     slug: "content-carousel",
+    type: "content-carousel",
     name: "ContentCarousel",
     category: "Contenu",
     description:
@@ -142,6 +155,7 @@ export const librarySections: LibrarySection[] = [
   },
   {
     slug: "audience-switcher",
+    type: "audience-switcher",
     name: "AudienceSwitcher",
     category: "Contenu",
     description:
