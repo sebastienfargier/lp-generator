@@ -134,11 +134,14 @@ describe("contraintes non supportées retirées", () => {
     assert.equal(array({ minItems: 2 }).minItems, undefined)
     assert.equal(array({ minItems: 1 }).minItems, 1)
     assert.equal(array({ minItems: 0 }).minItems, 0)
-    // Dans les schémas réels, tous les minItems valent 1 : aucun n'est retiré.
+    // Dans les schémas réels, tous les minItems valent 1 sauf un : les cartes de DestinationCards
+    // (2 à 3) ; le transport garde les 1 et retire le 2, que Zod continue de faire respecter.
     for (const name of names) {
-      assert.deepEqual(minItems(transports[name]), minItems(schemas[name]), name)
-      assert.ok(minItems(schemas[name]).length > 0 && minItems(schemas[name]).every((value) => value === 1), name)
+      const source = minItems(schemas[name]) as number[]
+      assert.deepEqual(minItems(transports[name]), source.filter((value) => value <= 1), name)
+      assert.ok(source.length > 0 && source.every((value) => value === 1 || value === 2), name)
     }
+    assert.equal(minItems(schemas.draft).filter((value) => value === 2).length, 1)
   })
 
   test("le nom d'une propriété n'est jamais pris pour un mot-clé", () => {
@@ -229,7 +232,7 @@ describe("propriétés de la transformation", () => {
     const { optional, unions } = complexity(transports.draft)
     assert.equal(optional, 0)
     assert.ok(unions <= anthropicSchemaLimits.unionParameters, `unions : ${unions}`)
-    assert.ok(JSON.stringify(transports.draft).length < 4500, `taille : ${JSON.stringify(transports.draft).length}`)
+    assert.ok(JSON.stringify(transports.draft).length < 5000, `taille : ${JSON.stringify(transports.draft).length}`)
   })
 
   test("le contrat complet dépasse la limite documentée d'optionnelles : pourquoi il n'est plus envoyé", () => {

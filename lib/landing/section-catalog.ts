@@ -213,6 +213,31 @@ const catalog = {
       "l'image change de côté d'une narrative-split à l'autre ; ce côté n'est jamais à choisir",
     ],
   },
+  "destination-cards": {
+    type: "destination-cards",
+    name: "DestinationCards",
+    category: "conversion",
+    placement: "any",
+    description:
+      "Deux ou trois suites cliquables vers des destinations Studi : titre et courte description, sans image.",
+    bestFor: [
+      "la page peut mener vers plusieurs suites pertinentes : métiers, diplômes, financement, accompagnement, méthode, certificats",
+    ],
+    avoidWhen: [
+      "une seule suite est évidente : préférer final-cta",
+      "plus de trois suites sont nécessaires",
+      "la page expose déjà ces mêmes suites",
+    ],
+    guidance: [
+      "2 à 3 cartes, 3 de préférence",
+      "chaque carte pointe une destination différente",
+      "le titre de carte nomme clairement la suite et sert de texte de lien : environ 25 à 40 caractères",
+      "description de carte : une phrase d'environ 90 à 120 caractères, fidèle à l'usage de la destination et sans promesse",
+      "titre de section : environ 60 caractères ; description de section : environ 120 caractères",
+      "une seule destination-cards par page, au milieu ou en bas de page, avant la clôture si elle existe",
+      "choisir des destinations complémentaires ; reprendre une destination du hero ou de la clôture est permis",
+    ],
+  },
   "final-cta": {
     type: "final-cta",
     name: "FinalCta",

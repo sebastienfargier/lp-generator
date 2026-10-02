@@ -58,8 +58,8 @@ describe("sections candidates", () => {
     assert.deepEqual(context.rules.composition, catalog.rules)
   })
 
-  test("huit sections candidates, dont deux heroes : le modèle garde le choix", () => {
-    assert.deepEqual(types, ["editorial-hero", "immersive-hero", "value-props", "pillars", "content-carousel", "audience-switcher", "narrative-split", "final-cta"])
+  test("neuf sections candidates, dont deux heroes : le modèle garde le choix", () => {
+    assert.deepEqual(types, ["editorial-hero", "immersive-hero", "value-props", "pillars", "content-carousel", "audience-switcher", "narrative-split", "destination-cards", "final-cta"])
     assert.equal(context.sections.filter((section) => section.isHero).length, 2)
     for (const type of types) assert.ok(sectionCatalog.some((entry) => entry.type === type))
   })
@@ -80,8 +80,8 @@ describe("sections candidates", () => {
 
   test("sans image disponible, les sections qui en exigent sont écartées", () => {
     const bare = buildLandingGenerationContext(request, { images: [], destinations: [] })
-    // La clôture n'exige aucune image : les heroes, le carrousel, les profils et NarrativeSplit sont écartés.
-    assert.deepEqual(bare.sections.map((section) => section.type), ["value-props", "pillars", "final-cta"])
+    // La clôture et DestinationCards n'exigent aucune image : les heroes, le carrousel, les profils et NarrativeSplit sont écartés.
+    assert.deepEqual(bare.sections.map((section) => section.type), ["value-props", "pillars", "destination-cards", "final-cta"])
     assert.match(explainLandingSectionSelection({ images: [], destinations: [] })["editorial-hero"]!, /aucune image/)
   })
 })

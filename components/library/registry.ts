@@ -193,6 +193,28 @@ export const librarySections: LibrarySection[] = [
 />`,
   },
   {
+    slug: "destination-cards",
+    type: "destination-cards",
+    name: "DestinationCards",
+    category: "Conversion",
+    description:
+      "Deux ou trois suites cliquables vers des destinations Studi : titre et courte description, sans image.",
+    importPath: "@/components/sections/destination-cards",
+    example: "/examples/destination-cards",
+    usage: `<DestinationCards
+  title="Trois façons de poursuivre votre exploration"
+  description="Explorez votre projet par métier, par niveau de diplôme ou dans le catalogue."
+  items={[
+    {
+      title: "Explorer les métiers",
+      description: "Découvrir un métier avant de choisir une formation.",
+      href: "https://www.studi.com/fr/metiers",
+    },
+    // 2 à 3 cartes, chacune vers une destination différente
+  ]}
+/>`,
+  },
+  {
     slug: "final-cta",
     type: "final-cta",
     name: "FinalCta",

@@ -1,5 +1,6 @@
 import { AudienceSwitcher } from "@/components/sections/audience-switcher"
 import { ContentCarousel } from "@/components/sections/content-carousel"
+import { DestinationCards } from "@/components/sections/destination-cards"
 import { EditorialHero } from "@/components/sections/editorial-hero"
 import { FinalCta } from "@/components/sections/final-cta"
 import { ImmersiveHero } from "@/components/sections/immersive-hero"
@@ -89,6 +90,8 @@ function renderSection(section: LandingPageSection) {
       return <AudienceSwitcher {...section.props} />
     case "narrative-split":
       return <NarrativeSplit {...section.props} />
+    case "destination-cards":
+      return <DestinationCards {...section.props} />
     case "final-cta": {
       const { primaryAction, ...props } = section.props
       return <FinalCta {...props} primaryAction={toHeroAction(primaryAction)} />

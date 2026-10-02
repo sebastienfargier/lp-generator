@@ -60,6 +60,15 @@ export const props = {
     description: "Apprendre en parallèle d'un emploi ou d'un quotidien déjà chargé demande de la souplesse.",
     visual: picture(),
   }),
+  "destination-cards": () => ({
+    title: "Trois façons de poursuivre votre exploration",
+    description: "Explorez votre projet par métier, par niveau de diplôme ou directement dans le catalogue.",
+    items: [
+      { title: "Explorer les métiers", description: "Découvrir un métier avant de choisir une formation.", href: "https://www.studi.com/fr/metiers" },
+      { title: "Comparer les niveaux de diplôme", description: "Choisir une formation selon le niveau de sortie visé.", href: "https://www.studi.com/fr/diplomes" },
+      { title: "Parcourir le catalogue", description: "Consulter l'ensemble des formations, avec des filtres.", href: catalogueUrl },
+    ],
+  }),
   "final-cta": () => ({
     title: "Prêt à explorer les formations ?",
     description: "Parcourez le catalogue Studi pour découvrir les formations qui correspondent à votre projet.",
@@ -127,6 +136,16 @@ export const draftSection = {
     title: "Se former en gardant sa vie en équilibre",
     description: "Apprendre en parallèle d'un emploi ou d'un quotidien déjà chargé demande de la souplesse.",
     image: "content-1",
+  }),
+  "destination-cards": () => ({
+    section: "destination-cards",
+    title: "Trois façons de poursuivre votre exploration",
+    description: "Explorez votre projet par métier, par niveau de diplôme ou directement dans le catalogue.",
+    items: [
+      { title: "Explorer les métiers", description: "Découvrir un métier avant de choisir une formation.", destination: "metiers" },
+      { title: "Comparer les niveaux de diplôme", description: "Choisir une formation selon le niveau de sortie visé.", destination: "diplomes" },
+      { title: "Parcourir le catalogue", description: "Consulter l'ensemble des formations, avec des filtres.", destination: "catalogue-formations" },
+    ],
   }),
   "final-cta": () => ({
     section: "final-cta",

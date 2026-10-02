@@ -223,6 +223,30 @@ export const AudienceSwitcherConfigSchema = z
     }
   })
 
+/** Deux ou trois suites : titre, description et lien contrôlé ; le titre est le texte du lien. */
+export const DestinationCardsConfigSchema = z
+  .strictObject({
+    title: text,
+    description: text.optional(),
+    items: z
+      .array(z.strictObject({ title: text, description: text, href: text }))
+      .min(2, "Au moins deux suites sont requises.")
+      .max(3, "Trois suites au plus."),
+  })
+  .superRefine((config, ctx) => {
+    const seen = new Set<string>()
+    config.items.forEach((item, index) => {
+      if (seen.has(item.href)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["items", index, "href"],
+          message: `Deux suites mènent à la même destination : "${item.href}".`,
+        })
+      }
+      seen.add(item.href)
+    })
+  })
+
 /** Une idée développée : image d'un côté, texte de l'autre. Le côté est décidé par l'application. */
 export const NarrativeSplitConfigSchema = z.strictObject({
   eyebrow: text.optional(),
@@ -260,6 +284,7 @@ export const LandingPageSectionSchema = z.discriminatedUnion("type", [
   section("content-carousel", ContentCarouselConfigSchema),
   section("audience-switcher", AudienceSwitcherConfigSchema),
   section("narrative-split", NarrativeSplitConfigSchema),
+  section("destination-cards", DestinationCardsConfigSchema),
   section("final-cta", FinalCtaConfigSchema),
 ])
 
@@ -298,6 +323,12 @@ function sectionActions(
     case "content-carousel":
     case "audience-switcher":
     case "narrative-split":
+      break
+    case "destination-cards":
+      // Chaque carte est un lien : exposée au contrôle des liens sous la forme d'une action.
+      section.props.items.forEach((item, index) => {
+        actions.push({ action: { label: item.title, href: item.href }, path: ["items", String(index)] })
+      })
       break
     default: {
       const unhandled: never = section

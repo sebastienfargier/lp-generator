@@ -94,11 +94,13 @@ export function resolveLandingDraft(
     const image = pick(id, path)
     return { src: image?.src ?? "", alt: image?.alt ?? "" }
   }
-  const action = (cta: { label: string; destination: string }, path: string) => {
-    const destination = destinations.get(cta.destination)
-    if (!destination) issues.push({ path, message: `Destination "${cta.destination}" absente des destinations de cette génération.` })
-    return { label: cta.label, href: destination?.url ?? "" }
+  /** URL d'une destination ; absente du contexte : erreur, jamais une valeur inventée. */
+  const destinationHref = (id: string, path: string) => {
+    const destination = destinations.get(id)
+    if (!destination) issues.push({ path, message: `Destination "${id}" absente des destinations de cette génération.` })
+    return destination?.url ?? ""
   }
+  const action = (cta: { label: string; destination: string }, path: string) => ({ label: cta.label, href: destinationHref(cta.destination, path) })
 
   const seen = new Map<string, number>()
   const sectionId = (type: string) => {
@@ -188,6 +190,20 @@ export function resolveLandingDraft(
             visual: picture(section.image, `${at}.image`),
             // Rang parmi les NarrativeSplit (compteur des ids) : 1re à gauche, 2e à droite, etc.
             visualSide: ((seen.get("narrative-split") ?? 1) - 1) % 2 === 0 ? "left" : "right",
+          },
+        }
+      case "destination-cards":
+        return {
+          id,
+          type: "destination-cards",
+          props: {
+            title: section.title,
+            description: section.description,
+            items: section.items.map((item, position) => ({
+              title: item.title,
+              description: item.description,
+              href: destinationHref(item.destination, `${at}.items.${position}.destination`),
+            })),
           },
         }
       case "final-cta":

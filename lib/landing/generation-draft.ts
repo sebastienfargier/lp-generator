@@ -89,6 +89,16 @@ const branches = [
     image: DraftImageIdSchema,
   }),
   z.strictObject({
+    section: z.literal("destination-cards"),
+    title: text,
+    description: text,
+    // 2 à 3 : vérifié par Zod après la réponse (le transport ne sait exprimer que `minItems` 0 ou 1).
+    items: z
+      .array(z.strictObject({ title: text, description: text, destination: z.enum(destinationIds) }))
+      .min(2, "Au moins deux suites sont requises.")
+      .max(3, "Trois suites au plus."),
+  }),
+  z.strictObject({
     section: z.literal("final-cta"),
     title: text,
     description: text,
@@ -103,7 +113,24 @@ export type LandingDraftSectionType = (typeof landingDraftSectionTypes)[number]
 
 const sections = z.array(z.discriminatedUnion("section", branches)).min(1, "Au moins une section est requise.")
 
-export const LandingGenerationDraftSchema = z.strictObject({ sections })
+export const LandingGenerationDraftSchema = z.strictObject({ sections }).superRefine((draft, ctx) => {
+  // Une destination par carte au sein d'une section. Règle posée ici et non sur la branche :
+  // un raffinement sur la branche ferait traiter ses sous-schémas en double par `toJSONSchema`.
+  draft.sections.forEach((section, sectionIndex) => {
+    if (section.section !== "destination-cards") return
+    const seen = new Set<string>()
+    section.items.forEach((item, index) => {
+      if (seen.has(item.destination)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["sections", sectionIndex, "items", index, "destination"],
+          message: `Destination en double : "${item.destination}".`,
+        })
+      }
+      seen.add(item.destination)
+    })
+  })
+})
 
 export type LandingGenerationDraft = z.infer<typeof LandingGenerationDraftSchema>
 export type LandingDraftSection = LandingGenerationDraft["sections"][number]
