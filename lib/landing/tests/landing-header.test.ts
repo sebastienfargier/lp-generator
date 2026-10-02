@@ -80,7 +80,7 @@ describe("LandingHeader : shell du renderer", () => {
   test("rendu automatiquement par LandingPageRenderer, avant <main> et hors de sections[]", () => {
     assert.match(renderer, /import \{ LandingHeader \} from "\.\/landing-header"/)
     const headerAt = renderer.indexOf("<LandingHeader />")
-    const mainAt = renderer.indexOf("<main>")
+    const mainAt = renderer.indexOf("<main")
     const mainEnd = renderer.indexOf("</main>")
     assert.ok(headerAt > -1 && headerAt < mainAt, "header avant main")
     assert.ok(mainEnd > mainAt && !renderer.slice(mainAt, mainEnd).includes("LandingHeader"), "header hors de main")

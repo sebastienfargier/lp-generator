@@ -266,6 +266,15 @@ export const libraryShellParts: LibraryShellPart[] = [
     example: "/examples/landing-header",
     usage: `<LandingHeader />`,
   },
+  {
+    slug: "landing-footer",
+    name: "LandingFooter",
+    description:
+      "Footer global : logo Studi, deux groupes de liens fixes (Explorer, Votre projet) et une barre légale, sur fond neutral-950.",
+    importPath: "@/components/landing/landing-footer",
+    example: "/examples/landing-footer",
+    usage: `<LandingFooter />`,
+  },
 ]
 
 export function getLibraryShellPart(slug: string) {
