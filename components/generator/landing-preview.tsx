@@ -3,8 +3,10 @@
 import { useEffect, useRef, useState } from "react"
 import { MonitorIcon, SmartphoneIcon, TabletIcon } from "lucide-react"
 
+import { Badge } from "@/components/ui/badge"
 import { Spinner } from "@/components/ui/spinner"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+import { describeGeneratedPage } from "@/lib/landing/generator-state"
 import type { LandingPageConfig } from "@/lib/landing/types"
 
 import { PreviewFrame } from "./preview-frame"
@@ -79,6 +81,11 @@ export function LandingPreview({ config, loading }: LandingPreviewProps) {
           <p className="text-caption text-muted-foreground" aria-live="polite">
             {target.width} px{scale > 0 && scale < 1 ? ` · ${zoom} %` : ""}
           </p>
+          {config && !loading && (
+            <Badge variant="brand-soft" aria-live="polite">
+              {describeGeneratedPage(config)}
+            </Badge>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <ToggleGroup

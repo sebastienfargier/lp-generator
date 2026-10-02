@@ -43,3 +43,9 @@ export function generatorReducer(state: GeneratorState, action: GeneratorAction)
 export function canGenerate(brief: GeneratorBrief): boolean {
   return [brief.projectName, brief.brief, brief.audience, brief.objective].every((value) => value.trim() !== "")
 }
+
+/** Légende compacte d'un résultat : dérivée de la configuration affichée, sans état en plus. */
+export function describeGeneratedPage(config: LandingPageConfig): string {
+  const count = config.sections.length
+  return `Page générée · ${count} ${count > 1 ? "sections" : "section"}`
+}

@@ -8,7 +8,7 @@ import { describe, mock, test } from "node:test"
 
 import { emptyGeneratorBrief } from "../brief"
 import { requestLandingGeneration } from "../generate-client"
-import { canGenerate, generatorReducer, initialGeneratorState, type GeneratorState } from "../generator-state"
+import { canGenerate, describeGeneratedPage, generatorReducer, initialGeneratorState, type GeneratorState } from "../generator-state"
 import { resolveLandingDraft } from "../draft-resolver"
 import { landingGenerateEndpoint, publicErrorCodes, type PublicGenerationError } from "../public-api"
 import { context, request, validDraft } from "./fixtures"
@@ -206,5 +206,37 @@ describe("canGenerate : validation légère", () => {
       assert.equal(canGenerate({ ...brief, [key]: "   " }), false, key)
       assert.equal(canGenerate({ ...brief, [key]: "" }), false, key)
     }
+  })
+})
+
+describe("légende du résultat : « Page générée · N sections »", () => {
+  const loading = generatorReducer(initialGeneratorState, { type: "start" })
+  const legend = (state: GeneratorState) => (state.config ? describeGeneratedPage(state.config) : null)
+
+  test("aucune légende avant une génération réussie : ni au départ, ni pendant, ni après un premier échec", () => {
+    assert.equal(legend(initialGeneratorState), null)
+    assert.equal(legend(loading), null)
+    assert.equal(legend(generatorReducer(loading, { type: "failure", error: { code: "timeout", message: "x" } as PublicGenerationError })), null)
+  })
+
+  test("après un succès : « Page générée » et le vrai nombre de sections de la configuration", () => {
+    const text = describeGeneratedPage(config)
+    assert.match(text, /^Page générée · \d+ sections?$/)
+    assert.equal(text, `Page générée · ${config.sections.length} ${config.sections.length > 1 ? "sections" : "section"}`)
+    assert.equal(legend(generatorReducer(loading, { type: "success", config })), text)
+  })
+
+  test("singulier à une section, pluriel sinon ; aucun identifiant technique, aucun JSON", () => {
+    const one = { ...config, sections: config.sections.slice(0, 1) }
+    assert.equal(describeGeneratedPage(one), "Page générée · 1 section")
+    assert.equal(describeGeneratedPage({ ...config, sections: [...config.sections, ...config.sections] }), `Page générée · ${config.sections.length * 2} sections`)
+    for (const section of config.sections) assert.ok(!describeGeneratedPage(config).includes(section.id))
+    assert.ok(!/[{}"\[\]]/.test(describeGeneratedPage(config)))
+  })
+
+  test("la légende suit la dernière configuration valide (un échec ultérieur ne la change pas)", () => {
+    const success = generatorReducer(loading, { type: "success", config })
+    const failed = generatorReducer(generatorReducer(success, { type: "start" }), { type: "failure", error: { code: "timeout", message: "x" } as PublicGenerationError })
+    assert.equal(legend(failed), legend(success))
   })
 })

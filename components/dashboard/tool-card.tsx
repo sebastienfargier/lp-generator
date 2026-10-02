@@ -11,7 +11,7 @@ import type { Tool } from "./dashboard-data"
  * Toute la carte est cliquable via un lien « étiré » (::after) porté par le
  * CTA : un seul lien dans l'arbre d'accessibilité, focus visible sur la carte.
  */
-export function ToolCard({ title, description, href, icon: Icon }: Tool) {
+export function ToolCard({ title, description, cta, href, icon: Icon }: Tool) {
   return (
     <Card className="relative transition-colors hover:bg-accent has-[a:focus-visible]:ring-2 has-[a:focus-visible]:ring-ring">
       <CardHeader>
@@ -27,7 +27,7 @@ export function ToolCard({ title, description, href, icon: Icon }: Tool) {
           href={href}
           className={cn(buttonVariants({ variant: "outline" }), "outline-none after:absolute after:inset-0 after:content-['']")}
         >
-          Accéder à l&apos;éditeur
+          {cta}
           <ArrowRight data-icon="inline-end" aria-hidden />
         </Link>
       </CardFooter>

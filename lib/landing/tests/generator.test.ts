@@ -175,3 +175,43 @@ describe("frontière serveur / client : le secret Anthropic reste serveur", () =
     }
   })
 })
+
+describe("clarté de la démonstration", () => {
+  const page = code("app/generator/page.tsx")
+  const preview = code("components/generator/landing-preview.tsx")
+  const tools = code("components/dashboard/dashboard-data.ts")
+  const card = code("components/dashboard/tool-card.tsx")
+  const library = code("app/(dashboard)/library/page.tsx")
+
+  test("/generator propose un retour au Dashboard (Link vers « / »), sans sidebar", () => {
+    assert.match(page, /import Link from "next\/link"/)
+    assert.match(page, /render=\{<Link href="\/" \/>\}/)
+    assert.match(page, /Dashboard\s*<\/Button>/)
+    assert.ok(!/Sidebar|AppSidebar/.test(page))
+  })
+
+  test("la légende du résultat n'existe qu'avec une configuration, jamais pendant une génération, sans nouvel état", () => {
+    assert.match(preview, /\{config && !loading && \(\s*<Badge[^>]*>\s*\{describeGeneratedPage\(config\)\}/)
+    assert.ok(!/useState<[^>]*(config|legend|sections)/i.test(preview))
+    assert.ok(!/fetch\(|requestLandingGeneration/.test(preview))
+  })
+
+  test("Dashboard : Landing dit « IA » et « brief », Email dit « démo » et « sans IA », plus de « gérez » ni d'« éditeur »", () => {
+    const landing = tools.match(/title: "Landing Pages",\s*description: "([^"]+)",\s*cta: "([^"]+)"/)
+    const email = tools.match(/title: "Emails",\s*description: "([^"]+)",\s*cta: "([^"]+)"/)
+    assert.ok(landing && email)
+    assert.match(landing[1]!, /IA/)
+    assert.match(landing[1]!, /Décrivez/)
+    assert.equal(landing[2], "Générer une landing page")
+    assert.match(email[1]!, /démo/i)
+    assert.match(email[1]!, /sans IA/)
+    assert.ok(!/gérez|éditeur/i.test(`${tools}\n${card}`))
+    assert.match(card, /\{cta\}/)
+  })
+
+  test("Library : une phrase explique que l'IA compose avec des lames contrôlées, sans jargon technique", () => {
+    assert.match(library, /Les landing pages générées par l'IA sont composées à partir de ces lames contrôlées, pour garantir un rendu cohérent\./)
+    assert.match(library, /\{librarySections\.length\} lames/)
+    assert.ok(!/Zod|JSON|React|Tailwind/.test(library.slice(library.indexOf("description="), library.indexOf("/>", library.indexOf("description=")))))
+  })
+})

@@ -28,7 +28,7 @@ export default function LibraryPage() {
     <div className="flex flex-col gap-12">
       <PageHeader
         title="Bibliothèque de lames"
-        description={`${librarySections.length} lames prêtes à composer une landing page.`}
+        description={`${librarySections.length} lames prêtes à composer une landing page. Les landing pages générées par l'IA sont composées à partir de ces lames contrôlées, pour garantir un rendu cohérent.`}
       />
 
       {libraryCategories.map((category) => {

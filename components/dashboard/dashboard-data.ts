@@ -31,6 +31,8 @@ export const currentWorkspace = {
 export type Tool = {
   title: string
   description: string
+  /** Libellé du bouton de la carte. */
+  cta: string
   href: string
   icon: LucideIcon
 }
@@ -39,13 +41,15 @@ export type Tool = {
 export const tools: Tool[] = [
   {
     title: "Landing Pages",
-    description: "Créez et gérez vos landing pages.",
+    description: "Décrivez votre projet : l'IA compose une landing page à partir de lames contrôlées.",
+    cta: "Générer une landing page",
     href: "/generator",
     icon: PanelsTopLeft,
   },
   {
     title: "Emails",
-    description: "Créez et gérez vos emails.",
+    description: "Mode démo : un email assemblé à partir des lames, sans IA.",
+    cta: "Ouvrir la démo",
     href: "/email-generator",
     icon: Mail,
   },
