@@ -20,9 +20,14 @@ import { landingImages } from "./image-catalog"
  *
  * Conventions (à lire avant de modifier une famille) :
  * - AUCUNE propriété optionnelle : une famille porte tous ses champs, requis.
- * - Un champ SANS OBJET pour la section choisie est une CHAÎNE VIDE (le système
- *   le demande à Claude). La conversion le retire. S'il est NON vide, la
- *   conversion REFUSE : Claude n'écrit pas de contenu qui serait jeté en silence.
+ * - Un champ SANS OBJET pour la section choisie (ex. `eyebrow` d'une
+ *   step-sequence, `accent` d'un editorial-hero, `image` d'un final-cta) est un
+ *   champ TECHNIQUE : il n'existe que pour factoriser la famille. Le système
+ *   demande de le laisser vide, mais ce n'est qu'une préférence de génération :
+ *   la conversion l'IGNORE, quelle que soit sa valeur transport valide. Il ne
+ *   fait jamais échouer la génération, et rien n'est jamais corrigé.
+ *   Un champ qui a un objet pour la section reste, lui, strictement validé par
+ *   le Draft métier.
  * - Un champ dont le nom change entre transport et Draft est renommé par la
  *   conversion seulement : `title` → `label` (value-props), `description` →
  *   `supportingText` (editorial-hero).
@@ -48,7 +53,7 @@ import { landingImages } from "./image-catalog"
 
 const imageIds = landingImages.map((image) => image.id)
 
-/** Texte : une chaîne simple. Vide = champ sans objet (la validation métier est celle du Draft). */
+/** Texte : une chaîne simple. La validation métier (non vide, etc.) est celle du Draft. */
 const text = z.string()
 const destination = z.string()
 const nonEmpty = <Item extends z.ZodType>(item: Item) => z.array(item).min(1, "Au moins un élément est requis.")
@@ -159,34 +164,24 @@ export function buildLandingTransportJsonSchema(candidateTypes: readonly string[
 
 export type LandingTransportIssue = { path: string; message: string }
 
-export type LandingTransportConversion =
-  | { status: "converted"; draft: { sections: Record<string, unknown>[] } }
-  | { status: "invalid"; issues: LandingTransportIssue[] }
-
-const noPurpose = (section: string) => `Champ sans objet pour « ${section} » : laissez-le vide (chaîne vide), il ne sera pas utilisé.`
-
-/** Convertit une réponse de transport valide ; refuse un champ sans objet non vide. */
-export function convertLandingTransportDraft(transport: LandingTransportDraft): LandingTransportConversion {
-  const issues: LandingTransportIssue[] = []
-  const sections = transport.sections.map((entry, index): Record<string, unknown> => {
-    const at = `sections.${index}`
-    /** Champs sans objet : doivent être vides. */
-    const mustBeEmpty = (values: Record<string, string>, prefix = at) => {
-      for (const [field, value] of Object.entries(values)) {
-        if (value !== "") issues.push({ path: `${prefix}.${field}`, message: noPurpose(entry.section) })
-      }
-    }
+/**
+ * Convertit une réponse de transport valide en brouillon métier (pas encore
+ * validé). Les champs techniques sans objet pour la section sont ignorés ;
+ * les renommages sont faits ici et seulement ici.
+ */
+export function convertLandingTransportDraft(transport: LandingTransportDraft): { sections: Record<string, unknown>[] } {
+  const sections = transport.sections.map((entry): Record<string, unknown> => {
     switch (entry.section) {
+      // Sans objet : eyebrow, description (le label du Draft est le title du transport).
       case "value-props":
-        mustBeEmpty({ eyebrow: entry.eyebrow, description: entry.description })
         return { section: entry.section, label: entry.title, items: entry.items }
       case "pillars":
         return { section: entry.section, eyebrow: entry.eyebrow, title: entry.title, description: entry.description, items: entry.items }
+      // Sans objet : eyebrow.
       case "step-sequence":
-        mustBeEmpty({ eyebrow: entry.eyebrow })
         return { section: entry.section, title: entry.title, description: entry.description, items: entry.items }
+      // Sans objet : description de chaque item.
       case "content-carousel":
-        entry.items.forEach((item, position) => mustBeEmpty({ description: item.description }, `${at}.items.${position}`))
         return { section: entry.section, label: entry.label, items: entry.items.map(({ eyebrow, title, image }) => ({ eyebrow, title, image })) }
       case "audience-switcher":
         return { section: entry.section, label: entry.label, items: entry.items }
@@ -194,19 +189,19 @@ export function convertLandingTransportDraft(transport: LandingTransportDraft): 
         return { section: entry.section, title: entry.title, description: entry.description, items: entry.items }
       case "narrative-split":
         return { section: entry.section, eyebrow: entry.eyebrow, title: entry.title, description: entry.description, image: entry.image }
+      // Sans objet : accent. `description` du transport devient `supportingText`.
       case "editorial-hero":
-        mustBeEmpty({ accent: entry.accent })
         return { section: entry.section, title: entry.title, supportingText: entry.description, image: entry.image, cta: entry.cta }
       case "campaign-spotlight":
         return { section: entry.section, title: entry.title, accent: entry.accent, description: entry.description, image: entry.image, cta: entry.cta }
+      // Sans objet : accent, image.
       case "final-cta":
-        mustBeEmpty({ accent: entry.accent, image: entry.image })
         return { section: entry.section, title: entry.title, description: entry.description, cta: entry.cta }
       case "immersive-hero":
         return { section: entry.section, headline: entry.headline, description: entry.description, image: entry.image, cta: entry.cta }
     }
   })
-  return issues.length > 0 ? { status: "invalid", issues } : { status: "converted", draft: { sections } }
+  return { sections }
 }
 
 export type LandingTransportParse =
@@ -223,8 +218,7 @@ export function parseLandingTransportDraft(output: unknown): LandingTransportPar
   if (!parsed.success) {
     return { status: "invalid", issues: parsed.error.issues.map((issue) => ({ path: issue.path.map(String).join(".") || "brouillon", message: issue.message })) }
   }
-  const converted = convertLandingTransportDraft(parsed.data)
-  return converted.status === "invalid" ? converted : { status: "ok", transport: parsed.data, draft: converted.draft }
+  return { status: "ok", transport: parsed.data, draft: convertLandingTransportDraft(parsed.data) }
 }
 
 /* -------------------------------------------------------------------------- */
@@ -236,7 +230,7 @@ type DraftSectionLike = { section: LandingDraftSectionType } & Record<string, un
 /**
  * Inverse de la conversion, pour les tests et les réponses simulées : jamais
  * utilisé par le pipeline de génération (Claude produit le transport lui-même).
- * Les champs sans objet sont des chaînes vides.
+ * Les champs sans objet sont des chaînes vides (la conversion les ignorerait de toute façon).
  */
 export function encodeLandingDraftForTransport(draft: { sections: readonly DraftSectionLike[] }): LandingTransportDraft {
   const sections = draft.sections.map((entry): LandingTransportSection => {

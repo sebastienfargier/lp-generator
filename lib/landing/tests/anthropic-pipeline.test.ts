@@ -259,7 +259,6 @@ describe("brouillon invalide : refusé avant toute résolution", () => {
     ["ancre interne", only({ ...hero, cta: { ...hero.cta, destination: "#pillars" } }), /destination/],
     ["texte vide", only({ ...hero, title: "   " }), /vide/],
     ["liste vide", transportOf(draftOf(draftSection["value-props"](), { ...draftSection.pillars(), items: [] })), /élément/],
-    ["champ sans objet non vide (accent d'un editorial-hero)", only({ ...hero, accent: "mise en avant" }), /sans objet/],
     ["LandingPageConfig complète au lieu d'un brouillon", { version: 1, id: "x", title: "x", sections: [{ id: "hero", type: "editorial-hero", props: {} }] }, /./],
     ["JSON valide qui n'est pas un objet", [validDraft()], /./],
   ]
@@ -275,6 +274,15 @@ describe("brouillon invalide : refusé avant toute résolution", () => {
       assert.equal(error.resolved, undefined)
     })
   }
+
+  test("un champ technique sans objet non vide (accent d'un editorial-hero) est ignoré : la génération réussit", async () => {
+    const transport = JSON.parse(JSON.stringify(transportOf(validDraft())))
+    transport.sections[0].accent = "mise en avant"
+    const { calls, result } = await run(() => reply(transport))
+    assert.equal(calls.length, 1)
+    assert.equal(result.status, "success")
+    if (result.status === "success") assert.deepEqual(result.draft, validDraft())
+  })
 
   test("une LandingPageConfig valide n'est JAMAIS acceptée comme brouillon : le JSON de Claude n'est pas la config", async () => {
     const config = { version: 1, id: "reconversion-rh", title: "Reconversion RH", sections: [{ id: "hero", type: "editorial-hero", props: { title: "x" } }] }

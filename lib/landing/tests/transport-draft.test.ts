@@ -1,6 +1,9 @@
 /**
  * TransportDraft (familles) : la forme que Claude produit, convertie
  * déterministement en LandingGenerationDraft avant la validation métier.
+ * Les champs TECHNIQUES sans objet pour la section (présents seulement pour
+ * factoriser la famille) sont ignorés à la conversion, jamais refusés ; tout
+ * champ qui a un objet reste strictement validé par le Draft métier.
  *
  * Les budgets de proxies ci-dessous sont des budgets de RÉGRESSION LOCAUX (état
  * mesuré lors de la correction « compiled grammar is too large ») : ils ne
@@ -19,6 +22,9 @@ import { resolveLandingDraft } from "../draft-resolver"
 import { landingDestinations } from "../destinations"
 import { landingDraftSectionTypes, safeParseLandingGenerationDraft } from "../generation-draft"
 import { landingImages } from "../image-catalog"
+import { buildLandingAiPrompt } from "../ai-prompt"
+import { validateGeneratedLanding } from "../generation-validation"
+import { safeParseLandingPage } from "../schemas"
 import { getSectionCatalogEntry } from "../section-catalog"
 import {
   buildLandingTransportJsonSchema,
@@ -292,7 +298,7 @@ describe("TransportDraft : aller-retour des 11 lames", () => {
   })
 })
 
-describe("TransportDraft : champs sans objet (chaîne vide)", () => {
+describe("TransportDraft : champs techniques sans objet (ignorés à la conversion)", () => {
   test("mappings : value-props title → label ; editorial-hero description → supportingText ; champs vides retirés", () => {
     const valueProps = parse(sample("value-props")).draft.sections[0]!
     assert.deepEqual(Object.keys(valueProps).sort(), ["items", "label", "section"])
@@ -317,24 +323,32 @@ describe("TransportDraft : champs sans objet (chaîne vide)", () => {
   })
 
   type Mutable = { sections: ({ [key: string]: unknown } & { items?: { [key: string]: unknown }[] })[] }
-  const nonEmpty: [string, string, (transport: Mutable) => void, string][] = [
-    ["final-cta", "image", (t) => (t.sections[0]!.image = "content-1"), "sections.0.image"],
-    ["final-cta", "accent", (t) => (t.sections[0]!.accent = "x"), "sections.0.accent"],
-    ["step-sequence", "eyebrow", (t) => (t.sections[0]!.eyebrow = "Parcours"), "sections.0.eyebrow"],
-    ["editorial-hero", "accent", (t) => (t.sections[0]!.accent = "mise en avant"), "sections.0.accent"],
-    ["value-props", "eyebrow", (t) => (t.sections[0]!.eyebrow = "x"), "sections.0.eyebrow"],
-    ["value-props", "description", (t) => (t.sections[0]!.description = "x"), "sections.0.description"],
-    ["content-carousel", "description d'item", (t) => (t.sections[0]!.items![0]!.description = "x"), "sections.0.items.0.description"],
+  const technical: [string, string, (transport: Mutable) => void, string[]][] = [
+    ["final-cta", "image", (t) => (t.sections[0]!.image = "content-1"), ["image"]],
+    ["final-cta", "image (id valide quelconque)", (t) => (t.sections[0]!.image = "hero-bilan"), ["image"]],
+    ["final-cta", "accent", (t) => (t.sections[0]!.accent = "x"), ["accent"]],
+    ["step-sequence", "eyebrow", (t) => (t.sections[0]!.eyebrow = "Votre réflexion"), ["eyebrow"]],
+    ["editorial-hero", "accent", (t) => (t.sections[0]!.accent = "mise en avant"), ["accent"]],
+    ["value-props", "eyebrow", (t) => (t.sections[0]!.eyebrow = "x"), ["eyebrow"]],
+    ["value-props", "description", (t) => (t.sections[0]!.description = "x"), ["description"]],
+    ["content-carousel", "description d'item", (t) => (t.sections[0]!.items![0]!.description = "x"), ["items.0.description"]],
   ]
-  for (const [type, field, mutate, path] of nonEmpty) {
-    test(`${type} : ${field} non vide → refusé à la conversion (jamais jeté en silence)`, () => {
-      const transport = JSON.parse(JSON.stringify(encode(sample(type as (typeof allSections)[number]))))
+  for (const [type, field, mutate, absent] of technical) {
+    test(`${type} : ${field} non vide → transport PASS, conversion PASS, champ absent du Draft (ignoré, jamais refusé)`, () => {
+      const initial = sample(type as (typeof allSections)[number])
+      const transport = JSON.parse(JSON.stringify(encode(initial)))
       mutate(transport)
       const result = parseLandingTransportDraft(transport)
-      assert.equal(result.status, "invalid")
-      if (result.status !== "invalid") return
-      assert.deepEqual(result.issues.map((issue) => issue.path), [path])
-      assert.match(result.issues[0]!.message, new RegExp(`sans objet pour « ${type} »`))
+      assert.equal(result.status, "ok", JSON.stringify(result))
+      if (result.status !== "ok") return
+      for (const path of absent) {
+        const [head, index, leaf] = path.split(".")
+        const target = leaf ? ((result.draft.sections[0]!.items as Record<string, unknown>[])[Number(index)] as Record<string, unknown>) : result.draft.sections[0]!
+        assert.ok(!(leaf ?? head!) || !((leaf ?? head!) in target), `${path} doit être absent du Draft`)
+      }
+      // Le Draft obtenu est exactement celui de la section d'origine, et le Draft métier l'accepte.
+      assert.deepEqual(JSON.parse(JSON.stringify(result.draft)), draftOf(initial))
+      assert.equal(safeParseLandingGenerationDraft(result.draft).success, true)
     })
   }
 
@@ -438,12 +452,12 @@ describe("TransportDraft : intégration au pipeline", () => {
     assert.ok(JSON.stringify(prompt.outputSchema).includes("campaign-spotlight"))
   })
 
-  test("le système contient UNE instruction sur les champs sans objet (pas répétée dans les lames)", () => {
-    const sentences = prompt.system.split("chaîne vide").length - 1
-    assert.equal(sentences, 1)
-    assert.match(prompt.system, /un champ sans objet pour la section choisie est une chaîne vide/)
+  test("le système contient UNE instruction sur les champs sans objet : une préférence, pas une condition de conversion", () => {
+    assert.equal(prompt.system.split("laisse-les vides").length - 1, 1)
+    assert.match(prompt.system, /ceux qui n'ont pas de sens pour la section choisie ne sont pas utilisés, laisse-les vides/)
     assert.match(prompt.system, /value-props écrit son label dans title, editorial-hero son texte secondaire dans description/)
-    assert.ok(!JSON.stringify(prompt.user).includes("chaîne vide"))
+    assert.ok(!/DOIT|doit être vide|obligatoirement vide/i.test(prompt.system))
+    assert.ok(!JSON.stringify(prompt.user).includes("laisse-les vides"))
   })
 
   test("le catalogue source n'est pas modifié : editorial-hero décrit toujours supportingText", () => {
@@ -472,5 +486,227 @@ describe("TransportDraft : intégration au pipeline", () => {
       assert.ok(!/transport-draft|TransportDraft/.test(read(path)), path)
     }
     assert.ok(resolveLandingDraft)
+  })
+})
+
+/* -------------------------------------------------------------------------- */
+/* Régression exacte du smoke réel #2                                         */
+/* -------------------------------------------------------------------------- */
+
+describe("régression du smoke réel #2 : step-sequence.eyebrow rempli par le modèle", () => {
+  const stepSequence = {
+    section: "step-sequence",
+    eyebrow: "Votre réflexion",
+    title: "Avancer pas à pas vers un projet qui a du sens",
+    description: "Une progression simple pour passer de l'envie de changer à une piste de formation plus précise.",
+    items: [
+      { title: "Explorer les métiers", description: "Découvrez des métiers et repérez ceux qui font écho à vos envies et à votre situation." },
+      { title: "Comparer les formations", description: "Mettez en regard les formations accessibles pour voir lesquelles correspondent à votre objectif." },
+      { title: "Préciser votre projet", description: "Identifiez ce qui compte pour vous afin de choisir la suite avec davantage de clarté." },
+    ],
+  }
+
+  test("transport PASS, conversion PASS, Draft métier PASS, et le Draft ne contient aucun eyebrow", () => {
+    const result = parseLandingTransportDraft({ sections: [stepSequence] })
+    assert.equal(result.status, "ok")
+    if (result.status !== "ok") return
+    const section = result.draft.sections[0]!
+    assert.deepEqual(Object.keys(section), ["section", "title", "description", "items"])
+    assert.ok(!("eyebrow" in section))
+    const draft = safeParseLandingGenerationDraft(result.draft)
+    assert.equal(draft.success, true)
+    if (draft.success) assert.ok(!JSON.stringify(draft.data).includes("Votre réflexion"))
+  })
+})
+
+/* -------------------------------------------------------------------------- */
+/* Frontière : on assouplit l'enveloppe technique, pas le modèle métier       */
+/* -------------------------------------------------------------------------- */
+
+describe("frontière transport / métier", () => {
+  const through = (...sections: object[]) => {
+    const transport = parseLandingTransportDraft(encode(...sections))
+    return transport.status === "ok" ? { transport: "PASS" as const, draft: safeParseLandingGenerationDraft(transport.draft) } : { transport: "FAIL" as const, draft: undefined }
+  }
+  const mutated = (type: (typeof allSections)[number], change: (section: Record<string, unknown>) => void) => {
+    const transport = JSON.parse(JSON.stringify(encode(sample(type))))
+    change(transport.sections[0])
+    return parseLandingTransportDraft(transport)
+  }
+
+  test("A. step-sequence.eyebrow non vide → PASS, ignoré", () => {
+    const result = mutated("step-sequence", (section) => (section.eyebrow = "Parcours"))
+    assert.equal(result.status, "ok")
+    assert.equal(result.status === "ok" && safeParseLandingGenerationDraft(result.draft).success, true)
+  })
+
+  test("B. campaign-spotlight, destination inconnue → transport PASS, Draft FAIL", () => {
+    const result = through({ ...sample("campaign-spotlight"), cta: { label: "S'inscrire au live", destination: "inscription-live" } })
+    assert.equal(result.transport, "PASS")
+    assert.equal(result.draft?.success, false)
+  })
+
+  test("C. campaign-spotlight, image inconnue → transport FAIL", () => {
+    assert.equal(mutated("campaign-spotlight", (section) => (section.image = "hero-inventee")).status, "invalid")
+    assert.equal(mutated("campaign-spotlight", (section) => (section.image = "")).status, "ok", "vide : accepté par l'enum du bloc CTA, refusé ensuite par le Draft")
+    const empty = mutated("campaign-spotlight", (section) => (section.image = ""))
+    assert.equal(empty.status === "ok" && safeParseLandingGenerationDraft(empty.draft).success, false)
+  })
+
+  test("D. campaign-spotlight, accent vide → Draft FAIL (l'accent a un objet pour cette section)", () => {
+    const result = through({ ...sample("campaign-spotlight"), accent: "" })
+    assert.equal(result.transport, "PASS")
+    assert.equal(result.draft?.success, false)
+    if (result.draft && !result.draft.success) assert.ok(result.draft.error.issues.some((issue) => issue.path.join(".") === "sections.0.accent"))
+  })
+
+  test("E. step-sequence à 2 items → Draft FAIL", () => {
+    const steps = sample("step-sequence")
+    const result = through({ ...steps, items: (steps.items as object[]).slice(0, 2) })
+    assert.equal(result.transport, "PASS")
+    assert.equal(result.draft?.success, false)
+  })
+
+  test("F. destination-cards, destination inconnue → Draft FAIL", () => {
+    const cards = sample("destination-cards")
+    const items = (cards.items as { destination: string }[]).map((item, index) => (index === 0 ? { ...item, destination: "inscription-live" } : item))
+    const result = through({ ...cards, items })
+    assert.equal(result.transport, "PASS")
+    assert.equal(result.draft?.success, false)
+    if (result.draft && !result.draft.success) assert.ok(result.draft.error.issues.some((issue) => issue.path.join(".") === "sections.0.items.0.destination"))
+  })
+
+  test("un vrai champ métier n'est JAMAIS ignoré : le texte de pillars, l'accent de campaign-spotlight, les items restent dans le Draft", () => {
+    for (const type of ["pillars", "campaign-spotlight", "destination-cards", "audience-switcher", "narrative-split", "immersive-hero"] as const) {
+      const initial = sample(type)
+      const result = parseLandingTransportDraft(encode(initial))
+      assert.equal(result.status, "ok", type)
+      if (result.status === "ok") assert.deepEqual(JSON.parse(JSON.stringify(result.draft.sections[0])), initial, type)
+    }
+  })
+})
+
+/* -------------------------------------------------------------------------- */
+/* Replay hors ligne du smoke réel #2 (aucun appel Anthropic)                 */
+/* -------------------------------------------------------------------------- */
+
+describe("replay hors ligne de la réponse réelle du smoke #2", () => {
+  const smokeRequest = {
+  "projectName": "Studi Live Orientation",
+  "audience": "adultes en réflexion sur leur orientation ou leur reconversion",
+  "objective": "discover-trainings",
+  "brief": "Studi organise un live consacré à l'orientation et à la reconversion.\nLa landing page doit annoncer clairement ce rendez-vous, puis aider\nles visiteurs à explorer les formations et à préciser leur projet.\nLe live doit constituer un temps fort visible de la page, sans\ntransformer toute la landing en page événementielle.",
+  "facts": [
+    { "value": "Date du live : 15 octobre 2026." },
+    { "value": "Heure : 18h30." },
+    { "value": "Le live est gratuit." },
+    { "value": "L'inscription est nécessaire." }
+  ]
+}
+  // TransportDraft renvoyé par Claude (HTTP 200), recopié à l'identique.
+  const smokeTransport = {
+  "sections": [
+    {
+      "section": "editorial-hero",
+      "title": "Orientation, reconversion : explorez les formations et précisez votre projet",
+      "accent": "",
+      "description": "Studi vous aide à y voir plus clair : parcourez les formations, comparez les pistes et avancez à votre rythme vers un projet qui vous ressemble.",
+      "image": "hero-bilan",
+      "cta": {
+        "label": "Explorer les formations",
+        "destination": "catalogue-formations"
+      }
+    },
+    {
+      "section": "campaign-spotlight",
+      "title": "Le live orientation et reconversion",
+      "accent": "a lieu le 15 octobre 2026 à 18h30",
+      "description": "Ce live est gratuit et l'inscription est nécessaire. Un temps fort pour faire le point sur votre orientation ou votre reconversion.",
+      "image": "content-4",
+      "cta": {
+        "label": "Explorer les métiers",
+        "destination": "metiers"
+      }
+    },
+    {
+      "section": "step-sequence",
+      "eyebrow": "Votre réflexion",
+      "title": "Avancer pas à pas vers un projet qui a du sens",
+      "description": "Une progression simple pour passer de l'envie de changer à une piste de formation plus précise.",
+      "items": [
+        {
+          "title": "Explorer les métiers",
+          "description": "Découvrez des métiers et repérez ceux qui font écho à vos envies et à votre situation."
+        },
+        {
+          "title": "Comparer les formations",
+          "description": "Mettez en regard les formations accessibles pour voir lesquelles correspondent à votre objectif."
+        },
+        {
+          "title": "Préciser votre projet",
+          "description": "Identifiez ce qui compte pour vous afin de choisir la suite avec davantage de clarté."
+        }
+      ]
+    },
+    {
+      "section": "destination-cards",
+      "title": "Poursuivez votre exploration à votre rythme",
+      "description": "Trois pistes complémentaires pour affiner votre réflexion après avoir découvert les formations.",
+      "items": [
+        {
+          "title": "Choisir par niveau de diplôme",
+          "description": "Parcourez les formations en fonction du niveau de diplôme qui correspond à votre projet.",
+          "destination": "diplomes"
+        },
+        {
+          "title": "Monter en compétences",
+          "description": "Découvrez les certificats pour développer des compétences ciblées dans votre domaine.",
+          "destination": "certificats"
+        },
+        {
+          "title": "Les dispositifs de financement",
+          "description": "Consultez l'ensemble des dispositifs de financement existants pour préparer votre projet.",
+          "destination": "financement"
+        }
+      ]
+    }
+  ]
+}
+
+  test("TransportDraft → conversion → Draft → résolveur → LandingPageSchema : PASS à chaque étape", () => {
+    const prompt = buildLandingAiPrompt(smokeRequest)
+    assert.equal(prompt.status, "ready")
+    if (prompt.status !== "ready") return
+    const transport = parseLandingTransportDraft(smokeTransport)
+    assert.equal(transport.status, "ok", JSON.stringify(transport))
+    if (transport.status !== "ok") return
+    const draft = safeParseLandingGenerationDraft(transport.draft)
+    assert.equal(draft.success, true)
+    if (!draft.success) return
+    const resolution = resolveLandingDraft(prompt.request, draft.data, prompt.context)
+    assert.equal(resolution.status, "resolved")
+    if (resolution.status !== "resolved") return
+    assert.deepEqual(resolution.config.sections.map((entry) => entry.type), ["editorial-hero", "campaign-spotlight", "step-sequence", "destination-cards"])
+    assert.equal(validateGeneratedLanding(resolution.config, prompt.context).status, "valid")
+    assert.equal(safeParseLandingPage(resolution.config).success, true)
+    const [hero, spotlight] = resolution.config.sections
+    assert.ok(hero!.type === "editorial-hero" && hero!.props.supportingText?.startsWith("Studi vous aide"))
+    assert.ok(spotlight!.type === "campaign-spotlight" && spotlight!.props.primaryAction.href === "https://www.studi.com/fr/metiers" && spotlight!.props.visual.src === "/images/content-4.jpg")
+  })
+
+  test("le pipeline complet réussit avec cette réponse : un seul appel simulé, success", async () => {
+    let calls = 0
+    const client: LandingClaudeClient = {
+      messages: {
+        create: async () => {
+          calls += 1
+          return { model: "claude-sonnet-5-5", stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify(smokeTransport) }], usage: { input_tokens: 7478, output_tokens: 1854 } } as never
+        },
+      },
+    }
+    const result = await generateLandingWithClaude(smokeRequest, { client, env: { ANTHROPIC_API_KEY: ["sk-ant", "api03", "q".repeat(24)].join("-") } })
+    assert.equal(calls, 1)
+    assert.equal(result.status, "success", JSON.stringify(result))
+    if (result.status === "success") assert.ok(!JSON.stringify(result.draft).includes("Votre réflexion"))
   })
 })
