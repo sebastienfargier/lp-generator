@@ -173,6 +173,14 @@ export const draftSection = {
       { title: "Parcourir le catalogue", description: "Consulter l'ensemble des formations, avec des filtres.", destination: "catalogue-formations" },
     ],
   }),
+  "campaign-spotlight": () => ({
+    section: "campaign-spotlight",
+    title: "Explorez les temps forts",
+    accent: "de Studi",
+    description: "Découvrez les formations Studi et avancez dans votre projet, à votre rythme.",
+    image: "content-4",
+    cta: { label: "Découvrir les formations", destination: "catalogue-formations" },
+  }),
   "final-cta": () => ({
     section: "final-cta",
     title: "Prêt à explorer les formations ?",

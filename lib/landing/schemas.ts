@@ -406,6 +406,20 @@ export const LandingPageSchema = z
       }
     })
 
+    // CampaignSpotlight : une seule communication mise à l'affiche par page.
+    let spotlightCount = 0
+    page.sections.forEach((section, index) => {
+      if (section.type !== "campaign-spotlight") return
+      spotlightCount += 1
+      if (spotlightCount > 1) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["sections", index, "type"],
+          message: `Une landing page ne peut contenir qu'une seule CampaignSpotlight ("campaign-spotlight" en trop).`,
+        })
+      }
+    })
+
     // Clôture : au plus une, et dernière section (même garantie que « hero en tête »).
     let closingCount = 0
     page.sections.forEach((section, index) => {

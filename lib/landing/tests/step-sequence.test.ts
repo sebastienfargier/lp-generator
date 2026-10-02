@@ -199,11 +199,11 @@ describe("StepSequence : catalogue, garde-fou factuel, frontière avec Pillars",
 })
 
 describe("StepSequence : bibliothèque", () => {
-  test("13 lames, 10 générables par IA, 3 en bibliothèque uniquement ; catégorie Contenu", () => {
+  test("13 lames, 11 générables par IA, 2 en bibliothèque uniquement ; catégorie Contenu", () => {
     const statuses = librarySections.map((candidate) => getSectionGeneration(candidate.type).status)
     assert.equal(librarySections.length, 13)
-    assert.equal(statuses.filter((status) => status === "generable").length, 10)
-    assert.equal(statuses.filter((status) => status === "library-only").length, 3)
+    assert.equal(statuses.filter((status) => status === "generable").length, 11)
+    assert.equal(statuses.filter((status) => status === "library-only").length, 2)
     const library = librarySections.find((candidate) => candidate.slug === "step-sequence")!
     assert.equal(library.category, "Contenu")
     assert.equal(library.name, "StepSequence")

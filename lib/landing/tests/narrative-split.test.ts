@@ -164,11 +164,11 @@ describe("NarrativeSplit : contexte, catalogue, bibliothèque", () => {
     assert.match(entry.avoidWhen.join(" "), /pillars/)
   })
 
-  test("bibliothèque : 13 lames, 10 générables par IA, 3 en bibliothèque uniquement ; catégorie Contenu existante", () => {
+  test("bibliothèque : 13 lames, 11 générables par IA, 2 en bibliothèque uniquement ; catégorie Contenu existante", () => {
     const statuses = librarySections.map((entry) => getSectionGeneration(entry.type).status)
     assert.equal(librarySections.length, 13)
-    assert.equal(statuses.filter((status) => status === "generable").length, 10)
-    assert.equal(statuses.filter((status) => status === "library-only").length, 3)
+    assert.equal(statuses.filter((status) => status === "generable").length, 11)
+    assert.equal(statuses.filter((status) => status === "library-only").length, 2)
     const entry = librarySections.find((candidate) => candidate.slug === "narrative-split")!
     assert.equal(entry.category, "Contenu")
     assert.equal(entry.name, "NarrativeSplit")

@@ -208,6 +208,18 @@ export function resolveLandingDraft(
             })),
           },
         }
+      case "campaign-spotlight":
+        return {
+          id,
+          type: "campaign-spotlight",
+          props: {
+            title: section.title,
+            accent: section.accent,
+            description: section.description,
+            visual: picture(section.image, `${at}.image`),
+            primaryAction: action(section.cta, `${at}.cta.destination`),
+          },
+        }
       case "final-cta":
         return {
           id,

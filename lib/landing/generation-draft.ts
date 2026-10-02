@@ -109,6 +109,15 @@ const branches = [
       .max(3, "Trois suites au plus."),
   }),
   z.strictObject({
+    section: z.literal("campaign-spotlight"),
+    /** Début du titre ; `accent` en est la fin mise en valeur (une seule phrase). */
+    title: text,
+    accent: text,
+    description: text,
+    image: DraftImageIdSchema,
+    cta: DraftCtaSchema,
+  }),
+  z.strictObject({
     section: z.literal("final-cta"),
     title: text,
     description: text,

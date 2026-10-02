@@ -266,19 +266,19 @@ const catalog = {
     category: "conversion",
     placement: "any",
     description:
-      "Une communication mise à l'affiche : visuel, titre, phrase et un seul bouton vers une destination.",
+      "Mise en avant visuelle d'une communication ou annonce précise Studi, avec image et CTA.",
     bestFor: [
-      "annoncer un live, un événement ou une actualité Studi que le brief décrit explicitement",
+      "annonce explicite : live, événement, actualité, campagne éditoriale ou communication spéciale",
     ],
     avoidWhen: [
-      "le brief ne contient aucune annonce précise : préférer narrative-split",
-      "plusieurs communications à présenter",
+      "le brief ne contient aucune annonce précise à mettre en avant : préférer narrative-split pour développer une idée",
     ],
     guidance: [
-      "title : début de phrase, accent : fin du titre mise en valeur ; ensemble d'environ 60 caractères",
-      "description : 1 à 2 phrases, environ 120 à 160 caractères",
-      "reprend l'annonce du brief sans rien y ajouter ; faits d'événement : voir facts-only",
-      "une seule par page, au milieu ou en haut, jamais en ouverture",
+      "uniquement si le brief contient une annonce explicite",
+      "CTA obligatoire, vers la destination existante la plus cohérente avec le but de l'annonce",
+      "une seule par page, jamais en ouverture",
+      "ne reprends des faits événementiels que depuis request.facts",
+      "title + accent forment une phrase naturelle (~60 caractères) ; description : 1 à 2 phrases",
     ],
   },
   "final-cta": {

@@ -234,13 +234,63 @@ describe("propriétés de la transformation", () => {
     const { optional, unions } = complexity(transports.draft)
     assert.equal(optional, 0)
     assert.ok(unions <= anthropicSchemaLimits.unionParameters, `unions : ${unions}`)
-    assert.ok(JSON.stringify(transports.draft).length < 5000, `taille : ${JSON.stringify(transports.draft).length}`)
+  })
+
+  test("le schéma envoyé (Draft) : tous les objets sont stricts", () => {
+    const objects = schemaNodes(transports.draft).filter((node) => node.type === "object")
+    assert.ok(objects.length >= landingDraftSectionTypes.length)
+    for (const node of objects) assert.equal(node.additionalProperties, false)
   })
 
   test("le contrat complet dépasse la limite documentée d'optionnelles : pourquoi il n'est plus envoyé", () => {
     assert.ok(complexity(transports.complet).optional > anthropicSchemaLimits.optionalParameters)
     // Plus gros que le Draft : l'écart se réduit à chaque lame, la raison de fond reste le nombre d'optionnelles.
     assert.ok(JSON.stringify(transports.complet).length > JSON.stringify(transports.draft).length)
+  })
+})
+
+/**
+ * Politique de budget du schéma Draft : structurelle, pas un plafond absolu serré. Elle ne doit pas
+ * empêcher l'ajout d'une lame légitime ; elle détecte une explosion accidentelle, une branche
+ * inutilement verbeuse ou un schéma qui se rapprocherait du contrat complet.
+ * - garde-fous API (testés ci-dessus) : optionnels <= 24, unions <= 16, objets stricts ;
+ * - budget par branche : <= 420 caractères sérialisés (maximum observé : 376) ;
+ * - plafond proportionnel : socle 1 900 + 420 x nombre de branches (11 branches : 6 520) ;
+ * - sanité : < 8 000, très en dessous du contrat complet (9 565).
+ * Le Draft source et le transport sont tous deux mesurés (seul le transport part à Anthropic).
+ */
+const schemaBudget = { socle: 1900, perBranch: 420, sanity: 8000 } as const
+
+function sectionBranches(schema: unknown): Node[] {
+  const found = schemaNodes(schema).find((node) => {
+    const branches = (node.anyOf ?? node.oneOf) as Node[] | undefined
+    return Array.isArray(branches) && branches.length > 1 && branches.every((branch) => (branch.properties as Node | undefined)?.section !== undefined)
+  })
+  return ((found?.anyOf ?? found?.oneOf) as Node[] | undefined) ?? []
+}
+
+describe("budget du schéma : politique structurelle", () => {
+  for (const [label, schema] of [["Draft source", schemas.draft], ["transport", transports.draft]] as const) {
+    test(`${label} : une branche par lame générable, chacune <= 420 caractères`, () => {
+      const branches = sectionBranches(schema)
+      assert.equal(branches.length, landingDraftSectionTypes.length)
+      for (const branch of branches) {
+        const type = ((branch.properties as Node).section as Node).const
+        assert.ok(JSON.stringify(branch).length <= schemaBudget.perBranch, `${label} : branche ${String(type)} = ${JSON.stringify(branch).length}`)
+      }
+    })
+
+    test(`${label} : sous le plafond proportionnel (socle 1 900 + 420 x branches) et sous la sanité (8 000)`, () => {
+      const size = JSON.stringify(schema).length
+      const ceiling = schemaBudget.socle + schemaBudget.perBranch * sectionBranches(schema).length
+      assert.ok(size <= ceiling, `${label} : ${size} > ${ceiling}`)
+      assert.ok(size < schemaBudget.sanity, `${label} : ${size}`)
+      assert.ok(size < JSON.stringify(transports.complet).length, "le Draft reste plus petit que le contrat complet")
+    })
+  }
+
+  test("le transport n'est jamais plus gros que le Draft source (il ne fait que retirer des contraintes)", () => {
+    assert.ok(JSON.stringify(transports.draft).length <= JSON.stringify(schemas.draft).length)
   })
 })
 

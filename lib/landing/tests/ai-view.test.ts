@@ -31,12 +31,27 @@ const finalCta = (id: string) => section(id, "final-cta", props["final-cta"]())
 describe("ai-view : sections", () => {
   const candidates = context.sections.map((entry) => entry.type)
 
-  test("les 10 candidates, dans l'ordre du catalogue source, sans CampaignSpotlight", () => {
-    assert.equal(view.sections.length, 10)
+  test("les 11 candidates (dont CampaignSpotlight, une seule fois), dans l'ordre du catalogue source", () => {
+    assert.equal(view.sections.length, 11)
     assert.deepEqual(view.sections.map((entry) => entry.type), candidates)
     assert.deepEqual(candidates, sectionCatalog.filter((entry) => getSectionGeneration(entry.type).status === "generable").map((entry) => entry.type))
-    assert.ok(!JSON.stringify(view).includes("campaign-spotlight"))
-    assert.ok(!prompt.user.includes("CampaignSpotlight"))
+    assert.equal(view.sections.filter((entry) => entry.type === "campaign-spotlight").length, 1)
+    assert.equal(prompt.user.split("campaign-spotlight").length - 1, 1)
+    assert.ok(!prompt.user.includes("CampaignSpotlight"), "le nom de composant n'est pas envoyé")
+  })
+
+  test("les 10 candidates historiques sont inchangées par l'ajout de CampaignSpotlight (même texte, mêmes champs)", () => {
+    const historical = ["editorial-hero", "immersive-hero", "value-props", "pillars", "content-carousel", "audience-switcher", "narrative-split", "step-sequence", "destination-cards", "final-cta"]
+    assert.deepEqual(view.sections.filter((entry) => entry.type !== "campaign-spotlight").map((entry) => entry.type), historical)
+    // Taille des 10 anciennes entrées, mesurée avant CampaignSpotlight (6 562 avec la vue V2) : aucune compression.
+    assert.equal(JSON.stringify(view.sections.filter((entry) => entry.type !== "campaign-spotlight")).length, 6562)
+  })
+
+  test("CampaignSpotlight : ni hero, ni category, guidance présente, textes du catalogue", () => {
+    const spotlight = view.sections.find((entry) => entry.type === "campaign-spotlight")!
+    assert.ok(!("isHero" in spotlight) && !("category" in spotlight))
+    assert.ok((spotlight.guidance ?? []).length >= 4)
+    assert.match(spotlight.avoidWhen.join(" "), /préférer narrative-split/)
   })
 
   test("INVARIANT : description, bestFor, avoidWhen et guidance sont identiques à la source, mot pour mot", () => {
@@ -306,7 +321,8 @@ describe("ai-view : contexte statique et request mesurés séparément", () => {
 
   test("le contexte statique tient dans son budget de régression (la taille de request n'y compte pas)", () => {
     const staticContext = JSON.stringify(view).length
-    assert.ok(staticContext < 9200, `contexte statique : ${staticContext}`)
+    // Baseline V2 avant CampaignSpotlight : 9 013 ; avec la candidate : 9 744 ; budget relevé ponctuellement à 9 800.
+    assert.ok(staticContext < 9800, `contexte statique : ${staticContext}`)
     assert.ok(staticContext > 8000, "le test détecte aussi un contexte anormalement vide")
   })
 
@@ -316,8 +332,8 @@ describe("ai-view : contexte statique et request mesurés séparément", () => {
     assert.ok(!/<\/?[a-z]|className|tailwind|style=|\/images\/|https?:\/\//i.test(JSON.stringify(view)))
   })
 
-  test("le schéma Draft n'est pas touché par la vue", () => {
+  test("la vue n'ajoute rien au schéma Draft (il ne dépend que des branches)", () => {
     assert.ok(!JSON.stringify(prompt.outputSchema).includes("hint"))
-    assert.equal(JSON.stringify(prompt.outputSchema).length, 5001)
+    assert.ok(!JSON.stringify(prompt.outputSchema).includes("hint") && !JSON.stringify(prompt.outputSchema).includes("usage"))
   })
 })

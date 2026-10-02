@@ -167,16 +167,15 @@ describe("décision de génération IA", () => {
     assert.deepEqual([...proposed].sort(), [...draftTypes].sort())
   })
 
-  test("règle produit : dix lames générables, ProductHero et ProductGrid en bibliothèque uniquement", () => {
-    assert.deepEqual(draftTypes, ["editorial-hero", "immersive-hero", "value-props", "pillars", "content-carousel", "audience-switcher", "narrative-split", "step-sequence", "destination-cards", "final-cta"])
+  test("règle produit : onze lames générables, ProductHero et ProductGrid en bibliothèque uniquement", () => {
+    assert.deepEqual(draftTypes, ["editorial-hero", "immersive-hero", "value-props", "pillars", "content-carousel", "audience-switcher", "narrative-split", "step-sequence", "destination-cards", "campaign-spotlight", "final-cta"])
     for (const type of draftTypes) assert.deepEqual(getSectionGeneration(type as never), { status: "generable" }, type)
     for (const type of ["product-hero", "product-grid"] as const) {
       const generation = getSectionGeneration(type)
       assert.equal(generation.status, "library-only", type)
       assert.match(generation.status === "library-only" ? generation.reason : "", /source produit contrôlée/, type)
     }
-    // CampaignSpotlight : exclue temporairement, pour une autre raison (intégration IA différée).
-    assert.deepEqual(Object.keys(nonGenerableSections).sort(), ["campaign-spotlight", "product-grid", "product-hero"])
+    assert.deepEqual(Object.keys(nonGenerableSections).sort(), ["product-grid", "product-hero"])
   })
 })
 
