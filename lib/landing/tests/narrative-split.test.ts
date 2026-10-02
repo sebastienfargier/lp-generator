@@ -187,10 +187,19 @@ describe("NarrativeSplit : composant, renderer, exemple", () => {
     assert.match(component, /aspect-4\/3 w-full overflow-hidden rounded-xl bg-muted sm:aspect-3\/2 lg:aspect-4\/3/)
     assert.match(component, /object-cover/)
     assert.match(component, /bg-background py-8 text-foreground md:py-12/)
-    assert.match(component, /grid items-center gap-8 lg:grid-cols-2 lg:gap-12/)
+    assert.match(component, /grid[^"]*items-center[^"]*gap-8[^"]*lg:grid-cols-2[^"]*lg:gap-12/)
     assert.match(component, /text-caption tracking-wider text-muted-foreground uppercase/)
     assert.match(component, /max-w-xl text-body text-pretty text-muted-foreground/)
     assert.ok(!/text-display|<Button|<Link|href|<Badge|style=|#[0-9a-fA-F]{3,8}\b/.test(component))
+  })
+
+  test("pile large : image et texte partagent un même conteneur plafonné et centré, plafond levé dès lg", () => {
+    const grid = component.match(/<div className="([^"]*grid[^"]*)">/)?.[1] ?? ""
+    assert.match(grid, /\bmx-auto\b/)
+    assert.match(grid, /\bmax-w-3xl\b/)
+    assert.match(grid, /\blg:max-w-none\b/)
+    // Le plafond n'est pas sur l'image seule : image et texte resteraient désalignés en pile large.
+    assert.ok(!/max-w-[a-z0-9]+[^"]*overflow-hidden|overflow-hidden[^"]*max-w-/.test(component))
   })
 
   test("ordre DOM = ordre visuel : deux branches JSX, aucun `order` CSS ni inversion flex", () => {

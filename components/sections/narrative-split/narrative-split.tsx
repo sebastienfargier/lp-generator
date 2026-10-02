@@ -17,7 +17,10 @@ export type NarrativeSplitProps = {
 
 /**
  * Une idée développée : une image d'un côté, surtitre, titre et paragraphe de
- * l'autre. Sous `lg`, une seule colonne. L'ordre des enfants dans le DOM est
+ * l'autre. Sous `lg`, une seule colonne, plafonnée à `max-w-3xl` et centrée
+ * (image et texte restent alignés) : sans plafond, l'image atteindrait presque
+ * 1000 px de large juste avant `lg`. Le plafond est levé dès `lg`, où les deux
+ * colonnes ne changent pas. L'ordre des enfants dans le DOM est
  * toujours l'ordre visuel (aucun `order` CSS) : `left` rend l'image puis le
  * texte, `right` le texte puis l'image.
  */
@@ -65,7 +68,7 @@ export function NarrativeSplit({
       className={cn("bg-background py-8 text-foreground md:py-12", className)}
     >
       <PageContainer>
-        <div className="grid items-center gap-8 lg:grid-cols-2 lg:gap-12">
+        <div className="mx-auto grid max-w-3xl items-center gap-8 lg:max-w-none lg:grid-cols-2 lg:gap-12">
           {visualSide === "right" ? (
             <>
               {text}
