@@ -64,7 +64,7 @@ export function PillarsSection({
                 {eyebrow}
               </p>
             )}
-            <h2 id={titleId} className="max-w-4xl text-h1 sm:text-display">
+            <h2 id={titleId} className="max-w-4xl text-h1 lg:text-display">
               {title}
             </h2>
             {description && (
