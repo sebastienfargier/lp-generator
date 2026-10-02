@@ -12,6 +12,7 @@ import {
   type ProductHeroAction,
   type ProductHighlight,
 } from "@/components/sections/product-hero"
+import { StepSequence } from "@/components/sections/step-sequence"
 import { ValueProps } from "@/components/sections/value-props"
 import type {
   LandingAction,
@@ -90,6 +91,8 @@ function renderSection(section: LandingPageSection) {
       return <AudienceSwitcher {...section.props} />
     case "narrative-split":
       return <NarrativeSplit {...section.props} />
+    case "step-sequence":
+      return <StepSequence {...section.props} />
     case "destination-cards":
       return <DestinationCards {...section.props} />
     case "final-cta": {

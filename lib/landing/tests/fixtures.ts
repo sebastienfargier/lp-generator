@@ -60,6 +60,15 @@ export const props = {
     description: "Apprendre en parallèle d'un emploi ou d'un quotidien déjà chargé demande de la souplesse.",
     visual: picture(),
   }),
+  "step-sequence": () => ({
+    title: "Clarifier son projet pas à pas",
+    description: "Quelques repères pour passer d'une première idée à une direction plus précise.",
+    items: [
+      { title: "Explorer les possibilités", description: "Parcourez les domaines et les métiers qui vous attirent, sans vous fermer de porte." },
+      { title: "Comparer les pistes", description: "Mettez en regard ce que chaque piste demande et ce qu'elle peut vous apporter." },
+      { title: "Préciser son choix", description: "Gardez la piste qui correspond le mieux à votre situation et à vos envies." },
+    ],
+  }),
   "destination-cards": () => ({
     title: "Trois façons de poursuivre votre exploration",
     description: "Explorez votre projet par métier, par niveau de diplôme ou directement dans le catalogue.",
@@ -136,6 +145,16 @@ export const draftSection = {
     title: "Se former en gardant sa vie en équilibre",
     description: "Apprendre en parallèle d'un emploi ou d'un quotidien déjà chargé demande de la souplesse.",
     image: "content-1",
+  }),
+  "step-sequence": () => ({
+    section: "step-sequence",
+    title: "Clarifier son projet pas à pas",
+    description: "Quelques repères pour passer d'une première idée à une direction plus précise.",
+    items: [
+      { title: "Explorer les possibilités", description: "Parcourez les domaines et les métiers qui vous attirent, sans vous fermer de porte." },
+      { title: "Comparer les pistes", description: "Mettez en regard ce que chaque piste demande et ce qu'elle peut vous apporter." },
+      { title: "Préciser son choix", description: "Gardez la piste qui correspond le mieux à votre situation et à vos envies." },
+    ],
   }),
   "destination-cards": () => ({
     section: "destination-cards",

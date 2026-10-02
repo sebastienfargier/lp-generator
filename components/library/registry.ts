@@ -193,6 +193,24 @@ export const librarySections: LibrarySection[] = [
 />`,
   },
   {
+    slug: "step-sequence",
+    type: "step-sequence",
+    name: "StepSequence",
+    category: "Contenu",
+    description:
+      "Une progression ordonnée de trois ou quatre étapes, chacune avec un titre et une phrase.",
+    importPath: "@/components/sections/step-sequence",
+    example: "/examples/step-sequence",
+    usage: `<StepSequence
+  title="Clarifier son projet pas à pas"
+  description="…"
+  items={[
+    { title: "Explorer les possibilités", description: "…" },
+    // 3 à 4 étapes
+  ]}
+/>`,
+  },
+  {
     slug: "destination-cards",
     type: "destination-cards",
     name: "DestinationCards",

@@ -9,6 +9,7 @@ import type {
   AudienceSwitcherConfigSchema,
   ContentCarouselConfigSchema,
   DestinationCardsConfigSchema,
+  StepSequenceConfigSchema,
   EditorialHeroConfigSchema,
   FinalCtaConfigSchema,
   ImmersiveHeroConfigSchema,
@@ -62,6 +63,7 @@ export type ValuePropsConfig = z.infer<typeof ValuePropsConfigSchema>
 export type PillarsConfig = z.infer<typeof PillarsConfigSchema>
 export type ContentCarouselConfig = z.infer<typeof ContentCarouselConfigSchema>
 export type AudienceSwitcherConfig = z.infer<typeof AudienceSwitcherConfigSchema>
+export type StepSequenceConfig = z.infer<typeof StepSequenceConfigSchema>
 export type DestinationCardsConfig = z.infer<typeof DestinationCardsConfigSchema>
 export type NarrativeSplitConfig = z.infer<typeof NarrativeSplitConfigSchema>
 export type FinalCtaConfig = z.infer<typeof FinalCtaConfigSchema>

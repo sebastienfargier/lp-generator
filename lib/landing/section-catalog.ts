@@ -126,13 +126,12 @@ const catalog = {
       "Introduction (surtitre, titre, description) suivie de piliers numérotés automatiquement, chacun avec un titre et un paragraphe explicatif.",
     bestFor: [
       "méthodologie",
-      "étapes d'un parcours",
       "piliers d'une offre",
       "explications structurées",
     ],
     avoidWhen: ["les messages sont de simples bénéfices d'une ligne"],
     guidance: [
-      "plus développé et structuré que value-props ; l'ordre des items est l'ordre de numérotation",
+      "plus développé et structuré que value-props ; principes parallèles ; l'ordre des items est l'ordre de numérotation",
     ],
   },
   "product-grid": {
@@ -211,6 +210,29 @@ const catalog = {
       "une idée distincte par narrative-split",
       "1 à 3 narrative-split par page",
       "l'image change de côté d'une narrative-split à l'autre ; ce côté n'est jamais à choisir",
+    ],
+  },
+  "step-sequence": {
+    type: "step-sequence",
+    name: "StepSequence",
+    category: "content",
+    placement: "any",
+    description:
+      "Une progression ordonnée de trois ou quatre étapes, chacune avec un titre et une phrase.",
+    bestFor: [
+      "parcours de découverte ou raisonnement séquentiel en 3 ou 4 temps, tiré du brief",
+    ],
+    avoidWhen: [
+      "idées parallèles ou bénéfices : préférer pillars ou value-props",
+      "pas de vraie progression, ou idées déjà présentées en étapes",
+      "procédure opérationnelle Studi",
+    ],
+    guidance: [
+      "progression éditoriale ; chaque étape dit ce que la personne peut explorer, comparer, identifier ou préciser",
+      "ne présente jamais comme processus Studi des étapes d'inscription, d'admission, de financement, de contact ou de suivi, ni délai, condition ou résultat, sauf s'ils figurent dans request.facts",
+      "3 étapes de préférence ; ne pas écrire leur nombre dans le titre",
+      "section : titre ~50-60 caractères, phrase ~100-120 ; étape : titre 2 à 4 mots, phrase ~70-110",
+      "une seule par page, au milieu, pas juste après pillars ou value-props",
     ],
   },
   "destination-cards": {

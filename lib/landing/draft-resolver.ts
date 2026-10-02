@@ -192,6 +192,8 @@ export function resolveLandingDraft(
             visualSide: ((seen.get("narrative-split") ?? 1) - 1) % 2 === 0 ? "left" : "right",
           },
         }
+      case "step-sequence":
+        return { id, type: "step-sequence", props: { title: section.title, description: section.description, items: section.items } }
       case "destination-cards":
         return {
           id,

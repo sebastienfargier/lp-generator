@@ -134,14 +134,16 @@ describe("contraintes non supportées retirées", () => {
     assert.equal(array({ minItems: 2 }).minItems, undefined)
     assert.equal(array({ minItems: 1 }).minItems, 1)
     assert.equal(array({ minItems: 0 }).minItems, 0)
-    // Dans les schémas réels, tous les minItems valent 1 sauf un : les cartes de DestinationCards
-    // (2 à 3) ; le transport garde les 1 et retire le 2, que Zod continue de faire respecter.
+    // Dans les schémas réels, les minItems valent 1 sauf deux : les cartes de DestinationCards (2 à 3)
+    // et les étapes de StepSequence (3 à 4) ; le transport garde les 1 et retire les autres,
+    // que Zod continue de faire respecter.
     for (const name of names) {
       const source = minItems(schemas[name]) as number[]
       assert.deepEqual(minItems(transports[name]), source.filter((value) => value <= 1), name)
-      assert.ok(source.length > 0 && source.every((value) => value === 1 || value === 2), name)
+      assert.ok(source.length > 0 && source.every((value) => value >= 1 && value <= 3), name)
     }
     assert.equal(minItems(schemas.draft).filter((value) => value === 2).length, 1)
+    assert.equal(minItems(schemas.draft).filter((value) => value === 3).length, 1)
   })
 
   test("le nom d'une propriété n'est jamais pris pour un mot-clé", () => {
@@ -237,7 +239,8 @@ describe("propriétés de la transformation", () => {
 
   test("le contrat complet dépasse la limite documentée d'optionnelles : pourquoi il n'est plus envoyé", () => {
     assert.ok(complexity(transports.complet).optional > anthropicSchemaLimits.optionalParameters)
-    assert.ok(JSON.stringify(transports.complet).length > JSON.stringify(transports.draft).length * 2)
+    // Plus gros que le Draft : l'écart se réduit à chaque lame, la raison de fond reste le nombre d'optionnelles.
+    assert.ok(JSON.stringify(transports.complet).length > JSON.stringify(transports.draft).length)
   })
 })
 

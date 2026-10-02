@@ -37,9 +37,9 @@ describe("sections du brouillon", () => {
     assert.ok(accepts(validDraft()))
   })
 
-  test("exactement les 9 lames candidates, dans l'ordre du catalogue et du contexte", () => {
+  test("exactement les 10 lames candidates, dans l'ordre du catalogue et du contexte", () => {
     assert.deepEqual([...landingDraftSectionTypes], context.sections.map((section) => section.type))
-    assert.deepEqual([...landingDraftSectionTypes], ["editorial-hero", "immersive-hero", "value-props", "pillars", "content-carousel", "audience-switcher", "narrative-split", "destination-cards", "final-cta"])
+    assert.deepEqual([...landingDraftSectionTypes], ["editorial-hero", "immersive-hero", "value-props", "pillars", "content-carousel", "audience-switcher", "narrative-split", "step-sequence", "destination-cards", "final-cta"])
     const contract = LandingPageSectionSchema.options.map((option) => option.shape.type.value as string)
     for (const type of landingDraftSectionTypes) assert.ok(contract.includes(type), type)
   })

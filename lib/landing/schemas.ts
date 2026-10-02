@@ -223,6 +223,16 @@ export const AudienceSwitcherConfigSchema = z
     }
   })
 
+/** Progression ordonnée de 3 ou 4 étapes ; les numéros sont calculés par le composant. */
+export const StepSequenceConfigSchema = z.strictObject({
+  title: text,
+  description: text.optional(),
+  items: z
+    .array(LandingTextItemSchema)
+    .min(3, "Au moins trois étapes sont requises.")
+    .max(4, "Quatre étapes au plus."),
+})
+
 /** Deux ou trois suites : titre, description et lien contrôlé ; le titre est le texte du lien. */
 export const DestinationCardsConfigSchema = z
   .strictObject({
@@ -284,6 +294,7 @@ export const LandingPageSectionSchema = z.discriminatedUnion("type", [
   section("content-carousel", ContentCarouselConfigSchema),
   section("audience-switcher", AudienceSwitcherConfigSchema),
   section("narrative-split", NarrativeSplitConfigSchema),
+  section("step-sequence", StepSequenceConfigSchema),
   section("destination-cards", DestinationCardsConfigSchema),
   section("final-cta", FinalCtaConfigSchema),
 ])
@@ -323,6 +334,7 @@ function sectionActions(
     case "content-carousel":
     case "audience-switcher":
     case "narrative-split":
+    case "step-sequence":
       break
     case "destination-cards":
       // Chaque carte est un lien : exposée au contrôle des liens sous la forme d'une action.

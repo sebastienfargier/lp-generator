@@ -79,9 +79,13 @@ describe("buildLandingAiPrompt", () => {
 
   test("tailles mesurées et bornées : système compact, schéma non recopié dans le prompt", () => {
     assert.ok(prompt.system.length < 2500, `système : ${prompt.system.length}`)
-    // Le catalogue ajoute environ 600 à 800 caractères par lame : 9 lames générables ≈ 10,5 k caractères (≈ 3 k tokens) ; plafond relevé à chaque lame ajoutée.
+    // Le catalogue ajoute environ 600 à 800 caractères par lame : 10 lames générables ≈ 11,5 k caractères (≈ 3,3 k tokens). Plafond NON relevé pour StepSequence : l'entrée a été resserrée pour y tenir.
     assert.ok(prompt.user.length < 11500, `user : ${prompt.user.length}`)
-    assert.ok(serialized.length < 5000, `schéma : ${serialized.length}`)
+    // Budget de régression du schéma Draft (pas une limite de l'API), relevé ponctuellement de 5 000 à 5 100 :
+    // StepSequence ajoute une branche structurelle à 3-4 étapes (5 001). Le schéma transport reste sous son
+    // propre budget (anthropic-schema.test.ts : 5 000). Ce contexte est saturé : message à 11 494 / 11 500.
+    // Toute nouvelle lame exige d'abord un audit d'optimisation du contexte, pas un nouveau relèvement.
+    assert.ok(serialized.length < 5100, `schéma : ${serialized.length}`)
     assert.ok(!/\$defs|additionalProperties|oneOf|"type":"object"/.test(prompt.system))
   })
 })

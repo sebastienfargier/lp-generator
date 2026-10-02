@@ -89,6 +89,16 @@ const branches = [
     image: DraftImageIdSchema,
   }),
   z.strictObject({
+    section: z.literal("step-sequence"),
+    title: text,
+    description: text,
+    // 3 à 4 : vérifié par Zod après la réponse (le transport retire `minItems` > 1 et `maxItems`).
+    items: z
+      .array(textItem)
+      .min(3, "Au moins trois étapes sont requises.")
+      .max(4, "Quatre étapes au plus."),
+  }),
+  z.strictObject({
     section: z.literal("destination-cards"),
     title: text,
     description: text,
