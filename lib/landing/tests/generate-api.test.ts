@@ -13,6 +13,7 @@ import { generateLandingWithClaude, type LandingGenerationError, type LandingGen
 import { handleLandingGeneration, publicErrors, type LandingEngine } from "../generate-handler"
 import { publicErrorCodes } from "../public-api"
 import { LandingPageSchema } from "../schemas"
+import { encodeLandingDraftForTransport } from "../transport-draft"
 import { context, prompt, request, validDraft } from "./fixtures"
 import { resolveLandingDraft } from "../draft-resolver"
 import { generationDraftFor } from "./generate-fixtures"
@@ -29,6 +30,8 @@ after(() => {
   fetchGuard.mock.restore()
 })
 
+/** Ce que Claude renvoie : un TransportDraft (familles), converti en Draft par le pipeline. */
+const transportOf = (draft: unknown) => encodeLandingDraftForTransport(draft as Parameters<typeof encodeLandingDraftForTransport>[0])
 const resolution = resolveLandingDraft(request, generationDraftFor(validDraft()), context)
 assert.ok(resolution.status === "resolved")
 const config = resolution.config
@@ -264,7 +267,7 @@ describe("avec le vrai moteur et un client Anthropic simulé", () => {
   }
 
   test("brouillon valide → un appel Anthropic → 200 avec la config résolue, pas le brouillon", async () => {
-    const { response, body, anthropicCalls, text } = await withClient(() => messageOf(validDraft()))
+    const { response, body, anthropicCalls, text } = await withClient(() => messageOf(transportOf(validDraft())))
     assert.equal(response.status, 200)
     assert.equal(anthropicCalls.length, 1)
     assert.deepEqual(Object.keys(body), ["ok", "config"])
@@ -295,7 +298,7 @@ describe("avec le vrai moteur et un client Anthropic simulé", () => {
     const invalidDraft = await withClient(() => messageOf({ sections: [], interne: "SORTIE-BRUTE" }))
     assert.equal(invalidDraft.response.status, 422)
     assert.ok(!invalidDraft.text.includes("SORTIE-BRUTE"))
-    const lateHero = await withClient(() => messageOf({ sections: [validDraft().sections[2], validDraft().sections[0]] }))
+    const lateHero = await withClient(() => messageOf(transportOf({ sections: [validDraft().sections[2], validDraft().sections[0]] })))
     assert.equal(lateHero.response.status, 422)
     assert.equal((lateHero.body.error as { code: string }).code, "generation-failed")
     assert.ok(!lateHero.text.includes("editorial-hero") && !lateHero.text.includes("première section"))

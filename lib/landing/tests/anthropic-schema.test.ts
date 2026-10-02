@@ -250,14 +250,15 @@ describe("propriétés de la transformation", () => {
 })
 
 /**
- * Politique de budget du schéma Draft : structurelle, pas un plafond absolu serré. Elle ne doit pas
- * empêcher l'ajout d'une lame légitime ; elle détecte une explosion accidentelle, une branche
+ * BUDGET DU DRAFT MÉTIER (11 branches, une par lame) : structurel, pas un plafond absolu serré. Il ne
+ * doit pas empêcher l'ajout d'une lame légitime ; il détecte une explosion accidentelle, une branche
  * inutilement verbeuse ou un schéma qui se rapprocherait du contrat complet.
  * - garde-fous API (testés ci-dessus) : optionnels <= 24, unions <= 16, objets stricts ;
  * - budget par branche : <= 420 caractères sérialisés (maximum observé : 376) ;
  * - plafond proportionnel : socle 1 900 + 420 x nombre de branches (11 branches : 6 520) ;
  * - sanité : < 8 000, très en dessous du contrat complet (9 565).
- * Le Draft source et le transport sont tous deux mesurés (seul le transport part à Anthropic).
+ * Ce schéma n'est PLUS envoyé à Anthropic : il reste l'indicateur de régression du Draft. Le schéma de
+ * TRANSPORT réellement envoyé (6 familles) a ses propres budgets dans transport-draft.test.ts.
  */
 const schemaBudget = { socle: 1900, perBranch: 420, sanity: 8000 } as const
 
@@ -269,8 +270,8 @@ function sectionBranches(schema: unknown): Node[] {
   return ((found?.anyOf ?? found?.oneOf) as Node[] | undefined) ?? []
 }
 
-describe("budget du schéma : politique structurelle", () => {
-  for (const [label, schema] of [["Draft source", schemas.draft], ["transport", transports.draft]] as const) {
+describe("budget du Draft métier : politique structurelle", () => {
+  for (const [label, schema] of [["Draft source", schemas.draft], ["Draft adapté (plus envoyé)", transports.draft]] as const) {
     test(`${label} : une branche par lame générable, chacune <= 420 caractères`, () => {
       const branches = sectionBranches(schema)
       assert.equal(branches.length, landingDraftSectionTypes.length)
@@ -289,7 +290,7 @@ describe("budget du schéma : politique structurelle", () => {
     })
   }
 
-  test("le transport n'est jamais plus gros que le Draft source (il ne fait que retirer des contraintes)", () => {
+  test("le Draft adapté n'est jamais plus gros que le Draft source (il ne fait que retirer des contraintes)", () => {
     assert.ok(JSON.stringify(transports.draft).length <= JSON.stringify(schemas.draft).length)
   })
 })

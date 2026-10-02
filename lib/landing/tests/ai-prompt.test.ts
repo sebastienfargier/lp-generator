@@ -34,7 +34,7 @@ const view = buildLandingPromptContext(context)
 describe("buildLandingAiPrompt", () => {
   test("ready sur un brief valide, avec system, user, contexte et schéma", () => {
     assert.equal(prompt.status, "ready")
-    assert.deepEqual(Object.keys(prompt), ["status", "request", "context", "system", "user", "outputSchema"])
+    assert.deepEqual(Object.keys(prompt), ["status", "request", "context", "system", "user", "outputSchema", "transportSchema"])
     assert.equal(prompt.system, landingSystemPrompt)
   })
 

@@ -23,7 +23,8 @@ import {
 } from "../anthropic"
 import { toAnthropicJsonSchema } from "../anthropic-schema"
 import { resolveLandingDraft } from "../draft-resolver"
-import { context, draftCta, draftOf, draftSection, prompt, request, validDraft } from "./fixtures"
+import { encodeLandingDraftForTransport } from "../transport-draft"
+import { context, draftOf, draftSection, prompt, request, validDraft } from "./fixtures"
 
 type Call = Anthropic.MessageCreateParamsNonStreaming
 
@@ -76,6 +77,9 @@ const message = (text: string | null, over: Record<string, unknown> = {}) =>
   }) as unknown as Anthropic.Message
 
 const reply = (output: unknown, over: Record<string, unknown> = {}) => message(JSON.stringify(output), over)
+/** Ce que Claude renvoie désormais : un TransportDraft (familles), converti ensuite en Draft par le pipeline. */
+const transportOf = (draft: unknown) => encodeLandingDraftForTransport(draft as Parameters<typeof encodeLandingDraftForTransport>[0])
+const replyDraft = (draft: unknown, over: Record<string, unknown> = {}) => reply(transportOf(draft), over)
 
 const apiError = (status: number, type: string, text = "détail", headers: Record<string, string> = { "request-id": "req_test" }) =>
   Anthropic.APIError.generate(status, { type: "error", error: { type, message: text } }, `${status} ${text}`, new Headers(headers))
@@ -95,7 +99,7 @@ function failed(result: LandingGenerationResult): LandingGenerationError {
 
 describe("succès", () => {
   test("requête valide → un seul appel → LandingPageConfig validée", async () => {
-    const { calls, result } = await run(() => reply(validDraft()))
+    const { calls, result } = await run(() => replyDraft(validDraft()))
     assert.equal(calls.length, 1)
     assert.equal(result.status, "success")
     if (result.status !== "success") return
@@ -114,7 +118,7 @@ describe("succès", () => {
   })
 
   test("forme exacte de messages.create : modèle, max_tokens, system, user, output_config.format", async () => {
-    const { calls } = await run(() => reply(validDraft()))
+    const { calls } = await run(() => replyDraft(validDraft()))
     const [params] = calls
     assert.deepEqual(Object.keys(params!).sort(), ["max_tokens", "messages", "model", "output_config", "system"])
     assert.equal(params!.model, DEFAULT_LANDING_MODEL)
@@ -124,32 +128,34 @@ describe("succès", () => {
     assert.deepEqual(JSON.parse(params!.messages[0]!.content as string), { request: prompt.request, context: buildLandingPromptContext(prompt.context) })
   })
 
-  test("le schéma envoyé est celui du brouillon, adapté ; le schéma complet de LandingPageConfig n'est plus envoyé", async () => {
-    const { calls } = await run(() => reply(validDraft()))
+  test("le schéma envoyé est le schéma de TRANSPORT (familles), adapté ; ni le Draft métier, ni LandingPageConfig", async () => {
+    const { calls } = await run(() => replyDraft(validDraft()))
     const sent = calls[0]!.output_config!.format!.schema
     const serialized = JSON.stringify(sent)
     assert.deepEqual(Object.keys(sent.properties as object), ["sections"])
-    for (const sections of ["section", "items", "cta", "destination", "image"]) assert.ok(serialized.includes(`"${sections}"`), sections)
-    for (const technical of ["version", "href", "src", "alt", "logo", "badge", "icon", "position", "defaultValue", "primaryAction", "visual", "props"]) {
+    for (const key of ["section", "items", "cta", "destination", "image", "accent"]) assert.ok(serialized.includes(`"${key}"`), key)
+    for (const technical of ["version", "href", "src", "alt", "logo", "badge", "icon", "position", "defaultValue", "primaryAction", "visual", "props", "supportingText", "label\":{\"$ref\":\"#/$defs/__schema0"]) {
       assert.ok(!serialized.includes(`"${technical}"`), technical)
     }
-    const consts = [...serialized.matchAll(/"const":"([^"]+)"/g)].map((match) => match[1])
-    assert.deepEqual(consts.sort(), context.sections.map((entry) => entry.type).sort())
+    // Les sections : valeurs `const` et `enum` des familles = exactement les candidates.
+    const names = [...serialized.matchAll(/"section":\{"type":"string","(?:const":"([^"]+)"|enum":\[([^\]]+)\])\}/g)].flatMap((match) => (match[1] ? [match[1]] : match[2]!.split(",").map((name) => name.replace(/"/g, ""))))
+    assert.deepEqual(names.sort(), context.sections.map((entry) => entry.type).sort())
   })
 
   test("le schéma Anthropic (adapté) est bien celui passé dans output_config.format", async () => {
-    const { calls } = await run(() => reply(validDraft()))
+    const { calls } = await run(() => replyDraft(validDraft()))
     const config = calls[0]!.output_config!
     assert.deepEqual(Object.keys(config), ["format"])
     assert.equal(config.format!.type, "json_schema")
-    assert.deepEqual(config.format!.schema, toAnthropicJsonSchema(prompt.outputSchema as unknown as Record<string, unknown>))
+    assert.deepEqual(config.format!.schema, toAnthropicJsonSchema(prompt.transportSchema as unknown as Record<string, unknown>))
     const sent = JSON.stringify(config.format!.schema)
     assert.ok(!sent.includes('"oneOf"') && !sent.includes('"\\\\S"') && !sent.includes("exclusiveMinimum") && !sent.includes('"$schema"'))
-    assert.notDeepEqual(config.format!.schema, prompt.outputSchema)
+    assert.notDeepEqual(config.format!.schema, prompt.transportSchema)
+    assert.notDeepEqual(config.format!.schema, toAnthropicJsonSchema(prompt.outputSchema as unknown as Record<string, unknown>), "le Draft métier n'est plus envoyé")
   })
 
   test("aucun réglage hors besoin : ni température, ni tools, ni thinking, ni effort", async () => {
-    const { calls } = await run(() => reply(validDraft()))
+    const { calls } = await run(() => replyDraft(validDraft()))
     for (const key of ["temperature", "top_p", "top_k", "tools", "tool_choice", "thinking", "stream", "metadata", "cache_control", "stop_sequences"]) {
       assert.ok(!(key in calls[0]!), key)
     }
@@ -162,14 +168,14 @@ describe("modèle configurable, défini en un seul endroit", () => {
     assert.equal(resolveLandingModel({}), DEFAULT_LANDING_MODEL)
     assert.equal(resolveLandingModel({ ANTHROPIC_MODEL: "   " }), DEFAULT_LANDING_MODEL)
     assert.equal(resolveLandingModel({ ANTHROPIC_MODEL: " claude-autre " }), "claude-autre")
-    const { calls } = await run(() => reply(validDraft()), request, { ANTHROPIC_MODEL: "claude-autre" })
+    const { calls } = await run(() => replyDraft(validDraft()), request, { ANTHROPIC_MODEL: "claude-autre" })
     assert.equal(calls[0]!.model, "claude-autre")
-    const { calls: defaultCalls } = await run(() => reply(validDraft()), request, { ANTHROPIC_MODEL: "" })
+    const { calls: defaultCalls } = await run(() => replyDraft(validDraft()), request, { ANTHROPIC_MODEL: "" })
     assert.equal(defaultCalls[0]!.model, DEFAULT_LANDING_MODEL)
   })
 
   test("le modèle qui répond est celui rapporté", async () => {
-    const { result } = await run(() => reply(validDraft(), { model: "claude-reponse" }))
+    const { result } = await run(() => replyDraft(validDraft(), { model: "claude-reponse" }))
     assert.ok(result.status === "success" && result.model === "claude-reponse")
   })
 
@@ -182,7 +188,7 @@ describe("modèle configurable, défini en un seul endroit", () => {
 describe("aucun appel quand la demande ne peut pas aboutir", () => {
   test("invalid-request → zéro appel", async () => {
     for (const input of [null, "brief", {}, { ...request, brief: "  " }, { ...request, objective: "contact" }, { ...request, className: "x" }]) {
-      const { calls, result } = await run(() => reply(validDraft()), input)
+      const { calls, result } = await run(() => replyDraft(validDraft()), input)
       assert.equal(calls.length, 0, JSON.stringify(input))
       const error = failed(result)
       assert.equal(error.kind, "invalid-request")
@@ -191,7 +197,7 @@ describe("aucun appel quand la demande ne peut pas aboutir", () => {
   })
 
   test("impossible → zéro appel", async () => {
-    const { calls, client } = fakeClient(() => reply(validDraft()))
+    const { calls, client } = fakeClient(() => replyDraft(validDraft()))
     const result = await generateLandingFromPrompt({ status: "impossible", context, reasons: ["Aucune section candidate."] }, { client, env: {} })
     assert.equal(calls.length, 0)
     assert.deepEqual([failed(result).kind, failed(result).message], ["impossible", "Aucune section candidate."])
@@ -229,7 +235,7 @@ describe("réponse inexploitable", () => {
   })
 
   test("le texte de plusieurs blocs est joint ; la réflexion est ignorée", async () => {
-    const json = JSON.stringify(validDraft())
+    const json = JSON.stringify(transportOf(validDraft()))
     const content = [
       { type: "thinking", thinking: "…", signature: "s" },
       { type: "text", text: json.slice(0, 40), citations: null },
@@ -240,17 +246,20 @@ describe("réponse inexploitable", () => {
 })
 
 describe("brouillon invalide : refusé avant toute résolution", () => {
-  const hero = draftSection["editorial-hero"]()
+  const hero = transportOf(draftOf(draftSection["editorial-hero"]())).sections[0]! as { cta: { label: string; destination: string } } & Record<string, unknown>
+  const only = (section: unknown) => ({ sections: [section] })
   const cases: [string, unknown, RegExp][] = [
-    ["propriété inconnue (className)", draftOf({ ...hero, className: "text-red-500" }), /./],
-    ["section inconnue", draftOf({ ...hero, section: "product-grid" }), /./],
-    ["image inventée", draftOf({ ...hero, image: "hero-inventee" }), /image/],
-    ["chemin d'image brut", draftOf({ ...hero, image: "/images/hero-bilan.jpg" }), /image/],
-    ["destination inventée", draftOf({ ...hero, cta: { ...draftCta, destination: "inventee" } }), /destination/],
-    ["href brut", draftOf({ ...hero, cta: { label: "Voir", href: "https://www.studi.com/fr/formations" } }), /destination|href/],
-    ["ancre interne", draftOf({ ...hero, cta: { label: "Voir", destination: "#pillars" } }), /destination/],
-    ["texte vide", draftOf({ ...hero, title: "   " }), /vide/],
-    ["liste vide", draftOf(draftSection["value-props"](), { ...draftSection.pillars(), items: [] }), /élément/],
+    ["propriété inconnue (className)", only({ ...hero, className: "text-red-500" }), /./],
+    ["section inconnue", only({ ...hero, section: "product-grid" }), /./],
+    ["image inventée", only({ ...hero, image: "hero-inventee" }), /image/],
+    ["chemin d'image brut", only({ ...hero, image: "/images/hero-bilan.jpg" }), /image/],
+    // La destination est libre au transport : elle est refusée par le Draft métier juste après la conversion.
+    ["destination inventée", only({ ...hero, cta: { ...hero.cta, destination: "inventee" } }), /destination/],
+    ["href brut", only({ ...hero, cta: { label: "Voir", href: "https://www.studi.com/fr/formations" } }), /destination|href/],
+    ["ancre interne", only({ ...hero, cta: { ...hero.cta, destination: "#pillars" } }), /destination/],
+    ["texte vide", only({ ...hero, title: "   " }), /vide/],
+    ["liste vide", transportOf(draftOf(draftSection["value-props"](), { ...draftSection.pillars(), items: [] })), /élément/],
+    ["champ sans objet non vide (accent d'un editorial-hero)", only({ ...hero, accent: "mise en avant" }), /sans objet/],
     ["LandingPageConfig complète au lieu d'un brouillon", { version: 1, id: "x", title: "x", sections: [{ id: "hero", type: "editorial-hero", props: {} }] }, /./],
     ["JSON valide qui n'est pas un objet", [validDraft()], /./],
   ]
@@ -282,13 +291,13 @@ describe("résolution impossible : un brouillon valide, des ressources absentes"
   ]
   for (const [name, fabricated, path, expected] of cases) {
     test(`${name} → draft-resolution, un seul appel, aucune validation finale`, async () => {
-      const { calls, client } = fakeClient(() => reply(validDraft()))
+      const { calls, client } = fakeClient(() => replyDraft(validDraft()))
       const result = await generateLandingFromPrompt(fabricated, { client, env: {} })
       assert.equal(calls.length, 1)
       const error = failed(result)
       assert.equal(error.kind, "draft-resolution")
       assert.ok(error.issues!.some((issue) => issue.path === path && expected.test(issue.message)), JSON.stringify(error.issues))
-      assert.equal(error.output, JSON.stringify(validDraft()))
+      assert.equal(error.output, JSON.stringify(transportOf(validDraft())))
       assert.equal(error.resolved, undefined)
     })
   }
@@ -297,13 +306,13 @@ describe("résolution impossible : un brouillon valide, des ressources absentes"
 describe("configuration finale invalide : le contrat applicatif reste l'autorité", () => {
   test("hero qui n'est pas en tête → invalid-landing, avec la configuration résolue pour inspection", async () => {
     const draft = draftOf(draftSection["value-props"](), draftSection["editorial-hero"]())
-    const { calls, result } = await run(() => reply(draft))
+    const { calls, result } = await run(() => replyDraft(draft))
     assert.equal(calls.length, 1)
     const error = failed(result)
     assert.equal(error.kind, "invalid-landing")
     assert.match(JSON.stringify(error.issues), /première section/)
     assert.ok(error.issues!.some((issue) => issue.path === "sections.1.type"))
-    assert.equal(error.output, JSON.stringify(draft))
+    assert.equal(error.output, JSON.stringify(transportOf(draft)))
     const resolved = error.resolved as { version: number; sections: { id: string }[] }
     assert.equal(resolved.version, 1)
     assert.deepEqual(resolved.sections.map((entry) => entry.id), ["value-props", "editorial-hero"])
@@ -311,20 +320,20 @@ describe("configuration finale invalide : le contrat applicatif reste l'autorit�
 
   test("deux heroes → invalid-landing", async () => {
     const draft = draftOf(draftSection["editorial-hero"](), draftSection["immersive-hero"]())
-    const error = failed((await run(() => reply(draft))).result)
+    const error = failed((await run(() => replyDraft(draft))).result)
     assert.equal(error.kind, "invalid-landing")
     assert.match(JSON.stringify(error.issues), /seul hero/)
   })
 
   test("deux validations distinctes : le brouillon (invalid-draft), puis la configuration (invalid-landing)", async () => {
     const draftFailure = failed((await run(() => reply({ sections: [] }))).result)
-    const finalFailure = failed((await run(() => reply(draftOf(draftSection.pillars(), draftSection["immersive-hero"]())))).result)
+    const finalFailure = failed((await run(() => replyDraft(draftOf(draftSection.pillars(), draftSection["immersive-hero"]())))).result)
     assert.deepEqual([draftFailure.kind, finalFailure.kind], ["invalid-draft", "invalid-landing"])
   })
 
   test("un brouillon qui se résout en une page valide réussit, répétitions comprises", async () => {
     const draft = draftOf(draftSection["immersive-hero"](), draftSection.pillars(), draftSection.pillars(), draftSection["audience-switcher"]())
-    const { result } = await run(() => reply(draft))
+    const { result } = await run(() => replyDraft(draft))
     assert.equal(result.status, "success")
     if (result.status === "success") assert.deepEqual(result.config.sections.map((entry) => entry.id), ["immersive-hero", "pillars", "pillars-2", "audience-switcher"])
   })
@@ -332,7 +341,7 @@ describe("configuration finale invalide : le contrat applicatif reste l'autorit�
 
 describe("arrêts du modèle", () => {
   test("refusal : erreur typée avec la catégorie, même si un JSON valide l'accompagne", async () => {
-    const { calls, result } = await run(() => reply(validDraft(), { stop_reason: "refusal", stop_details: { type: "refusal", category: "cyber", explanation: null } }))
+    const { calls, result } = await run(() => replyDraft(validDraft(), { stop_reason: "refusal", stop_details: { type: "refusal", category: "cyber", explanation: null } }))
     assert.equal(calls.length, 1)
     const error = failed(result)
     assert.equal(error.kind, "refusal")
@@ -341,13 +350,13 @@ describe("arrêts du modèle", () => {
   })
 
   test("max_tokens : réponse tronquée, jamais validée même si elle ressemble à un JSON complet", async () => {
-    assert.equal(failed((await run(() => reply(validDraft(), { stop_reason: "max_tokens" }))).result).kind, "truncated")
+    assert.equal(failed((await run(() => replyDraft(validDraft(), { stop_reason: "max_tokens" }))).result).kind, "truncated")
     assert.equal(failed((await run(() => message('{"version":1,"id":', { stop_reason: "max_tokens" }))).result).kind, "truncated")
   })
 
   test("tout autre arrêt que end_turn : interrompu", async () => {
     for (const stop_reason of ["pause_turn", "tool_use", "model_context_window_exceeded", null]) {
-      assert.equal(failed((await run(() => reply(validDraft(), { stop_reason }))).result).kind, "interrupted", String(stop_reason))
+      assert.equal(failed((await run(() => replyDraft(validDraft(), { stop_reason }))).result).kind, "interrupted", String(stop_reason))
     }
   })
 })
@@ -407,7 +416,7 @@ describe("secrets et prompt", () => {
 
   test("ni le prompt système, ni la clé dans aucun résultat", async () => {
     const outcomes = [
-      (await run(() => reply(validDraft()), request, { ANTHROPIC_API_KEY: FAKE_KEY })).result,
+      (await run(() => replyDraft(validDraft()), request, { ANTHROPIC_API_KEY: FAKE_KEY })).result,
       (await run(() => message("{"), request, { ANTHROPIC_API_KEY: FAKE_KEY })).result,
       (await run(() => { throw apiError(500, "api_error") }, request, { ANTHROPIC_API_KEY: FAKE_KEY })).result,
       await generateLandingWithClaude(request, { env: {} }),

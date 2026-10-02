@@ -5,6 +5,7 @@ import { toAnthropicJsonSchema } from "./anthropic-schema"
 import { resolveLandingDraft } from "./draft-resolver"
 import { safeParseLandingGenerationDraft, type LandingGenerationDraft } from "./generation-draft"
 import { validateGeneratedLanding, type LandingValidationIssue } from "./generation-validation"
+import { parseLandingTransportDraft } from "./transport-draft"
 import type { LandingPageConfig } from "./types"
 
 /**
@@ -231,8 +232,14 @@ function readResponse(response: Anthropic.Message, model: string, prompt: ReadyP
     return failure({ ...meta, kind: "invalid-json", message: "La réponse n'est pas du JSON valide.", output: text })
   }
 
-  // 1. Le brouillon : ce que Claude a produit.
-  const draft = safeParseLandingGenerationDraft(output)
+  // 1a. Le transport : la forme que Claude a produite (familles), convertie en brouillon.
+  const transport = parseLandingTransportDraft(output)
+  if (transport.status === "invalid") {
+    return failure({ ...meta, kind: "invalid-draft", message: "Le brouillon généré ne respecte pas le contrat attendu.", issues: transport.issues, output: text })
+  }
+
+  // 1b. Le brouillon métier : seule validation du contenu, toujours appliquée après la conversion.
+  const draft = safeParseLandingGenerationDraft(transport.draft)
   if (!draft.success) {
     return failure({ ...meta, kind: "invalid-draft", message: "Le brouillon généré ne respecte pas le contrat attendu.", issues: toIssues(draft.error.issues, "brouillon"), output: text })
   }
@@ -301,7 +308,7 @@ export async function generateLandingFromPrompt(
     max_tokens: LANDING_MAX_TOKENS,
     system: prompt.system,
     messages: [{ role: "user", content: prompt.user }],
-    output_config: { format: { type: "json_schema", schema: toAnthropicJsonSchema(prompt.outputSchema) } },
+    output_config: { format: { type: "json_schema", schema: toAnthropicJsonSchema(prompt.transportSchema) } },
   }
 
   let response: Anthropic.Message
