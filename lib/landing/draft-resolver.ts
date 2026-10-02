@@ -177,6 +177,19 @@ export function resolveLandingDraft(
         })
         return { id, type: "audience-switcher", props: { label: section.label, defaultValue: items[0]!.id, items } }
       }
+      case "narrative-split":
+        return {
+          id,
+          type: "narrative-split",
+          props: {
+            eyebrow: section.eyebrow,
+            title: section.title,
+            description: section.description,
+            visual: picture(section.image, `${at}.image`),
+            // Rang parmi les NarrativeSplit (compteur des ids) : 1re à gauche, 2e à droite, etc.
+            visualSide: ((seen.get("narrative-split") ?? 1) - 1) % 2 === 0 ? "left" : "right",
+          },
+        }
       case "final-cta":
         return {
           id,

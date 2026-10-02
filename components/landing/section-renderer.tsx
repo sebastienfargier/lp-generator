@@ -3,6 +3,7 @@ import { ContentCarousel } from "@/components/sections/content-carousel"
 import { EditorialHero } from "@/components/sections/editorial-hero"
 import { FinalCta } from "@/components/sections/final-cta"
 import { ImmersiveHero } from "@/components/sections/immersive-hero"
+import { NarrativeSplit } from "@/components/sections/narrative-split"
 import { PillarsSection } from "@/components/sections/pillars"
 import { ProductGrid } from "@/components/sections/product-grid"
 import {
@@ -86,6 +87,8 @@ function renderSection(section: LandingPageSection) {
       return <ContentCarousel {...section.props} />
     case "audience-switcher":
       return <AudienceSwitcher {...section.props} />
+    case "narrative-split":
+      return <NarrativeSplit {...section.props} />
     case "final-cta": {
       const { primaryAction, ...props } = section.props
       return <FinalCta {...props} primaryAction={toHeroAction(primaryAction)} />

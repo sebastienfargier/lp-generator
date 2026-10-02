@@ -82,6 +82,13 @@ const branches = [
     items: nonEmpty(z.strictObject({ eyebrow: text, title: text, description: text, image: DraftImageIdSchema })),
   }),
   z.strictObject({
+    section: z.literal("narrative-split"),
+    eyebrow: text,
+    title: text,
+    description: text,
+    image: DraftImageIdSchema,
+  }),
+  z.strictObject({
     section: z.literal("final-cta"),
     title: text,
     description: text,

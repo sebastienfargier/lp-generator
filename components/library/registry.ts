@@ -176,6 +176,23 @@ export const librarySections: LibrarySection[] = [
 />`,
   },
   {
+    slug: "narrative-split",
+    type: "narrative-split",
+    name: "NarrativeSplit",
+    category: "Contenu",
+    description:
+      "Une idée développée : image d'un côté, surtitre, titre et paragraphe de l'autre ; l'image change de côté d'une section à l'autre.",
+    importPath: "@/components/sections/narrative-split",
+    example: "/examples/narrative-split",
+    usage: `<NarrativeSplit
+  eyebrow="Votre rythme"
+  title="Se former en gardant sa vie en équilibre"
+  description="Apprendre en parallèle d'un emploi ou d'un quotidien déjà chargé demande de la souplesse."
+  visual={{ src: "/images/…", alt: "…" }}
+  visualSide="right"
+/>`,
+  },
+  {
     slug: "final-cta",
     type: "final-cta",
     name: "FinalCta",

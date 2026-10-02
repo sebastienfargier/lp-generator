@@ -38,6 +38,7 @@ const sectionsNeedingImages: ReadonlySet<LandingSectionType> = new Set([
   "immersive-hero",
   "content-carousel",
   "audience-switcher",
+  "narrative-split",
 ])
 
 /** Sections écartées pour ces ressources, avec la raison. */

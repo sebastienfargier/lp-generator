@@ -150,7 +150,7 @@ describe("aucun hasard, aucune rotation, aucun changement du Draft", () => {
   })
 
   test("l'ordre du schéma et du catalogue n'a pas été modifié pour provoquer de la variété", () => {
-    assert.deepEqual(landingDraftSectionTypes, ["editorial-hero", "immersive-hero", "value-props", "pillars", "content-carousel", "audience-switcher", "final-cta"])
+    assert.deepEqual(landingDraftSectionTypes, ["editorial-hero", "immersive-hero", "value-props", "pillars", "content-carousel", "audience-switcher", "narrative-split", "final-cta"])
     assert.deepEqual(view.sections.map((section) => section.type), [...landingDraftSectionTypes])
   })
 

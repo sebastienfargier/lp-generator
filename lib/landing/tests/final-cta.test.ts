@@ -190,10 +190,10 @@ describe("FinalCta : catalogue, règle de composition, bibliothèque", () => {
     assert.ok(!/toujours|obligatoire|différent du hero/i.test(JSON.stringify(entry)))
   })
 
-  test("bibliothèque : 9 lames, 7 générables par IA, 2 en bibliothèque uniquement", () => {
+  test("bibliothèque : 10 lames, 8 générables par IA, 2 en bibliothèque uniquement", () => {
     const statuses = librarySections.map((entry) => getSectionGeneration(entry.type).status)
-    assert.equal(librarySections.length, 9)
-    assert.equal(statuses.filter((status) => status === "generable").length, 7)
+    assert.equal(librarySections.length, 10)
+    assert.equal(statuses.filter((status) => status === "generable").length, 8)
     assert.equal(statuses.filter((status) => status === "library-only").length, 2)
     const entry = librarySections.find((candidate) => candidate.slug === "final-cta")!
     assert.equal(entry.category, "Conversion")

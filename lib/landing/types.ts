@@ -27,6 +27,7 @@ import type {
   LandingPricingSchema,
   LandingProductSchema,
   LandingTextItemSchema,
+  NarrativeSplitConfigSchema,
   PillarsConfigSchema,
   ProductGridConfigSchema,
   ProductHeroConfigSchema,
@@ -60,6 +61,7 @@ export type ValuePropsConfig = z.infer<typeof ValuePropsConfigSchema>
 export type PillarsConfig = z.infer<typeof PillarsConfigSchema>
 export type ContentCarouselConfig = z.infer<typeof ContentCarouselConfigSchema>
 export type AudienceSwitcherConfig = z.infer<typeof AudienceSwitcherConfigSchema>
+export type NarrativeSplitConfig = z.infer<typeof NarrativeSplitConfigSchema>
 export type FinalCtaConfig = z.infer<typeof FinalCtaConfigSchema>
 
 /* Landing page */

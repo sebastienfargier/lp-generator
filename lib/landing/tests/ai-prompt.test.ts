@@ -79,7 +79,8 @@ describe("buildLandingAiPrompt", () => {
 
   test("tailles mesurées et bornées : système compact, schéma non recopié dans le prompt", () => {
     assert.ok(prompt.system.length < 2500, `système : ${prompt.system.length}`)
-    assert.ok(prompt.user.length < 9000, `user : ${prompt.user.length}`)
+    // Le catalogue ajoute environ 600 à 800 caractères par lame : 8 lames générables ≈ 9,4 k caractères (≈ 2,7 k tokens).
+    assert.ok(prompt.user.length < 10500, `user : ${prompt.user.length}`)
     assert.ok(serialized.length < 4500, `schéma : ${serialized.length}`)
     assert.ok(!/\$defs|additionalProperties|oneOf|"type":"object"/.test(prompt.system))
   })

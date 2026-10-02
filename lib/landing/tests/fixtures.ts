@@ -54,6 +54,12 @@ export const props = {
   "audience-switcher": () => ({
     items: [{ id: "actifs", eyebrow: "En poste", title: "Salariés", description: "Se former sans tout arrêter.", image: picture(otherImage) }],
   }),
+  "narrative-split": () => ({
+    eyebrow: "Votre rythme",
+    title: "Se former en gardant sa vie en équilibre",
+    description: "Apprendre en parallèle d'un emploi ou d'un quotidien déjà chargé demande de la souplesse.",
+    visual: picture(),
+  }),
   "final-cta": () => ({
     title: "Prêt à explorer les formations ?",
     description: "Parcourez le catalogue Studi pour découvrir les formations qui correspondent à votre projet.",
@@ -114,6 +120,13 @@ export const draftSection = {
     section: "audience-switcher",
     label: "Vous êtes",
     items: [{ eyebrow: "En poste", title: "Salarié", description: "Se former sans tout arrêter.", image: "audience-1" }],
+  }),
+  "narrative-split": () => ({
+    section: "narrative-split",
+    eyebrow: "Votre rythme",
+    title: "Se former en gardant sa vie en équilibre",
+    description: "Apprendre en parallèle d'un emploi ou d'un quotidien déjà chargé demande de la souplesse.",
+    image: "content-1",
   }),
   "final-cta": () => ({
     section: "final-cta",

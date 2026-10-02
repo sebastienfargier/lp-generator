@@ -189,6 +189,30 @@ const catalog = {
       "chaque profil a son propre visuel, affiché quand il est sélectionné",
     ],
   },
+  "narrative-split": {
+    type: "narrative-split",
+    name: "NarrativeSplit",
+    category: "content",
+    placement: "any",
+    description:
+      "Une idée développée : image d'un côté, surtitre, titre et paragraphe de l'autre.",
+    bestFor: [
+      "développer une idée importante de la page : manière d'apprendre, accompagnement, étape du projet, contexte d'une promesse",
+    ],
+    avoidWhen: [
+      "l'idée tient en une phrase : préférer value-props",
+      "plusieurs idées parallèles à présenter ensemble : préférer pillars",
+      "la page est déjà dense",
+    ],
+    guidance: [
+      "eyebrow : 2 à 4 mots, environ 30 caractères",
+      "title : environ 60 à 70 caractères",
+      "description : 2 à 3 phrases, environ 200 à 300 caractères",
+      "une idée distincte par narrative-split",
+      "1 à 3 narrative-split par page",
+      "l'image change de côté d'une narrative-split à l'autre ; ce côté n'est jamais à choisir",
+    ],
+  },
   "final-cta": {
     type: "final-cta",
     name: "FinalCta",

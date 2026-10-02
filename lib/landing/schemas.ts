@@ -223,6 +223,15 @@ export const AudienceSwitcherConfigSchema = z
     }
   })
 
+/** Une idée développée : image d'un côté, texte de l'autre. Le côté est décidé par l'application. */
+export const NarrativeSplitConfigSchema = z.strictObject({
+  eyebrow: text.optional(),
+  title: text,
+  description: text,
+  visual: LandingImageSchema,
+  visualSide: z.enum(["left", "right"]).optional(),
+})
+
 /** Lame de clôture : un titre, une phrase éventuelle et une action unique. */
 export const FinalCtaConfigSchema = z.strictObject({
   title: text,
@@ -250,6 +259,7 @@ export const LandingPageSectionSchema = z.discriminatedUnion("type", [
   section("pillars", PillarsConfigSchema),
   section("content-carousel", ContentCarouselConfigSchema),
   section("audience-switcher", AudienceSwitcherConfigSchema),
+  section("narrative-split", NarrativeSplitConfigSchema),
   section("final-cta", FinalCtaConfigSchema),
 ])
 
@@ -287,6 +297,7 @@ function sectionActions(
     case "pillars":
     case "content-carousel":
     case "audience-switcher":
+    case "narrative-split":
       break
     default: {
       const unhandled: never = section
