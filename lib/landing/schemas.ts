@@ -139,7 +139,7 @@ export const LandingAudienceItemSchema = z.strictObject({
 })
 
 /* -------------------------------------------------------------------------- */
-/* Configurations des 8 sections                                              */
+/* Configurations des sections                                                */
 /* -------------------------------------------------------------------------- */
 
 export const ProductHeroConfigSchema = z.strictObject({
@@ -223,6 +223,13 @@ export const AudienceSwitcherConfigSchema = z
     }
   })
 
+/** Lame de clôture : un titre, une phrase éventuelle et une action unique. */
+export const FinalCtaConfigSchema = z.strictObject({
+  title: text,
+  description: text.optional(),
+  primaryAction: LandingActionSchema,
+})
+
 /* -------------------------------------------------------------------------- */
 /* Sections et landing page                                                   */
 /* -------------------------------------------------------------------------- */
@@ -243,6 +250,7 @@ export const LandingPageSectionSchema = z.discriminatedUnion("type", [
   section("pillars", PillarsConfigSchema),
   section("content-carousel", ContentCarouselConfigSchema),
   section("audience-switcher", AudienceSwitcherConfigSchema),
+  section("final-cta", FinalCtaConfigSchema),
 ])
 
 type ParsedSection = z.infer<typeof LandingPageSectionSchema>
@@ -268,6 +276,7 @@ function sectionActions(
       break
     case "editorial-hero":
     case "immersive-hero":
+    case "final-cta":
       actions.push({
         action: section.props.primaryAction,
         path: ["primaryAction"],
@@ -324,6 +333,26 @@ export const LandingPageSchema = z
           code: "custom",
           path: ["sections", index, "type"],
           message: `Le hero "${section.type}" doit être la première section (position actuelle : ${index + 1}).`,
+        })
+      }
+    })
+
+    // Clôture : au plus une, et dernière section (même garantie que « hero en tête »).
+    let closingCount = 0
+    page.sections.forEach((section, index) => {
+      if (section.type !== "final-cta") return
+      closingCount += 1
+      if (closingCount > 1) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["sections", index, "type"],
+          message: `Une landing page ne peut contenir qu'une seule clôture ("final-cta" en trop).`,
+        })
+      } else if (index !== page.sections.length - 1) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["sections", index, "type"],
+          message: `La clôture "final-cta" doit être la dernière section (position actuelle : ${index + 1} sur ${page.sections.length}).`,
         })
       }
     })

@@ -177,6 +177,12 @@ export function resolveLandingDraft(
         })
         return { id, type: "audience-switcher", props: { label: section.label, defaultValue: items[0]!.id, items } }
       }
+      case "final-cta":
+        return {
+          id,
+          type: "final-cta",
+          props: { title: section.title, description: section.description, primaryAction: action(section.cta, `${at}.cta.destination`) },
+        }
       default: {
         const unhandled: never = section
         return unhandled

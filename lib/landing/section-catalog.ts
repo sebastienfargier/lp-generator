@@ -10,7 +10,7 @@ import type { LandingSectionType } from "./types"
  * Aucun import React : utilisable côté serveur.
  */
 
-export const sectionCategories = ["hero", "product", "content", "audience"] as const
+export const sectionCategories = ["hero", "product", "content", "audience", "conversion"] as const
 
 export type SectionCategory = (typeof sectionCategories)[number]
 
@@ -189,6 +189,27 @@ const catalog = {
       "chaque profil a son propre visuel, affiché quand il est sélectionné",
     ],
   },
+  "final-cta": {
+    type: "final-cta",
+    name: "FinalCta",
+    category: "conversion",
+    placement: "any",
+    description:
+      "Bandeau de clôture avec titre, phrase courte et action unique.",
+    bestFor: [
+      "la page a une action naturelle de poursuite : catalogue, métiers, financement, accompagnement",
+    ],
+    avoidWhen: [
+      "aucune poursuite n'est évidente",
+      "la page se conclut déjà suffisamment sur une autre invitation",
+    ],
+    guidance: [
+      "title : une phrase d'invitation, environ 70 caractères",
+      "description : 1 à 2 phrases, environ 160 caractères",
+      "cta.label : 2 à 4 mots qui décrivent la destination",
+      "la destination du hero peut être reprise si c'est la suite logique",
+    ],
+  },
 } as const satisfies { [Type in LandingSectionType]: SectionCatalogEntry<Type> }
 
 const catalogByType: { [Type in LandingSectionType]: SectionCatalogEntry<Type> } =
@@ -208,6 +229,7 @@ export const compositionRules = [
   { id: "single-hero", rule: "Au maximum un hero par landing page." },
   { id: "hero-first", rule: "Si un hero est présent, il est toujours la première section." },
   { id: "hero-by-message", rule: "Le type de hero se choisit d'après la manière dont le message doit être présenté (explication et réassurance, ou impact visuel et promesse courte), jamais parce qu'un hero est listé en premier : aucun n'est un choix par défaut. Interpréter le brief." },
+  { id: "closing-last", rule: "Une section de clôture, si elle est utilisée, est la dernière section de la page et n'apparaît qu'une fois." },
   { id: "no-exhaustive-use", rule: "Ne pas utiliser toutes les sections par défaut : ne choisir que celles utiles au brief." },
   { id: "editorial-purpose", rule: "Chaque section doit avoir une raison éditoriale claire dans le parcours." },
   { id: "no-redundancy", rule: "Éviter deux sections consécutives qui disent essentiellement la même chose." },

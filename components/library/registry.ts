@@ -8,7 +8,7 @@
 
 import type { LandingSectionType } from "@/lib/landing/types"
 
-export const libraryCategories = ["Hero", "Listing", "Contenu"] as const
+export const libraryCategories = ["Hero", "Listing", "Contenu", "Conversion"] as const
 
 export type LibraryCategory = (typeof libraryCategories)[number]
 
@@ -173,6 +173,21 @@ export const librarySections: LibrarySection[] = [
       image: { src: "/images/…", alt: "…" },
     },
   ]}
+/>`,
+  },
+  {
+    slug: "final-cta",
+    type: "final-cta",
+    name: "FinalCta",
+    category: "Conversion",
+    description:
+      "Bandeau de clôture : titre, phrase courte et un seul bouton, sur fond de marque.",
+    importPath: "@/components/sections/final-cta",
+    example: "/examples/final-cta",
+    usage: `<FinalCta
+  title="Prêt à explorer les formations ?"
+  description="Parcourez le catalogue Studi pour découvrir les formations qui correspondent à votre projet."
+  primaryAction={{ label: "Voir le catalogue", href: "https://www.studi.com/fr/formations" }}
 />`,
   },
 ]

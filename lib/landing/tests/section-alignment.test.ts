@@ -167,8 +167,8 @@ describe("décision de génération IA", () => {
     assert.deepEqual([...proposed].sort(), [...draftTypes].sort())
   })
 
-  test("règle produit : six lames générables, ProductHero et ProductGrid en bibliothèque uniquement", () => {
-    assert.deepEqual(draftTypes, ["editorial-hero", "immersive-hero", "value-props", "pillars", "content-carousel", "audience-switcher"])
+  test("règle produit : sept lames générables, ProductHero et ProductGrid en bibliothèque uniquement", () => {
+    assert.deepEqual(draftTypes, ["editorial-hero", "immersive-hero", "value-props", "pillars", "content-carousel", "audience-switcher", "final-cta"])
     for (const type of draftTypes) assert.deepEqual(getSectionGeneration(type as never), { status: "generable" }, type)
     for (const type of ["product-hero", "product-grid"] as const) {
       const generation = getSectionGeneration(type)

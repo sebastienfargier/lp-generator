@@ -81,6 +81,12 @@ const branches = [
     label: text,
     items: nonEmpty(z.strictObject({ eyebrow: text, title: text, description: text, image: DraftImageIdSchema })),
   }),
+  z.strictObject({
+    section: z.literal("final-cta"),
+    title: text,
+    description: text,
+    cta: DraftCtaSchema,
+  }),
 ] as const
 
 /** Les lames que le Draft sait exprimer, dans l'ordre du catalogue. */

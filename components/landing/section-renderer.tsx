@@ -1,6 +1,7 @@
 import { AudienceSwitcher } from "@/components/sections/audience-switcher"
 import { ContentCarousel } from "@/components/sections/content-carousel"
 import { EditorialHero } from "@/components/sections/editorial-hero"
+import { FinalCta } from "@/components/sections/final-cta"
 import { ImmersiveHero } from "@/components/sections/immersive-hero"
 import { PillarsSection } from "@/components/sections/pillars"
 import { ProductGrid } from "@/components/sections/product-grid"
@@ -85,6 +86,10 @@ function renderSection(section: LandingPageSection) {
       return <ContentCarousel {...section.props} />
     case "audience-switcher":
       return <AudienceSwitcher {...section.props} />
+    case "final-cta": {
+      const { primaryAction, ...props } = section.props
+      return <FinalCta {...props} primaryAction={toHeroAction(primaryAction)} />
+    }
     default:
       return assertNever(section)
   }

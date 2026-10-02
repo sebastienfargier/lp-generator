@@ -9,6 +9,7 @@ import type {
   AudienceSwitcherConfigSchema,
   ContentCarouselConfigSchema,
   EditorialHeroConfigSchema,
+  FinalCtaConfigSchema,
   ImmersiveHeroConfigSchema,
   LandingActionSchema,
   LandingAudienceItemSchema,
@@ -50,7 +51,7 @@ export type LandingProduct = z.infer<typeof LandingProductSchema>
 export type LandingContentItem = z.infer<typeof LandingContentItemSchema>
 export type LandingAudienceItem = z.infer<typeof LandingAudienceItemSchema>
 
-/* Configurations des 8 sections */
+/* Configurations des sections */
 export type ProductHeroConfig = z.infer<typeof ProductHeroConfigSchema>
 export type EditorialHeroConfig = z.infer<typeof EditorialHeroConfigSchema>
 export type ImmersiveHeroConfig = z.infer<typeof ImmersiveHeroConfigSchema>
@@ -59,6 +60,7 @@ export type ValuePropsConfig = z.infer<typeof ValuePropsConfigSchema>
 export type PillarsConfig = z.infer<typeof PillarsConfigSchema>
 export type ContentCarouselConfig = z.infer<typeof ContentCarouselConfigSchema>
 export type AudienceSwitcherConfig = z.infer<typeof AudienceSwitcherConfigSchema>
+export type FinalCtaConfig = z.infer<typeof FinalCtaConfigSchema>
 
 /* Landing page */
 

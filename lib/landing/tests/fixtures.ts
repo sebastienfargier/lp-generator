@@ -54,6 +54,11 @@ export const props = {
   "audience-switcher": () => ({
     items: [{ id: "actifs", eyebrow: "En poste", title: "Salariés", description: "Se former sans tout arrêter.", image: picture(otherImage) }],
   }),
+  "final-cta": () => ({
+    title: "Prêt à explorer les formations ?",
+    description: "Parcourez le catalogue Studi pour découvrir les formations qui correspondent à votre projet.",
+    primaryAction: { label: "Voir le catalogue", href: catalogueUrl },
+  }),
 } as const
 
 export const page = (sections: unknown[]) => ({ version: 1, id: "reconversion-rh", title: "Reconversion RH", sections })
@@ -109,6 +114,12 @@ export const draftSection = {
     section: "audience-switcher",
     label: "Vous êtes",
     items: [{ eyebrow: "En poste", title: "Salarié", description: "Se former sans tout arrêter.", image: "audience-1" }],
+  }),
+  "final-cta": () => ({
+    section: "final-cta",
+    title: "Prêt à explorer les formations ?",
+    description: "Parcourez le catalogue Studi pour découvrir les formations qui correspondent à votre projet.",
+    cta: { ...draftCta },
   }),
 } as const
 
