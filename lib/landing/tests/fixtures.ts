@@ -78,6 +78,13 @@ export const props = {
       { title: "Parcourir le catalogue", description: "Consulter l'ensemble des formations, avec des filtres.", href: catalogueUrl },
     ],
   }),
+  "campaign-spotlight": () => ({
+    title: "Explorez les temps forts",
+    accent: "de Studi",
+    description: "Découvrez les formations Studi et avancez dans votre projet, à votre rythme.",
+    visual: picture(landingImages[9]),
+    primaryAction: { label: "Découvrir les formations", href: catalogueUrl },
+  }),
   "final-cta": () => ({
     title: "Prêt à explorer les formations ?",
     description: "Parcourez le catalogue Studi pour découvrir les formations qui correspondent à votre projet.",

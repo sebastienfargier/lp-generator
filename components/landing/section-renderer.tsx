@@ -1,4 +1,5 @@
 import { AudienceSwitcher } from "@/components/sections/audience-switcher"
+import { CampaignSpotlight } from "@/components/sections/campaign-spotlight"
 import { ContentCarousel } from "@/components/sections/content-carousel"
 import { DestinationCards } from "@/components/sections/destination-cards"
 import { EditorialHero } from "@/components/sections/editorial-hero"
@@ -95,6 +96,15 @@ function renderSection(section: LandingPageSection) {
       return <StepSequence {...section.props} />
     case "destination-cards":
       return <DestinationCards {...section.props} />
+    case "campaign-spotlight": {
+      const { primaryAction, ...props } = section.props
+      return (
+        <CampaignSpotlight
+          {...props}
+          primaryAction={toHeroAction(primaryAction)}
+        />
+      )
+    }
     case "final-cta": {
       const { primaryAction, ...props } = section.props
       return <FinalCta {...props} primaryAction={toHeroAction(primaryAction)} />

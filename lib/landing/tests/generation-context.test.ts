@@ -69,7 +69,8 @@ describe("sections candidates", () => {
       assert.ok(!types.includes(type), type)
       assert.match(explainLandingSectionSelection()[type]!, /source produit contrôlée/)
     }
-    assert.deepEqual(Object.keys(explainLandingSectionSelection()).sort(), ["product-grid", "product-hero"])
+    // CampaignSpotlight est temporairement en bibliothèque uniquement (intégration IA différée).
+    assert.deepEqual(Object.keys(explainLandingSectionSelection()).sort(), ["campaign-spotlight", "product-grid", "product-hero"])
   })
 
   test("le contrat garde toutes ses sections : seul le moteur IA en propose moins", () => {

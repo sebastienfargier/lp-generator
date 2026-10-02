@@ -175,7 +175,8 @@ describe("décision de génération IA", () => {
       assert.equal(generation.status, "library-only", type)
       assert.match(generation.status === "library-only" ? generation.reason : "", /source produit contrôlée/, type)
     }
-    assert.deepEqual(Object.keys(nonGenerableSections).sort(), ["product-grid", "product-hero"])
+    // CampaignSpotlight : exclue temporairement, pour une autre raison (intégration IA différée).
+    assert.deepEqual(Object.keys(nonGenerableSections).sort(), ["campaign-spotlight", "product-grid", "product-hero"])
   })
 })
 

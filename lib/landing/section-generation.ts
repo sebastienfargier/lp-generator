@@ -29,6 +29,7 @@ import type { LandingSectionType } from "./types"
 export const nonGenerableSections = {
   "product-hero": "Porte une formation nommée, un prix, un financement et un partenaire : aucune source produit contrôlée.",
   "product-grid": "Exige des produits nommés, avec lien, image et prix : aucune source produit contrôlée.",
+  "campaign-spotlight": "Intégration IA différée pendant l'optimisation du contexte et des destinations de campagne.",
 } as const satisfies Partial<Record<LandingSectionType, string>>
 
 type Undecided = Exclude<LandingSectionType, LandingDraftSectionType | keyof typeof nonGenerableSections>

@@ -266,6 +266,19 @@ export const NarrativeSplitConfigSchema = z.strictObject({
   visualSide: z.enum(["left", "right"]).optional(),
 })
 
+/**
+ * Une communication mise à l'affiche : un visuel, un titre dont la fin peut être
+ * mise en valeur (`accent`, deux fragments d'une même phrase) et une action
+ * unique, toujours présente. Aucun champ factuel (date, heure, intervenant…).
+ */
+export const CampaignSpotlightConfigSchema = z.strictObject({
+  title: text,
+  accent: text.optional(),
+  description: text.optional(),
+  visual: LandingImageSchema,
+  primaryAction: LandingActionSchema,
+})
+
 /** Lame de clôture : un titre, une phrase éventuelle et une action unique. */
 export const FinalCtaConfigSchema = z.strictObject({
   title: text,
@@ -296,6 +309,7 @@ export const LandingPageSectionSchema = z.discriminatedUnion("type", [
   section("narrative-split", NarrativeSplitConfigSchema),
   section("step-sequence", StepSequenceConfigSchema),
   section("destination-cards", DestinationCardsConfigSchema),
+  section("campaign-spotlight", CampaignSpotlightConfigSchema),
   section("final-cta", FinalCtaConfigSchema),
 ])
 
@@ -322,6 +336,7 @@ function sectionActions(
       break
     case "editorial-hero":
     case "immersive-hero":
+    case "campaign-spotlight":
     case "final-cta":
       actions.push({
         action: section.props.primaryAction,

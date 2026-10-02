@@ -188,11 +188,11 @@ describe("LandingFooter : Library", () => {
     assert.ok(!librarySections.some((entry) => /footer/i.test(entry.slug) || /footer/i.test(entry.type)))
   })
 
-  test("compteurs de lames inchangés par le footer : 12, dont 10 générables et 2 en bibliothèque uniquement", () => {
+  test("compteurs de lames inchangés par le footer : 13, dont 10 générables et 3 en bibliothèque uniquement", () => {
     const statuses = librarySections.map((entry) => getSectionGeneration(entry.type).status)
-    assert.equal(librarySections.length, 12)
+    assert.equal(librarySections.length, 13)
     assert.equal(statuses.filter((status) => status === "generable").length, 10)
-    assert.equal(statuses.filter((status) => status === "library-only").length, 2)
+    assert.equal(statuses.filter((status) => status === "library-only").length, 3)
   })
 })
 

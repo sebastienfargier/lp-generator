@@ -260,6 +260,27 @@ const catalog = {
       "choisir des destinations complémentaires ; reprendre une destination du hero ou de la clôture est permis",
     ],
   },
+  "campaign-spotlight": {
+    type: "campaign-spotlight",
+    name: "CampaignSpotlight",
+    category: "conversion",
+    placement: "any",
+    description:
+      "Une communication mise à l'affiche : visuel, titre, phrase et un seul bouton vers une destination.",
+    bestFor: [
+      "annoncer un live, un événement ou une actualité Studi que le brief décrit explicitement",
+    ],
+    avoidWhen: [
+      "le brief ne contient aucune annonce précise : préférer narrative-split",
+      "plusieurs communications à présenter",
+    ],
+    guidance: [
+      "title : début de phrase, accent : fin du titre mise en valeur ; ensemble d'environ 60 caractères",
+      "description : 1 à 2 phrases, environ 120 à 160 caractères",
+      "reprend l'annonce du brief sans rien y ajouter ; faits d'événement : voir facts-only",
+      "une seule par page, au milieu ou en haut, jamais en ouverture",
+    ],
+  },
   "final-cta": {
     type: "final-cta",
     name: "FinalCta",

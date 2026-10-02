@@ -233,6 +233,23 @@ export const librarySections: LibrarySection[] = [
 />`,
   },
   {
+    slug: "campaign-spotlight",
+    type: "campaign-spotlight",
+    name: "CampaignSpotlight",
+    category: "Conversion",
+    description:
+      "Une communication mise à l'affiche : grand panneau arrondi, visuel à gauche, titre à fin mise en valeur, phrase et un seul bouton.",
+    importPath: "@/components/sections/campaign-spotlight",
+    example: "/examples/campaign-spotlight",
+    usage: `<CampaignSpotlight
+  title="Explorez les temps forts"
+  accent="de Studi"
+  description="…"
+  visual={{ src: "/images/content-4.jpg", alt: "…" }}
+  primaryAction={{ label: "Découvrir les formations", href: "…" }}
+/>`,
+  },
+  {
     slug: "final-cta",
     type: "final-cta",
     name: "FinalCta",
