@@ -5,6 +5,7 @@ import {
   LayoutTemplate,
   Library,
   Mail,
+  Palette,
   PanelsTopLeft,
 } from "lucide-react"
 
@@ -98,6 +99,7 @@ export const navItems: NavItem[] = [
     icon: Library,
     children: resourceLibraries.map(({ title, href, icon }) => ({ title, href: href ?? undefined, icon })),
   },
+  { title: "Design System", href: "/design-system", icon: Palette },
 ]
 
 /** Pages atteignables, pour la recherche (⌘K). */
