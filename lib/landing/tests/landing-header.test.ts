@@ -10,7 +10,6 @@ import { describe, test } from "node:test"
 
 import { libraryShellCategory, libraryShellNote, libraryShellParts, librarySections } from "../../../components/library/registry"
 import { resolveLandingDraft } from "../draft-resolver"
-import { landingDestinations, landingDestinationUrl } from "../destinations"
 import { buildLandingGenerationContext } from "../generation-context"
 import { landingDraftSectionTypes, safeParseLandingGenerationDraft } from "../generation-draft"
 import { LandingPageSectionSchema, safeParseLandingPage } from "../schemas"
@@ -163,7 +162,7 @@ describe("LandingHeader dans /library : shell global, pas une lame", () => {
   })
 
   test("la galerie et le détail l'affichent comme Shell global, jamais avec un statut IA", () => {
-    const gallery = code("app/library/page.tsx")
+    const gallery = code("app/(dashboard)/library/page.tsx")
     assert.match(gallery, /libraryShellParts\.map/)
     assert.match(gallery, /libraryShellCategory/)
     assert.match(gallery, /libraryShellNote/)
@@ -171,7 +170,7 @@ describe("LandingHeader dans /library : shell global, pas une lame", () => {
     // Le statut IA n'est rendu que pour une lame.
     const shellSection = gallery.slice(gallery.indexOf("libraryShellParts.map"))
     assert.ok(!/GenerationStatus|Générable par IA|Bibliothèque uniquement/.test(shellSection))
-    const detail = code("app/library/[slug]/page.tsx")
+    const detail = code("app/(dashboard)/library/[slug]/page.tsx")
     assert.match(detail, /lame \? \(\s*<GenerationStatus type=\{lame\.type\} showReason \/>\s*\) : \(/)
     assert.match(detail, /libraryShellNote/)
   })
