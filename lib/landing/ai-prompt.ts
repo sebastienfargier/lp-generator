@@ -1,3 +1,4 @@
+import { buildLandingAiView } from "./ai-view"
 import { buildLandingGenerationContext, type LandingGenerationContext } from "./generation-context"
 import { buildLandingDraftJsonSchema } from "./generation-draft"
 import { safeParseLandingGenerationRequest, type LandingGenerationRequest } from "./generation-request"
@@ -19,11 +20,11 @@ Le brouillon est { sections: [...] } : l'ordre du tableau est l'ordre de la page
 
 Tu composes uniquement avec ce que context fournit :
 - sections : choisis celles qui servent le brief, leur nombre et leur ordre ; une page courte et cohérente vaut mieux qu'une page remplie. Le hero, s'il y en a un, est la première section, et il n'y en a qu'un ;
-- images : désigne chaque image par son id, pris dans context.images ; sa description t'aide à choisir celle qui convient ;
+- images : désigne chaque image par son id, pris dans context.images ; son hint t'aide à choisir celle qui convient ;
 - CTA : désigne la destination par son id, pris dans context.destinations ; tu n'écris aucun lien.
 
 Tu rédiges en français : titres, paragraphes, bénéfices, étapes. Tu respectes le ton et l'intention exprimés dans le brief, en restant clair et crédible, sans neutraliser un ton que le brief demande explicitement. Tu reformules le brief, tu ne l'enrichis pas de faits. Tu n'inventes rien :
-- aucun prix, remise, pourcentage, durée, statistique, nombre d'apprenants, certification, classement, garantie, témoignage, partenaire, date limite ni code promo, sauf s'il figure dans request.facts, repris à l'identique ;
+- aucun prix, remise, pourcentage, durée, statistique, effectif ou nombre d'apprenants, certification, classement, garantie, témoignage, partenaire, date limite ni code promo ; aucune date ni heure d'événement, aucun intervenant, nombre de places, gratuité, replay, inscription, urgence ni exclusivité : sauf s'il figure dans request.facts, repris à l'identique ;
 - aucune formation, aucun diplôme ni aucun métier nommé qui ne figure pas dans request ;
 - aucun lien, aucune image ni aucun produit hors context.
 
@@ -35,26 +36,11 @@ Respecte context.rules.`
 /* Vue du contexte pour le modèle                                             */
 /* -------------------------------------------------------------------------- */
 
-/** Règles de composition du catalogue qui concernent des ids et des ancres, écrits par le résolveur. */
-const resolverRules: ReadonlySet<string> = new Set(["internal-anchors", "section-ids"])
-
 /**
- * Ce que le modèle voit du contexte. Le contexte complet reste celui de
- * l'application (résolution et validation) ; le modèle n'a besoin ni des
- * chemins d'image, ni des URL, ni du cadrage, ni des règles d'ids et d'ancres :
- * il désigne les ressources par id.
+ * Ce que le modèle voit du contexte : la vue compacte d'`ai-view.ts`. Le
+ * contexte complet reste celui de l'application (résolution et validation).
  */
-export function buildLandingPromptContext(context: LandingGenerationContext) {
-  return {
-    sections: context.sections,
-    destinations: context.destinations.map(({ id, label, usage }) => ({ id, label, usage })),
-    images: context.images.map(({ id, alt }) => ({ id, description: alt })),
-    rules: {
-      composition: context.rules.composition.filter((entry) => !resolverRules.has(entry.id)),
-      resources: context.rules.resources,
-    },
-  }
-}
+export const buildLandingPromptContext = buildLandingAiView
 
 /* -------------------------------------------------------------------------- */
 /* Composabilité                                                              */

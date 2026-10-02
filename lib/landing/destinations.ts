@@ -38,12 +38,12 @@ const emailCatalog = "lib/email/destinations.ts"
 export const landingDestinations = {
   "catalogue-formations": { label: "Catalogue Studi", path: "/fr/formations", usage: "Catalogue complet des formations, avec filtres.", source: `${emailCatalog} · sources-studi.md §2` },
   metiers: { label: "Fiches métiers", path: "/fr/metiers", usage: "Découvrir un métier avant de choisir une formation.", source: `${emailCatalog} · sources-studi.md §2` },
-  diplomes: { label: "Formations par niveau de diplôme", path: "/fr/diplomes", usage: "Choisir une formation par niveau de sortie.", source: `${emailCatalog} · sources-studi.md §2` },
+  diplomes: { label: "Formations par niveau de diplôme", path: "/fr/diplomes", usage: "Choisir une formation par niveau de diplôme.", source: `${emailCatalog} · sources-studi.md §2` },
   certificats: { label: "Certificats professionnels", path: "/fr/certificats", usage: "Monter en compétences avec un certificat.", source: `${emailCatalog} · sources-studi.md §2` },
   financement: { label: "Financement", path: "/fr/financement", usage: "Tous les dispositifs de financement.", source: `${emailCatalog} · sources-studi.md §5` },
   "parcours-decouverte": { label: "Parcours Découverte", path: "/fr/parcours-decouverte", usage: "Essayer avant de s'engager ; lien secondaire, jamais second bouton.", source: `${emailCatalog} · sources-studi.md §5` },
   accompagnement: { label: "Accompagnement", path: "/fr/accompagnement", usage: "Les niveaux d'accompagnement pendant la formation.", source: `${emailCatalog} · sources-studi.md §5` },
-  methode: { label: "Méthode et pédagogie", path: "/fr/methode", usage: "Expliquer comment on apprend chez Studi.", source: `${emailCatalog} · sources-studi.md §5` },
+  methode: { label: "Méthode et pédagogie", path: "/fr/methode", usage: "Expliquer la méthode et la pédagogie Studi.", source: `${emailCatalog} · sources-studi.md §5` },
 } as const satisfies Record<string, LandingDestinationEntry>
 
 export type LandingDestinationId = keyof typeof landingDestinations

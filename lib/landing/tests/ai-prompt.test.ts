@@ -79,8 +79,12 @@ describe("buildLandingAiPrompt", () => {
 
   test("tailles mesurées et bornées : système compact, schéma non recopié dans le prompt", () => {
     assert.ok(prompt.system.length < 2500, `système : ${prompt.system.length}`)
-    // Le catalogue ajoute environ 600 à 800 caractères par lame : 10 lames générables ≈ 11,5 k caractères (≈ 3,3 k tokens). Plafond NON relevé pour StepSequence : l'entrée a été resserrée pour y tenir.
-    assert.ok(prompt.user.length < 11500, `user : ${prompt.user.length}`)
+    // Budget de régression du CONTEXTE STATIQUE (la vue IA : lames, règles, ressources), pas du message
+    // entier : `request` varie avec le brief (jusqu'à environ 8 000 caractères) et ne doit pas faire échouer
+    // un test. Mesuré à 9 013 après la vue V2 ; une lame ajoute environ 700 caractères (CampaignSpotlight le
+    // portera délibérément à environ 9 900). Voir ai-view.test.ts pour l'indépendance vis-à-vis de `request`.
+    assert.ok(JSON.stringify(view).length < 9200, `contexte statique : ${JSON.stringify(view).length}`)
+    assert.equal(prompt.user.length, JSON.stringify({ request: prompt.request, context: view }).length)
     // Budget de régression du schéma Draft (pas une limite de l'API), relevé ponctuellement de 5 000 à 5 100 :
     // StepSequence ajoute une branche structurelle à 3-4 étapes (5 001). Le schéma transport reste sous son
     // propre budget (anthropic-schema.test.ts : 5 000). Ce contexte est saturé : message à 11 494 / 11 500.
@@ -104,10 +108,10 @@ describe("ce que le modèle voit", () => {
     }
   })
 
-  test("vue du contexte : id et description des images, id, libellé et usage des destinations", () => {
-    assert.deepEqual(view.images, context.images.map(({ id, alt }) => ({ id, description: alt })))
-    assert.deepEqual(view.destinations, context.destinations.map(({ id, label, usage }) => ({ id, label, usage })))
-    assert.deepEqual(view.sections, context.sections)
+  test("vue du contexte : id et hint des images, id et usage des destinations, une entrée par candidate", () => {
+    assert.deepEqual(view.images, context.images.map(({ id, hint }) => ({ id, hint })))
+    assert.deepEqual(view.destinations, context.destinations.map(({ id, usage }) => ({ id, usage })))
+    assert.deepEqual(view.sections.map((section) => section.type), context.sections.map((section) => section.type))
     assert.equal(view.images.length, 10)
     assert.equal(view.destinations.length, 8)
   })
@@ -118,9 +122,9 @@ describe("ce que le modèle voit", () => {
     const seen = JSON.stringify({ images: view.images, destinations: view.destinations, rules: view.rules })
     assert.ok(!/\/images\/|https?:\/\/|"src"|"url"|"href"|"alt"|"subject"|"position"|"version"|defaultValue|"logo"|"badge"|"icon"/i.test(seen), seen.slice(0, 200))
     assert.ok(!/\bhref\b|\bsrc\b|\balt\b|\bversion\b|ancre|\bposition\b|defaultValue|\blogo\b|\bbadge\b|icône/i.test(prompt.system))
-    const ruleIds = [...view.rules.composition, ...view.rules.resources].map((entry) => entry.id)
-    assert.ok(!ruleIds.includes("internal-anchors") && !ruleIds.includes("section-ids"))
-    assert.ok(ruleIds.includes("single-hero") && ruleIds.includes("destination-only") && ruleIds.includes("no-contact"))
+    // Les règles d'ids et d'ancres ne sont pas dans la liste blanche de la vue ; le contexte complet les garde.
+    const ruleTexts = [...view.rules.composition, ...view.rules.resources].join("\n")
+    assert.ok(!/#|ids de section|ancre/i.test(ruleTexts), ruleTexts)
     assert.ok(context.rules.composition.some((entry) => entry.id === "internal-anchors"), "le contexte complet garde la règle")
   })
 

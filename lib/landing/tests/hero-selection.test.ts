@@ -20,8 +20,8 @@ const read = (path: string) => readFileSync(join(root, path), "utf8")
 const view = buildLandingPromptContext(context)
 const editorial = view.sections.find((section) => section.type === "editorial-hero")!
 const immersive = view.sections.find((section) => section.type === "immersive-hero")!
-const everything = (entry: { description: string; bestFor: string[]; avoidWhen: string[]; guidance: string[] }) =>
-  [entry.description, ...entry.bestFor, ...entry.avoidWhen, ...entry.guidance].join(" | ")
+const everything = (entry: { description: string; bestFor: string[]; avoidWhen: string[]; guidance?: string[] }) =>
+  [entry.description, ...entry.bestFor, ...entry.avoidWhen, ...(entry.guidance ?? [])].join(" | ")
 
 describe("deux heros, deux structures de message", () => {
   test("les deux sont candidats et présentés au modèle", () => {
@@ -122,7 +122,7 @@ describe("règle neutre de choix du hero", () => {
 
   test("présente dans le contexte donné au modèle", () => {
     assert.ok(rule)
-    assert.ok(view.rules.composition.some((entry) => entry.id === "hero-by-message"))
+    assert.ok(view.rules.composition.includes(rule!.rule), "la vue envoie le texte exact de la règle")
     assert.deepEqual(getSectionCatalogForPrompt().rules.map((entry) => entry.id), compositionRules.map((entry) => entry.id))
   })
 
