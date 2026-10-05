@@ -127,10 +127,15 @@ export type RecipeBrandProvenance = {
 
 const defaultTone = "Voix claire, optimiste, crédible ; ton professionnel et bienveillant."
 
-/** Contexte Brand de la recette pour une audience, et sa provenance interne. */
-export function buildRecipeBrandContext(recipeId: EmailRecipeId, audience: string): { context: RecipeBrandContext; provenance: RecipeBrandProvenance } {
+/** Contexte Brand de la recette pour une cible (ou, à défaut, une audience), et sa provenance interne. */
+export function buildRecipeBrandContext(
+  recipeId: EmailRecipeId,
+  audience: string,
+  target?: BrandAudienceId
+): { context: RecipeBrandContext; provenance: RecipeBrandProvenance } {
   const recipe = emailRecipes[recipeId]
-  const matched = matchBrandAudience(audience)
+  // La cible contrôlée décide de la voix ; sans elle, l'audience en texte libre ne sert qu'à en choisir une.
+  const matched = target ?? matchBrandAudience(audience)
   const profile = matched ? brandAudiences[matched] : undefined
   const exposed = approvedClaims.filter((claim) => (recipe.claims.allowed as readonly string[]).includes(claim.id))
   const intents = recipe.images.intents as readonly string[]

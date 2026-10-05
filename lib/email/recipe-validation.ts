@@ -272,17 +272,21 @@ export function validateEmailRecipeConfig(recipeId: EmailRecipeId, config: Email
   for (const id of description.claimIds) {
     if (!(recipe.claims.allowed as readonly string[]).includes(id)) issue("claims", "blocks", `La claim « ${id} » n'est pas acceptée par cette recette.`)
   }
-  // Un nombre n'est admis que s'il appartient à une claim approuvée (R3) ou à un fait de la demande, recopié tel quel.
-  const facts = [...(options.facts ?? [])].sort((a, b) => b.length - a.length)
+  // Un nombre n'est admis que s'il appartient à une claim approuvée (R3, formulation copiée) ou s'il figure dans un fait de la demande :
+  // un fait se reprend parfois en partie ou sans sa ponctuation, on compare donc les nombres, pas les phrases.
+  const numbers = (value: string) => (value.match(/\d+(?:[  .,]\d+)*/g) ?? []).map((token) => token.replace(/[  ]/g, ""))
+  const factNumbers = new Set((options.facts ?? []).flatMap(numbers))
   const claimStatements = recipe.figures === "claims-only" ? approvedClaims.map((claim) => claim.statement).sort((a, b) => b.length - a.length) : []
-  const stripKnown = (text: string) => [...claimStatements, ...facts].reduce((rest, known) => rest.split(known).join(" "), text)
+  const stripClaims = (value: string) => claimStatements.reduce((rest, statement) => rest.split(statement).join(" "), value)
   const figureTexts = [
     { path: "subject", text: config.subject },
     { path: "preheader", text: config.preheader },
     ...texts,
   ]
   for (const { path, text } of figureTexts) {
-    if (/\d/.test(stripKnown(text))) issue("figure", path, recipe.figures === "none" ? "Aucun chiffre dans cette recette, sauf ceux des faits de la demande." : "Un chiffre ne vient que d'une claim approuvée ou d'un fait de la demande, copiés tels quels.")
+    if (numbers(stripClaims(text)).some((token) => !factNumbers.has(token))) {
+      issue("figure", path, recipe.figures === "none" ? "Aucun chiffre dans cette recette, sauf ceux des faits de la demande." : "Un chiffre ne vient que d'une claim approuvée ou d'un fait de la demande, copiés tels quels.")
+    }
   }
   for (const { path, text } of figureTexts) if (placeholder.test(text)) issue("placeholder", path, "Texte de remplissage ou marqueur à confirmer.")
 

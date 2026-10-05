@@ -9,7 +9,8 @@ import {
   emptyEmailGeneratorForm,
   toEmailRequestBody,
   type EmailGeneratorExample,
-  type EmailGeneratorForm,
+  type EmailGeneratorIntent,
+  type EmailGeneratorTarget,
 } from "@/lib/email/generator-form"
 import {
   describeGeneratedEmail,
@@ -23,7 +24,8 @@ import { EmailBriefPanel } from "./email-brief-panel"
 import { EmailPreview } from "./email-preview"
 
 type EmailWorkspaceProps = {
-  objectives: readonly { value: EmailGeneratorForm["objective"]; label: string }[]
+  intents: readonly { value: EmailGeneratorIntent; label: string; hint: string }[]
+  targets: readonly { value: EmailGeneratorTarget; label: string }[]
   examples: readonly EmailGeneratorExample[]
 }
 
@@ -49,7 +51,7 @@ function readResult(value: unknown): EmailGenerationSuccess | EmailGeneratorErro
  * requête. Le secret Anthropic reste côté serveur : ce composant ne connaît
  * que la route.
  */
-export function EmailWorkspace({ objectives, examples }: EmailWorkspaceProps) {
+export function EmailWorkspace({ intents, targets, examples }: EmailWorkspaceProps) {
   const [form, setForm] = useState(emptyEmailGeneratorForm)
   const [state, dispatch] = useReducer(emailGeneratorReducer, initialEmailGeneratorState)
   // Garde contre une double soumission avant que l'état « loading » ne soit rendu.
@@ -89,7 +91,8 @@ export function EmailWorkspace({ objectives, examples }: EmailWorkspaceProps) {
       >
         <EmailBriefPanel
           form={form}
-          objectives={objectives}
+          intents={intents}
+          targets={targets}
           examples={examples}
           error={state.error}
           pending={pending}

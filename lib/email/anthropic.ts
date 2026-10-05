@@ -77,6 +77,7 @@ export type EmailGenerationErrorKind =
   | "draft-resolution"
   | "invalid-config"
   | "validation-failed"
+  | "brand-violation"
   | "unexpected"
 
 export type EmailEngineIssue = { path: string; message: string }
@@ -106,13 +107,13 @@ export type EmailEngineResult =
     }
   | { status: "error"; error: EmailEngineError }
 
-const failure = (error: EmailEngineError): EmailEngineResult => ({ status: "error", error })
+export const failure = (error: EmailEngineError): { status: "error"; error: EmailEngineError } => ({ status: "error", error })
 
 /* -------------------------------------------------------------------------- */
 /* Client                                                                     */
 /* -------------------------------------------------------------------------- */
 
-type CreateParams = Anthropic.MessageCreateParamsNonStreaming
+export type CreateParams = Anthropic.MessageCreateParamsNonStreaming
 
 /** Ce dont le pipeline a besoin du SDK : `messages.create`, rien d'autre. */
 export type EmailClaudeClient = {
@@ -126,7 +127,7 @@ export type EmailClaudeDependencies = {
   env?: Env
 }
 
-function createClient(apiKey: string): EmailClaudeClient {
+export function createClient(apiKey: string): EmailClaudeClient {
   if (typeof window !== "undefined") throw new Error("Le client Anthropic est réservé au serveur.")
   // Pas de relance automatique : un appel, un résultat.
   return new Anthropic({ apiKey, maxRetries: 0, timeout: EMAIL_REQUEST_TIMEOUT_MS })
@@ -145,7 +146,7 @@ function sanitize(text: string, secrets: readonly string[]): string {
   return safe.length > maxMessageLength ? `${safe.slice(0, maxMessageLength)}…` : safe
 }
 
-function mapApiError(error: unknown, secrets: readonly string[]): EmailEngineError {
+export function mapApiError(error: unknown, secrets: readonly string[]): EmailEngineError {
   if (error instanceof Anthropic.APIConnectionTimeoutError) {
     return { kind: "timeout", message: "Anthropic n'a pas répondu à temps." }
   }
@@ -180,7 +181,7 @@ function mapApiError(error: unknown, secrets: readonly string[]): EmailEngineErr
 /* Réponse                                                                    */
 /* -------------------------------------------------------------------------- */
 
-function toUsage(usage: Anthropic.Usage | undefined): EmailClaudeUsage | undefined {
+export function toUsage(usage: Anthropic.Usage | undefined): EmailClaudeUsage | undefined {
   if (!usage) return undefined
   return {
     inputTokens: usage.input_tokens,
@@ -194,34 +195,46 @@ type ReadyPrompt = Extract<EmailDraftPrompt, { status: "ready" }>
 const toIssues = (issues: readonly { path: readonly PropertyKey[]; message: string }[], root: string): EmailEngineIssue[] =>
   issues.map((issue) => ({ path: issue.path.map(String).join(".") || root, message: issue.message }))
 
-function readResponse(response: Anthropic.Message, model: string, prompt: ReadyPrompt): EmailEngineResult {
+type StructuredOutput =
+  | { ok: true; output: unknown; text: string; meta: { usage?: EmailClaudeUsage; requestId?: string } }
+  | { ok: false; failure: { status: "error"; error: EmailEngineError } }
+
+/**
+ * Réponse Messages API → JSON du modèle, partie commune aux moteurs Email :
+ * motif d'arrêt (la conformité au schéma n'est garantie que sur `end_turn`),
+ * texte, JSON. Ne valide rien du contenu : c'est le rôle de chaque moteur.
+ */
+export function readStructuredOutput(response: Anthropic.Message): StructuredOutput {
   const usage = toUsage(response.usage)
   const requestId = (response as { _request_id?: string | null })._request_id ?? undefined
   const meta = { ...(usage ? { usage } : {}), ...(requestId ? { requestId } : {}) }
+  const stop = (error: EmailEngineError): StructuredOutput => ({ ok: false, failure: failure({ ...meta, ...error }) })
 
-  // La conformité au schéma n'est garantie que sur `end_turn`.
   if (response.stop_reason === "refusal") {
     const category = response.stop_details?.category
-    return failure({ ...meta, kind: "refusal", message: `Le modèle a refusé de répondre${category ? ` (catégorie : ${category})` : ""}.` })
+    return stop({ kind: "refusal", message: `Le modèle a refusé de répondre${category ? ` (catégorie : ${category})` : ""}.` })
   }
   if (response.stop_reason === "max_tokens") {
-    return failure({ ...meta, kind: "truncated", message: "La réponse a atteint la limite de longueur : l'email est incomplet." })
+    return stop({ kind: "truncated", message: "La réponse a atteint la limite de longueur : l'email est incomplet." })
   }
   if (response.stop_reason !== "end_turn") {
-    return failure({ ...meta, kind: "interrupted", message: `La génération s'est arrêtée de façon inattendue (${response.stop_reason ?? "sans motif"}).` })
+    return stop({ kind: "interrupted", message: `La génération s'est arrêtée de façon inattendue (${response.stop_reason ?? "sans motif"}).` })
   }
 
   const text = response.content.flatMap((block) => (block.type === "text" ? [block.text] : [])).join("").trim()
-  if (text === "") {
-    return failure({ ...meta, kind: "empty-output", message: "La réponse ne contient aucun texte exploitable." })
-  }
+  if (text === "") return stop({ kind: "empty-output", message: "La réponse ne contient aucun texte exploitable." })
 
-  let output: unknown
   try {
-    output = JSON.parse(text)
+    return { ok: true, output: JSON.parse(text), text, meta }
   } catch {
-    return failure({ ...meta, kind: "invalid-json", message: "La réponse n'est pas du JSON valide.", output: text })
+    return stop({ kind: "invalid-json", message: "La réponse n'est pas du JSON valide.", output: text })
   }
+}
+
+function readResponse(response: Anthropic.Message, model: string, prompt: ReadyPrompt): EmailEngineResult {
+  const read = readStructuredOutput(response)
+  if (!read.ok) return read.failure
+  const { output, text, meta } = read
 
   // 1. Le brouillon : seule validation de ce que Claude a produit.
   const draft = safeParseEmailGenerationDraft(output)
@@ -246,7 +259,7 @@ function readResponse(response: Anthropic.Message, model: string, prompt: ReadyP
   if (validation.status === "invalid") {
     return failure({ ...meta, kind: "validation-failed", message: "L'email résolu est refusé par la validation finale.", issues: validation.issues, output: text })
   }
-  return { status: "success", config: validation.config, draft: draft.data, model: response.model || model, stopReason: response.stop_reason, ...meta }
+  return { status: "success", config: validation.config, draft: draft.data, model: response.model || model, stopReason: "end_turn", ...meta }
 }
 
 /* -------------------------------------------------------------------------- */

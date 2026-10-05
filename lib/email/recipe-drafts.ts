@@ -171,7 +171,8 @@ const empathyCues = ["demandeur", "sans emploi", "chomage", "recherche d'emploi"
 const fold = (value: string) => value.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase()
 
 /** Surface d'empathie : décidée par le code d'après l'audience (mêmes indices que le Draft V1), jamais par le modèle. */
-export function surfaceIntentFor(audience: string): "default" | "empathy" {
+export function surfaceIntentFor(audience: string, target?: string): "default" | "empathy" {
+  if (target) return target === "demandeurs_emploi" ? "empathy" : "default"
   const folded = fold(audience)
   return empathyCues.some((cue) => folded.includes(cue)) ? "empathy" : "default"
 }
@@ -206,7 +207,7 @@ function discoveryComposition(request: EmailRecipeRequest, draft: DiscoveryDraft
     preheader: draft.preheader,
     heroLayout,
     visualIntent: draft.visualIntent,
-    surfaceIntent: surfaceIntentFor(request.audience),
+    surfaceIntent: surfaceIntentFor(request.audience, request.target),
     seed: request.campaignName,
     hero: heroOf(draft, heroLayout) as EmailRecipeComposition["hero"],
     sections: [

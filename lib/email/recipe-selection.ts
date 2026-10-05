@@ -41,6 +41,14 @@ export const emailRecipeIntentRecipes = {
 } as const satisfies Record<EmailRecipeIntent, EmailRecipeId>
 
 /**
+ * Cibles de l'interface, identiques aux identifiants des cinq audiences de la
+ * couche Brand (un test garde l'égalité). Elles décident de la voix : la
+ * requête n'a plus à la deviner dans un texte libre.
+ */
+export const emailRecipeTargets = ["reconversion", "actifs_en_poste", "alternants", "b2b_rh", "demandeurs_emploi"] as const
+export type EmailRecipeTarget = (typeof emailRecipeTargets)[number]
+
+/**
  * Requête V2 : celle du moteur actuel, avec une intention facultative et un
  * objectif facultatif (l'un ou l'autre suffit). Le schéma de départ n'est pas
  * modifié : il est étendu.
@@ -48,6 +56,8 @@ export const emailRecipeIntentRecipes = {
 export const EmailRecipeRequestSchema = EmailGenerationRequestSchema.extend({
   intent: z.enum(emailRecipeIntents, { error: "Intention inconnue." }).optional(),
   objective: z.enum(emailObjectives.map((objective) => objective.value) as [string, ...string[]], { error: "Objectif inconnu." }).optional(),
+  /** Cible contrôlée : source de la voix (vouvoiement, tutoiement, ton). Sans elle, la voix se déduit du texte de l'audience. */
+  target: z.enum(emailRecipeTargets, { error: "Cible inconnue." }).optional(),
 })
 
 export type EmailRecipeRequest = z.infer<typeof EmailRecipeRequestSchema>

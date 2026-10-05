@@ -15,6 +15,7 @@
  *
  * Domaine Email uniquement : aucun import depuis `lib/landing`.
  */
+import { emailObjectives } from "./demo-generator"
 import { buildRecipeBrandContext, type RecipeBrandContext, type RecipeBrandProvenance } from "./recipe-brand-context"
 import { buildRecipeDraftJsonSchema, buildRecipeTransportSchema } from "./recipe-drafts"
 import {
@@ -127,12 +128,14 @@ function requestForPrompt(request: EmailRecipeRequest) {
     ...(request.subject ? { subject: request.subject } : {}),
     brief: request.brief,
     audience: request.audience,
+    // L'angle demandé (objectif de l'ancien vocabulaire) : il nuance R1 (découverte ou accompagnement), jamais la recette.
+    ...(request.objective ? { focus: emailObjectives.find((objective) => objective.value === request.objective)?.label } : {}),
     ...(request.facts && request.facts.length > 0 ? { facts: request.facts.map((fact) => fact.statement) } : {}),
   }
 }
 
 function build(recipe: EmailRecipeId, system: string, request: EmailRecipeRequest): EmailRecipePromptReady {
-  const { context, provenance } = buildRecipeBrandContext(recipe, request.audience)
+  const { context, provenance } = buildRecipeBrandContext(recipe, request.audience, request.target)
   const outputSchema = buildRecipeDraftJsonSchema(recipe)
   return {
     status: "ready",

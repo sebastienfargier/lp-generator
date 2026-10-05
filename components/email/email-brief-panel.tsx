@@ -19,12 +19,17 @@ import {
   emailFactsInputError,
   type EmailGeneratorExample,
   type EmailGeneratorForm,
+  type EmailGeneratorIntent,
+  type EmailGeneratorTarget,
 } from "@/lib/email/generator-form"
 import type { EmailGeneratorError } from "@/lib/email/generator-state"
 
 type EmailBriefPanelProps = {
   form: EmailGeneratorForm
-  objectives: readonly { value: EmailGeneratorForm["objective"]; label: string }[]
+  /** Intentions métier : l'utilisateur ne voit jamais la recette que le moteur en déduit. */
+  intents: readonly { value: EmailGeneratorIntent; label: string; hint: string }[]
+  /** Cibles : les audiences de la marque ; elles décident de la voix côté serveur. */
+  targets: readonly { value: EmailGeneratorTarget; label: string }[]
   /** Exemples de brief : un clic préremplit le formulaire, sans lancer de génération. */
   examples: readonly EmailGeneratorExample[]
   /** Erreur de la dernière génération ; l'aperçu précédent reste affiché. */
@@ -42,7 +47,8 @@ const optional = <span className="font-normal text-muted-foreground">(facultatif
 
 export function EmailBriefPanel({
   form,
-  objectives,
+  intents,
+  targets,
   examples,
   error,
   pending,
@@ -107,14 +113,55 @@ export function EmailBriefPanel({
         </Field>
 
         <Field>
-          <FieldLabel htmlFor="email-subject">Objet {optional}</FieldLabel>
-          <Input
-            id="email-subject"
-            aria-describedby="email-subject-help"
-            value={form.subject}
-            onChange={(event) => update("subject", event.target.value)}
-          />
-          <FieldDescription id="email-subject-help">Laissez vide : l&apos;IA le propose.</FieldDescription>
+          <FieldLabel htmlFor="email-intent">Intention</FieldLabel>
+          <Select
+            items={intents}
+            value={form.intent || null}
+            onValueChange={(value) => {
+              const intent = intents.find((item) => item.value === value)
+              if (intent) update("intent", intent.value)
+            }}
+          >
+            <SelectTrigger id="email-intent" className="w-full">
+              <SelectValue placeholder="Choisir une intention" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                {intents.map((intent) => (
+                  <SelectItem key={intent.value} value={intent.value}>
+                    {intent.label}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+          <FieldDescription>{intents.find((item) => item.value === form.intent)?.hint ?? "Ce que l'email doit permettre."}</FieldDescription>
+        </Field>
+
+        <Field>
+          <FieldLabel htmlFor="email-target">Cible</FieldLabel>
+          <Select
+            items={targets}
+            value={form.target || null}
+            onValueChange={(value) => {
+              const target = targets.find((item) => item.value === value)
+              if (target) update("target", target.value)
+            }}
+          >
+            <SelectTrigger id="email-target" className="w-full">
+              <SelectValue placeholder="Choisir une cible" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                {targets.map((target) => (
+                  <SelectItem key={target.value} value={target.value}>
+                    {target.label}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+          <FieldDescription>Elle règle le ton et l&apos;adresse de l&apos;email.</FieldDescription>
         </Field>
 
         <Field>
@@ -132,39 +179,14 @@ export function EmailBriefPanel({
         </Field>
 
         <Field>
-          <FieldLabel htmlFor="email-audience">Audience</FieldLabel>
+          <FieldLabel htmlFor="email-subject">Objet {optional}</FieldLabel>
           <Input
-            id="email-audience"
-            required
-            placeholder="Ex. Adultes en réflexion sur leur orientation"
-            value={form.audience}
-            onChange={(event) => update("audience", event.target.value)}
+            id="email-subject"
+            aria-describedby="email-subject-help"
+            value={form.subject}
+            onChange={(event) => update("subject", event.target.value)}
           />
-        </Field>
-
-        <Field>
-          <FieldLabel htmlFor="email-objective">Objectif</FieldLabel>
-          <Select
-            items={objectives}
-            value={form.objective}
-            onValueChange={(value) => {
-              const objective = objectives.find((item) => item.value === value)
-              if (objective) update("objective", objective.value)
-            }}
-          >
-            <SelectTrigger id="email-objective" className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                {objectives.map((objective) => (
-                  <SelectItem key={objective.value} value={objective.value}>
-                    {objective.label}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
+          <FieldDescription id="email-subject-help">Laissez vide : l&apos;IA le propose.</FieldDescription>
         </Field>
 
         <Field data-invalid={factsError ? true : undefined}>

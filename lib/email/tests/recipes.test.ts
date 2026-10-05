@@ -611,11 +611,11 @@ describe("recettes Email V2 : frontières et non-régression", () => {
     assert.deepEqual(users.sort(), ["recipe-brand-context.ts", "recipe-resolver.ts", "recipe-validation.ts"])
   })
 
-  test("le moteur V1 (client, schéma, prompt, brouillon, resolver, route) ne connaît pas les recettes", () => {
-    for (const path of ["lib/email/anthropic.ts", "lib/email/anthropic-schema.ts", "lib/email/draft-prompt.ts", "lib/email/generation-draft.ts", "lib/email/draft-resolver.ts", "lib/email/generate-handler.ts", "lib/email/generation-context.ts", "lib/email/image-catalog.ts", "app/api/generate-email/route.ts"]) {
+  test("le moteur V1 conservé (client, schéma, prompt, brouillon, resolver) ne connaît pas les recettes ; l'interface non plus (elle ne voit que des intentions)", () => {
+    for (const path of ["lib/email/anthropic.ts", "lib/email/anthropic-schema.ts", "lib/email/draft-prompt.ts", "lib/email/generation-draft.ts", "lib/email/draft-resolver.ts", "lib/email/generation-context.ts", "lib/email/image-catalog.ts"]) {
       assert.ok(!/recipe|image-bank/.test(code(path)), path)
     }
-    for (const file of readdirSync(join(root, "components/email"))) assert.ok(!/recipe/.test(read(`components/email/${file}`)), file)
+    for (const file of readdirSync(join(root, "components/email"))) assert.ok(!/recipe/i.test(read(`components/email/${file}`)), file)
   })
 
   test("l'aperçu V1 est inchangé : les quatre visuels de démo et la banque V2 sont deux mappings fermés distincts", () => {

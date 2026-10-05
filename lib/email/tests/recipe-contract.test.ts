@@ -275,6 +275,15 @@ describe("recettes V2 : contexte Brand compact", () => {
     assert.deepEqual(buildRecipeBrandContext("discovery-reassurance", "Personnes en recherche d'emploi").context.voice.audience?.label, "Demandeurs d'emploi")
   })
 
+  test("la cible contrôlée l'emporte sur le texte libre de l'audience pour décider de la voix", () => {
+    assert.equal(buildRecipeBrandContext("discovery-reassurance", "Personnes en recherche d'emploi", "alternants").context.voice.address, "tutoiement")
+    assert.equal(buildRecipeBrandContext("discovery-reassurance", "Alternants en entreprise", "reconversion").context.voice.address, "vouvoiement")
+    assert.equal(buildRecipeBrandContext("brand-proof", "Adultes", "demandeurs_emploi").context.voice.audience?.label, "Demandeurs d'emploi")
+    assert.equal(surfaceIntentFor("Alternants", "demandeurs_emploi"), "empathy")
+    assert.equal(surfaceIntentFor("Personnes en recherche d'emploi", "reconversion"), "default")
+    assert.equal(surfaceIntentFor("Personnes en recherche d'emploi"), "empathy", "sans cible : indices lexicaux")
+  })
+
   test("règles de rédaction : courtes, sourcées, et formulations à risque venues des règles de terminologie existantes", () => {
     assert.equal(emailWritingRules.length, 7)
     for (const rule of emailWritingRules) assert.ok(rule.text.length < 160, rule.text)
@@ -737,22 +746,24 @@ describe("recettes V2 : frontières et runtime V1 inchangé", () => {
     assert.deepEqual(users.sort(), ["recipe-brand-context.ts", "recipe-resolver.ts", "recipe-validation.ts"])
   })
 
-  test("le moteur V1, la route, le gestionnaire et l'interface ne connaissent aucun module V2", () => {
-    const v2 = /recipe-selection|recipe-drafts|recipe-brand-context|recipe-prompts|recipe-draft-fixtures|recipe-resolver|recipe-validation|image-bank/
-    for (const path of ["lib/email/anthropic.ts", "lib/email/anthropic-schema.ts", "lib/email/draft-prompt.ts", "lib/email/generation-draft.ts", "lib/email/draft-resolver.ts", "lib/email/generate-handler.ts", "lib/email/generation-context.ts", "lib/email/generation-request.ts", "lib/email/ai-prompt.ts", "lib/email/image-catalog.ts", "app/api/generate-email/route.ts"]) {
+  test("le moteur V1 conservé ne connaît aucun module V2 ; l'interface et la route n'en importent aucun (le gestionnaire seul appelle le moteur V2)", () => {
+    const v2 = /recipe-selection|recipe-drafts|recipe-brand-context|recipe-prompts|recipe-draft-fixtures|recipe-resolver|recipe-validation|image-bank|anthropic-v2/
+    for (const path of ["lib/email/anthropic.ts", "lib/email/anthropic-schema.ts", "lib/email/draft-prompt.ts", "lib/email/generation-draft.ts", "lib/email/draft-resolver.ts", "lib/email/generation-context.ts", "lib/email/generation-request.ts", "lib/email/ai-prompt.ts", "lib/email/image-catalog.ts"]) {
       assert.ok(!v2.test(code(path)), path)
     }
+    assert.ok(!v2.test(code("app/api/generate-email/route.ts")), "la route délègue au gestionnaire")
     for (const dir of ["components/email", "app/email-generator"]) {
       for (const name of readdirSync(join(root, dir))) if (/\.tsx?$/.test(name)) assert.ok(!v2.test(read(join(dir, name))), `${dir}/${name}`)
     }
     assert.ok(emailDraftHeroBlocks.length === 3, "le vocabulaire V1 est intact")
   })
 
-  test("le gestionnaire HTTP appelle toujours le moteur V1 (un seul appel de moteur, Draft V1)", () => {
+  test("le gestionnaire HTTP appelle le moteur V2, une seule fois ; le moteur V1 reste dans le dépôt, sans être appelé", () => {
     const handler = read("lib/email/generate-handler.ts")
     assert.equal((handler.match(/engine\(/g) ?? []).length, 1)
-    assert.match(handler, /generateEmailWithClaude/)
-    assert.match(read("lib/email/anthropic.ts"), /buildEmailDraftPrompt/)
-    assert.ok(!/recipe/i.test(read("lib/email/anthropic.ts")))
+    assert.match(handler, /generateEmailV2/)
+    assert.ok(!/generateEmailWithClaude|generateEmailFromPrompt|buildEmailDraftPrompt/.test(code("lib/email/generate-handler.ts")))
+    for (const path of ["lib/email/anthropic.ts", "lib/email/draft-prompt.ts", "lib/email/generation-draft.ts", "lib/email/draft-resolver.ts"]) assert.ok(statSync(join(root, path)).size > 1000, `${path} conservé`)
+    assert.match(read("lib/email/anthropic.ts"), /export function generateEmailWithClaude/)
   })
 })

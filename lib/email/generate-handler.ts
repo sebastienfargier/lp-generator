@@ -1,10 +1,16 @@
 import { z } from "zod"
 
-import { generateEmailWithClaude, type EmailEngineResult, type EmailGenerationErrorKind } from "./anthropic"
-import { emailDemoObjectives, emailDemoVisuals } from "./demo-generator"
+import type { EmailGenerationErrorKind } from "./anthropic"
+import { generateEmailV2, type EmailV2EngineResult } from "./anthropic-v2"
 import type { EmailGenerationSuccess } from "./generation"
-import { emailFactsLimits } from "./generator-form"
-import type { EmailGenerationRequest } from "./generation-request"
+import {
+  emailFactsLimits,
+  emailGeneratorIntentValues,
+  emailGeneratorTargets,
+  emailGeneratorTargetValues,
+  type EmailGeneratorIntent,
+} from "./generator-form"
+import type { EmailRecipeRequest } from "./recipe-selection"
 import { EmailPreviewError, toPreviewHtml } from "./preview"
 import { EmailTemplateError, renderEmail } from "./renderer"
 
@@ -12,16 +18,19 @@ import { EmailTemplateError, renderEmail } from "./renderer"
  * Logique de `POST /api/generate-email`, hors du fichier de route (Next n'y
  * autorise que les exports de méthodes HTTP). Serveur uniquement.
  *
- * Corps du formulaire → validation → refus des demandes que la V1 ne génère
- * pas → UN appel au moteur Claude → rendu → réponse publique. Pas de relance,
- * et surtout pas de repli sur le mode démo : une erreur du moteur est une
- * erreur publique, jamais un faux succès déterministe. Le navigateur ne reçoit
- * que l'email rendu ou une erreur courte : sortie brute, brouillon,
- * configuration résolue, tokens, identifiant de requête et détails du SDK
- * restent sur le serveur.
+ * Corps du formulaire → validation → requête V2 (intention et cible
+ * contrôlées) → UN appel au moteur Email V2 → rendu → réponse publique. Le
+ * moteur choisit la recette de façon déterministe et n'appelle Claude qu'une
+ * fois, avec le prompt et le schéma de cette recette. Pas de relance, et
+ * surtout pas de repli : ni sur le moteur V1, ni sur le mode démo. Une erreur
+ * du moteur est une erreur publique, jamais un faux succès. Le navigateur ne
+ * reçoit que l'email rendu ou une erreur courte : sortie brute, brouillon,
+ * recette, configuration résolue, prompt, contexte, provenance, tokens,
+ * identifiant de requête et détails du SDK restent sur le serveur.
  *
- * Le moteur déterministe (`demo-generator.ts`, `generation.ts`) reste
- * importable et testé à part ; cette route ne l'utilise plus.
+ * Le moteur V1 (`anthropic.ts`, Draft, resolver) et le moteur déterministe de
+ * démonstration restent importables et testés à part ; cette route ne les
+ * utilise plus.
  *
  * La forme de la réponse est celle que le client lit déjà (`status`, `title`,
  * `issues`), avec un `code` stable en plus pour une erreur.
@@ -31,12 +40,11 @@ import { EmailTemplateError, renderEmail } from "./renderer"
 const maxBodyLength = 100_000
 
 /**
- * Corps accepté par la route. L'objet est facultatif (vide, Claude le propose ;
- * rempli, il reste l'objet final) ; les informations à reprendre sont des
- * lignes de texte, converties en faits `{ statement }` du contrat existant.
- * Aucun disclaimer ne se choisit ici. `promotion` et `visual` (jeu d'essai)
- * restent acceptés par le schéma pour être refusés explicitement plus bas,
- * jamais traités : l'interface ne les propose plus, le serveur les refuse.
+ * Corps accepté par la route : ce que le formulaire envoie. Intention et cible
+ * sont des identifiants fermés ; les informations sont des lignes de texte,
+ * converties en faits `{ statement }`. L'objet est facultatif (vide, Claude le
+ * propose ; rempli, il reste l'objet final). Rien d'autre n'est accepté : ni
+ * promotion, ni offre, ni visuel, ni mention légale, ni recette.
  */
 const required = (label: string) => z.string().trim().min(1, `${label} est requis.`)
 
@@ -48,9 +56,8 @@ const EmailGenerateBodySchema = z.strictObject({
     .transform((value) => (value === "" ? undefined : value))
     .optional(),
   brief: required("Le brief"),
-  audience: required("L'audience"),
-  objective: z.enum(emailDemoObjectives.map((objective) => objective.value) as [string, ...string[]], { error: "Objectif inconnu." }),
-  visual: z.enum(emailDemoVisuals, { error: "Campagne visuelle inconnue." }).optional(),
+  intent: z.enum(emailGeneratorIntentValues, { error: "Intention inconnue." }),
+  target: z.enum(emailGeneratorTargetValues, { error: "Cible inconnue." }),
   facts: z
     .array(z.string().trim().min(1, "Une information ne peut pas être vide.").max(emailFactsLimits.maxLength, `Une information tient en ${emailFactsLimits.maxLength} caractères au maximum.`))
     .max(emailFactsLimits.maxCount, `${emailFactsLimits.maxCount} informations au maximum.`)
@@ -70,6 +77,7 @@ export type EmailPublicErrorCode =
   | "unresolvable"
   | "invalid-email"
   | "validation-failed"
+  | "brand-violation"
   | "rendering"
   | "internal"
 
@@ -82,7 +90,8 @@ export type EmailPublicError = {
 
 export type EmailGenerateResponse = EmailGenerationSuccess | EmailPublicError
 
-export type EmailEngine = (request: EmailGenerationRequest) => Promise<EmailEngineResult>
+/** Moteur Email V2 : requête de recette → email résolu ou erreur. */
+export type EmailEngine = (request: EmailRecipeRequest) => Promise<EmailV2EngineResult>
 
 export type EmailHandlerOptions = {
   /** Moteur de génération ; par défaut Claude. Injecté par les tests. */
@@ -98,6 +107,7 @@ const mapping = (status: number, code: EmailPublicErrorCode, message: string, ti
 
 const invalidRequest = mapping(400, "invalid-request", "Le brief est incomplet ou invalide : vérifiez les informations du formulaire.", "Brief incomplet")
 const unsupported = mapping(422, "unsupported", "Cette demande n'est pas encore prise en charge par la génération.", "Demande non prise en charge")
+const brandViolation = mapping(422, "brand-violation", "L'email généré ne respecte pas une règle de marque. Réessayez.")
 const configuration = mapping(500, "configuration", "Le service de génération n'est pas configuré. Contactez l'équipe.")
 const providerError = mapping(502, "provider-error", "Le service de génération est temporairement indisponible. Réessayez dans un instant.")
 const internal = mapping(500, "internal", "La génération a rencontré une erreur interne. Réessayez plus tard.")
@@ -128,18 +138,33 @@ export const emailPublicErrors: Record<EmailGenerationErrorKind, PublicMapping> 
   "draft-resolution": mapping(422, "unresolvable", "Le contenu généré n'a pas pu être assemblé en email. Réessayez."),
   "invalid-config": mapping(422, "invalid-email", "L'email généré est invalide. Réessayez."),
   "validation-failed": mapping(422, "validation-failed", "L'email généré ne respecte pas les règles de contenu. Réessayez."),
+  "brand-violation": brandViolation,
   unexpected: internal,
 }
 
-/** Corps validé → requête du contrat existant : l'objet seulement s'il est rempli, les informations en `{ statement }`. */
-function toGenerationRequest(body: z.output<typeof EmailGenerateBodySchema>): EmailGenerationRequest {
+/**
+ * Intention de l'interface → champs de la requête V2. Déterministe : la
+ * recette se déduit ensuite de ces champs (`selectEmailRecipe`), jamais du
+ * texte du brief. « Accompagnement » et « orientation » mènent à la même
+ * famille d'email, avec un angle différent.
+ */
+const intentRequests = {
+  orientation: { intent: "discovery", objective: "decouverte-formations" },
+  accompagnement: { intent: "discovery", objective: "accompagnement" },
+  newsletter: { intent: "editorial", emailType: "newsletter" },
+  preuves: { intent: "brand-proof" },
+} as const satisfies Record<EmailGeneratorIntent, Partial<EmailRecipeRequest>>
+
+/** Corps validé → requête V2 : la cible contrôlée est transmise telle quelle, son libellé tient lieu d'audience. */
+export function toEmailRecipeRequest(body: z.output<typeof EmailGenerateBodySchema>): EmailRecipeRequest {
+  const target = emailGeneratorTargets.find((entry) => entry.value === body.target)!
   return {
     campaignName: body.campaignName,
     ...(body.subject ? { subject: body.subject } : {}),
     brief: body.brief,
-    audience: body.audience,
-    // Promotion est refusée avant : seuls les trois objectifs du contrat arrivent ici.
-    objective: body.objective as EmailGenerationRequest["objective"],
+    audience: target.label,
+    target: target.value,
+    ...intentRequests[body.intent],
     ...(body.facts && body.facts.length > 0 ? { facts: body.facts.map((statement) => ({ statement })) } : {}),
   }
 }
@@ -154,7 +179,7 @@ function fail(error: PublicMapping, issues: EmailPublicError["issues"] = []) {
 const defaultLog: NonNullable<EmailHandlerOptions["log"]> = (entry) => console.error("[email-generation]", JSON.stringify(entry))
 
 export async function handleEmailGeneration(request: Request, options: EmailHandlerOptions = {}): Promise<Response> {
-  const engine = options.engine ?? ((input: EmailGenerationRequest) => generateEmailWithClaude(input))
+  const engine = options.engine ?? ((input: EmailRecipeRequest) => generateEmailV2(input))
   const log = options.log ?? defaultLog
 
   // 1. Le corps : borné, JSON.
@@ -173,18 +198,10 @@ export async function handleEmailGeneration(request: Request, options: EmailHand
     return fail(invalidRequest, brief.error.issues.map((issue) => ({ path: issue.path.join(".") || "brief", message: issue.message })))
   }
 
-  // 3. Hors périmètre de la V1 : refusé ici, jamais fabriqué ni ignoré en silence.
-  if (brief.data.objective === "promotion") {
-    return fail(unsupported, [{ path: "objective", message: "Les emails promotionnels ne sont pas encore générés par l'IA : ils exigent une offre validée." }])
-  }
-  if (brief.data.visual) {
-    return fail(unsupported, [{ path: "visual", message: "Les campagnes visuelles de démonstration ne sont pas générées par l'IA." }])
-  }
-
-  // 4. Un seul appel au moteur.
-  let result: EmailEngineResult
+  // 3. Un seul appel au moteur V2 ; la recette est choisie par le moteur, avant l'appel.
+  let result: EmailV2EngineResult
   try {
-    result = await engine(toGenerationRequest(brief.data))
+    result = await engine(toEmailRecipeRequest(brief.data))
   } catch {
     log({ kind: "engine-threw" })
     return fail(internal)
@@ -197,7 +214,7 @@ export async function handleEmailGeneration(request: Request, options: EmailHand
     return fail(emailPublicErrors[kind] ?? internal)
   }
 
-  // 5. Le rendu réel du moteur Email : l'EmailConfig est déjà validé.
+  // 4. Le rendu réel du moteur Email : l'EmailConfig est déjà validé.
   try {
     const html = renderEmail(result.config)
     const success: EmailGenerationSuccess = {

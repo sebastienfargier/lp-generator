@@ -7,18 +7,50 @@
  */
 import type { EmailPublicErrorCode } from "./generate-handler"
 
-/** Objectifs que le moteur V1 génère, avec leur libellé utilisateur. */
-export const emailGeneratorObjectiveValues = ["decouverte-formations", "accompagnement", "evolution-carriere"] as const
+/**
+ * Intentions proposées à l'utilisateur, en vocabulaire métier. Le moteur en
+ * déduit la recette de façon déterministe (côté serveur) : l'utilisateur ne
+ * voit ni recette, ni variante, ni image, ni claim. Deux intentions mènent à la
+ * même famille d'email (découverte), avec un angle différent.
+ */
+export const emailGeneratorIntents = [
+  { value: "orientation", label: "Découverte / orientation", hint: "Aider à se situer et à découvrir des métiers et des formations." },
+  { value: "accompagnement", label: "Accompagnement / évolution", hint: "Expliquer l'accompagnement et rassurer sur une évolution." },
+  { value: "newsletter", label: "Newsletter / contenu éditorial", hint: "Une newsletter à lire : rubriques et conseils." },
+  { value: "preuves", label: "Preuves Studi / chiffres clés", hint: "Des repères vérifiés sur Studi, sans offre." },
+] as const
 
-export type EmailGeneratorObjective = (typeof emailGeneratorObjectiveValues)[number]
+export type EmailGeneratorIntent = (typeof emailGeneratorIntents)[number]["value"]
+
+export const emailGeneratorIntentValues = emailGeneratorIntents.map((intent) => intent.value) as [EmailGeneratorIntent, ...EmailGeneratorIntent[]]
+
+/**
+ * Cibles : les cinq audiences de la couche Brand, par leur identifiant
+ * technique (un test garde l'égalité avec la couche Brand). La cible décide de la
+ * voix (vouvoiement, tutoiement, ton) côté serveur : ce module ne porte aucune
+ * règle de marque, seulement des libellés.
+ */
+export const emailGeneratorTargets = [
+  { value: "reconversion", label: "Personnes en reconversion" },
+  { value: "actifs_en_poste", label: "Actifs en poste" },
+  { value: "alternants", label: "Alternants" },
+  { value: "b2b_rh", label: "Entreprises / RH" },
+  { value: "demandeurs_emploi", label: "Demandeurs d'emploi" },
+] as const
+
+export type EmailGeneratorTarget = (typeof emailGeneratorTargets)[number]["value"]
+
+export const emailGeneratorTargetValues = emailGeneratorTargets.map((target) => target.value) as [EmailGeneratorTarget, ...EmailGeneratorTarget[]]
 
 export type EmailGeneratorForm = {
   campaignName: string
+  /** Vide tant que l'utilisateur n'a pas choisi. */
+  intent: EmailGeneratorIntent | ""
+  /** Vide tant que l'utilisateur n'a pas choisi. */
+  target: EmailGeneratorTarget | ""
+  brief: string
   /** Facultatif : vide, l'IA propose l'objet. */
   subject: string
-  brief: string
-  audience: string
-  objective: EmailGeneratorObjective
   /** Une information par ligne ; facultatif. */
   facts: string
 }
@@ -58,18 +90,19 @@ export function emailFactsInputError(input: string | undefined): string | null {
 
 export const emptyEmailGeneratorForm: EmailGeneratorForm = {
   campaignName: "",
-  subject: "",
+  intent: "",
+  target: "",
   brief: "",
-  audience: "",
-  objective: "decouverte-formations",
+  subject: "",
   facts: "",
 }
 
-/** Champs obligatoires remplis, objectif valide, informations dans leurs limites. L'objet est facultatif. */
+/** Champs obligatoires remplis, intention et cible valides, informations dans leurs limites. L'objet est facultatif. */
 export function canGenerateEmail(form: EmailGeneratorForm): boolean {
   return (
-    [form.campaignName, form.brief, form.audience].every((value) => value.trim() !== "") &&
-    (emailGeneratorObjectiveValues as readonly string[]).includes(form.objective) &&
+    [form.campaignName, form.brief].every((value) => value.trim() !== "") &&
+    (emailGeneratorIntentValues as readonly string[]).includes(form.intent) &&
+    (emailGeneratorTargetValues as readonly string[]).includes(form.target) &&
     emailFactsInputError(form.facts) === null
   )
 }
@@ -86,8 +119,8 @@ export function toEmailRequestBody(form: EmailGeneratorForm) {
     campaignName: form.campaignName.trim(),
     ...(subject ? { subject } : {}),
     brief: form.brief.trim(),
-    audience: form.audience.trim(),
-    objective: form.objective,
+    intent: form.intent,
+    target: form.target,
     ...(facts.length > 0 ? { facts } : {}),
   }
 }
@@ -117,6 +150,7 @@ export const emailErrorFamilies: Record<EmailClientErrorCode, EmailErrorFamily> 
   unresolvable: "temporary",
   "invalid-email": "temporary",
   "validation-failed": "temporary",
+  "brand-violation": "temporary",
   rendering: "temporary",
   network: "temporary",
   configuration: "configuration",
@@ -127,8 +161,8 @@ const fieldLabels: Record<string, string> = {
   campaignName: "Nom de campagne",
   subject: "Objet",
   brief: "Brief",
-  audience: "Audience",
-  objective: "Objectif",
+  intent: "Intention",
+  target: "Cible",
   facts: "Informations à reprendre telles quelles",
 }
 

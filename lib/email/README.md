@@ -640,6 +640,38 @@ renderEmail → aperçu
   Aucune règle actuelle n'est approuvée ; rien ne bloque, rien ne se corrige,
   aucune relance.
 
+### Moteur V2 branché au produit
+
+`POST /api/generate-email` appelle désormais le moteur V2 (`anthropic-v2.ts`),
+pour les trois familles d'emails du formulaire :
+
+```
+formulaire (intention + cible contrôlées) → requête V2 → recette →
+prompt et schéma de CETTE recette → UN messages.create → Draft de la recette →
+resolver → EmailConfig → validation de recette → diagnostics de terminologie →
+politique de blocage → renderEmail → toPreviewHtml → réponse publique compacte
+```
+
+- Un seul appel par génération, jamais de relance (`maxRetries: 0`, délai de
+  `anthropic.ts`), jamais de repli : ni sur le moteur V1, ni sur la démo. Seul
+  le schéma de la recette choisie est envoyé.
+- Configuration, client, correspondance des erreurs du fournisseur et lecture
+  de la réponse sont ceux de `anthropic.ts`, exportés et partagés.
+- Politique de marque : seule une erreur d'une règle APPROUVÉE bloque
+  (`brand-violation`). Aucune règle actuelle ne l'est : conflits connus,
+  brouillons, avertissements et erreurs de règles en revue restent des
+  diagnostics serveur. Aucune correction automatique.
+- Formulaire : quatre intentions métier (orientation, accompagnement,
+  newsletter, preuves) et cinq cibles (les audiences Brand). La cible décide de
+  la voix (tutoiement des alternants, vouvoiement sinon) ; la recette, les
+  claims, les images et les surfaces ne sont jamais visibles ni choisies par
+  l'utilisateur.
+- Réponse publique inchangée : `status`, `subject`, `preheader`, `blockCount`,
+  `html`, `previewHtml`. Ni recette, ni Draft, ni prompt, ni contexte, ni
+  provenance, ni jetons.
+- Le moteur V1 (`anthropic.ts` : `generateEmailWithClaude`, Draft, resolver,
+  catalogue de quatre images) est conservé, testé, mais plus appelé par la route.
+
 ## Tests
 
 ```bash
@@ -657,6 +689,9 @@ socle ; seuls les cas de corruption injectent une source modifiée.
   chaque template identiques au manifeste.
 - `renderer.test.ts` : document, slots, échappement, surfaces, intégrité, et
   rendu des 36 lames sur Page.
+- `email-v2-runtime.test.ts` : moteur V2 de bout en bout avec un
+  fournisseur simulé (un appel, schéma de la recette seul, erreurs, aucun
+  repli).
 - `recipe-contract.test.ts` : contrat IA des recettes (sélection, trois
   Drafts, schémas de transport, contexte Brand, prompts, aller-retour de six
   Drafts, Drafts invalides, fuites, politique de terminologie, frontières).

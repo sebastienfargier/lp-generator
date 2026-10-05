@@ -4,8 +4,8 @@ import { ArrowLeftIcon } from "lucide-react"
 
 import { EmailWorkspace } from "@/components/email/email-workspace"
 import { Button } from "@/components/ui/button"
-import { emailObjectives } from "@/lib/email/demo-generator"
-import { buildEmailGeneratorExamples } from "@/lib/email/generator-examples"
+import { emailGeneratorIntents, emailGeneratorTargets } from "@/lib/email/generator-form"
+import { emailGeneratorExamples } from "@/lib/email/generator-examples"
 
 export const metadata: Metadata = {
   title: "Email Generator",
@@ -23,7 +23,7 @@ export default function EmailGeneratorPage() {
         <h1 className="text-body font-semibold">Email Generator</h1>
         <p className="hidden truncate text-caption text-muted-foreground sm:block">L&apos;IA compose l&apos;email à partir de lames contrôlées.</p>
       </header>
-      <EmailWorkspace objectives={emailObjectives} examples={buildEmailGeneratorExamples()} />
+      <EmailWorkspace intents={emailGeneratorIntents} targets={emailGeneratorTargets} examples={emailGeneratorExamples} />
     </div>
   )
 }
