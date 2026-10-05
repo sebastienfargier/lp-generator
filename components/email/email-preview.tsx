@@ -22,6 +22,8 @@ type EmailPreviewProps = {
   html: string | null
   subject: string | null
   preheader: string | null
+  /** « Email généré · N lames » : dérivée de l'email réellement généré ; `null` avant toute génération. */
+  legend: string | null
   loading: boolean
   onLoad: () => void
 }
@@ -36,7 +38,7 @@ type EmailPreviewProps = {
  * interne, qui réduirait la largeur utile sous 600 px et déclencherait la
  * vue mobile. C'est la surface d'aperçu qui défile.
  */
-export function EmailPreview({ html, subject, preheader, loading, onLoad }: EmailPreviewProps) {
+export function EmailPreview({ html, subject, preheader, legend, loading, onLoad }: EmailPreviewProps) {
   const [viewport, setViewport] = useState<Viewport>("desktop")
   const surfaceRef = useRef<HTMLDivElement>(null)
   const [surface, setSurface] = useState<{ width: number; height: number }>()
@@ -67,9 +69,14 @@ export function EmailPreview({ html, subject, preheader, loading, onLoad }: Emai
           <h2 id="email-preview-title" className="text-body font-semibold">
             Aperçu
           </h2>
-          <p className="text-caption text-muted-foreground" aria-live="polite">
+          <p className="text-caption text-muted-foreground">
             {target.width} px{scale > 0 && scale < 1 ? ` · ${zoom} %` : ""}
           </p>
+          {legend && (
+            <p className="text-caption font-medium text-muted-foreground" aria-live="polite">
+              · {legend}
+            </p>
+          )}
         </div>
         <ToggleGroup
           variant="outline"
@@ -141,10 +148,12 @@ export function EmailPreview({ html, subject, preheader, loading, onLoad }: Emai
             />
           </div>
         ) : (
-          !html && (
-            <p className="self-center text-center text-body text-muted-foreground">
-              Aucun aperçu : la dernière génération est invalide.
-            </p>
+          !html &&
+          !loading && (
+            <div className="flex flex-col gap-1 self-center text-center">
+              <p className="text-body font-medium">Votre email apparaîtra ici après génération.</p>
+              <p className="text-body text-muted-foreground">Décrivez votre email, puis lancez la génération.</p>
+            </div>
           )
         )}
 
@@ -154,15 +163,21 @@ export function EmailPreview({ html, subject, preheader, loading, onLoad }: Emai
             className="absolute inset-0 flex items-center justify-center gap-2 bg-background/70 text-body text-muted-foreground"
           >
             <Spinner aria-hidden />
-            Génération de l&apos;email…
+            <span className="flex flex-col gap-0.5">
+              <span>Génération de l&apos;email…</span>
+              <span className="text-caption">La génération peut prendre une quinzaine de secondes.</span>
+            </span>
           </div>
         )}
       </div>
 
-      <p className="text-caption text-muted-foreground">
-        Aperçu : logo et pictos locaux, réseaux sociaux masqués, liens inactifs. Le HTML
-        exportable conserve ses jetons système et ses vrais liens.
-      </p>
+      {html && (
+        <p className="text-caption text-muted-foreground">
+          Aperçu : logo et pictos locaux, réseaux sociaux masqués, liens inactifs. Le HTML
+          exportable conserve ses jetons système et ses vrais liens. Les mentions légales ne
+          sont pas ajoutées automatiquement : vérifiez l&apos;email avant utilisation.
+        </p>
+      )}
     </section>
   )
 }

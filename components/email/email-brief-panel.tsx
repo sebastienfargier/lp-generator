@@ -2,7 +2,7 @@
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
+import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import {
   Select,
@@ -14,41 +14,47 @@ import {
 } from "@/components/ui/select"
 import { Spinner } from "@/components/ui/spinner"
 import { Textarea } from "@/components/ui/textarea"
-import type { EmailBrief, EmailDemoPreset, EmailDemoVisual } from "@/lib/email/demo-generator"
-import type { EmailGenerationError } from "@/lib/email/generation"
-
-const presetGroups = [
-  { value: "scenario", label: "Scénarios" },
-  { value: "campagne", label: "Campagnes visuelles" },
-] as const
+import {
+  describeEmailError,
+  emailFactsInputError,
+  type EmailGeneratorExample,
+  type EmailGeneratorForm,
+} from "@/lib/email/generator-form"
+import type { EmailGeneratorError } from "@/lib/email/generator-state"
 
 type EmailBriefPanelProps = {
-  brief: EmailBrief
-  objectives: readonly { value: EmailBrief["objective"]; label: string }[]
-  /** Briefs d'exemple : un clic préremplit le formulaire. */
-  presets: readonly EmailDemoPreset[]
-  /** Limite d'une campagne visuelle, affichée quand elle est choisie. */
-  notices: Partial<Record<EmailDemoVisual, string>>
+  form: EmailGeneratorForm
+  objectives: readonly { value: EmailGeneratorForm["objective"]; label: string }[]
+  /** Exemples de brief : un clic préremplit le formulaire, sans lancer de génération. */
+  examples: readonly EmailGeneratorExample[]
   /** Erreur de la dernière génération ; l'aperçu précédent reste affiché. */
-  error: EmailGenerationError | null
+  error: EmailGeneratorError | null
   pending: boolean
-  onBriefChange: (brief: EmailBrief) => void
+  /** Validation légère pour l'UX : le serveur reste l'autorité. */
+  canGenerate: boolean
+  /** « Générer l'email », « Génération… » ou « Régénérer » : dérivé de l'état de la page. */
+  submitLabel: string
+  onFormChange: (form: EmailGeneratorForm) => void
   onGenerate: () => void
 }
 
+const optional = <span className="font-normal text-muted-foreground">(facultatif)</span>
+
 export function EmailBriefPanel({
-  brief,
+  form,
   objectives,
-  presets,
-  notices,
+  examples,
   error,
   pending,
-  onBriefChange,
+  canGenerate,
+  submitLabel,
+  onFormChange,
   onGenerate,
 }: EmailBriefPanelProps) {
-  const update = <Key extends keyof EmailBrief>(key: Key, value: EmailBrief[Key]) =>
-    onBriefChange({ ...brief, [key]: value })
-  const notice = brief.visual ? notices[brief.visual] : undefined
+  const update = <Key extends keyof EmailGeneratorForm>(key: Key, value: EmailGeneratorForm[Key]) =>
+    onFormChange({ ...form, [key]: value })
+  const factsError = emailFactsInputError(form.facts)
+  const errorView = error ? describeEmailError(error) : null
 
   return (
     <form
@@ -64,75 +70,74 @@ export function EmailBriefPanel({
           Brief
         </h2>
         <p className="text-caption text-muted-foreground">
-          Mode démo — email assemblé localement à partir des lames, sans IA.
+          Décrivez l&apos;email à générer. Tous les champs sont obligatoires, sauf ceux marqués « facultatif ».
         </p>
       </header>
 
-      {presetGroups.map((group) => (
-        <div key={group.value} role="group" aria-label={group.label} className="flex flex-wrap items-center gap-2">
-          <span className="text-caption text-muted-foreground">{group.label}</span>
-          {presets
-            .filter((preset) => preset.group === group.value)
-            .map((preset) => {
-              const active = JSON.stringify(preset.brief) === JSON.stringify(brief)
-              return (
-                <Button
-                  key={preset.id}
-                  type="button"
-                  size="xs"
-                  variant={active ? "secondary" : "outline"}
-                  aria-pressed={active}
-                  disabled={pending}
-                  onClick={() => onBriefChange({ ...preset.brief })}
-                >
-                  {preset.label}
-                </Button>
-              )
-            })}
-        </div>
-      ))}
-
-      {notice && (
-        <Alert aria-live="polite">
-          <AlertTitle>Campagne visuelle de démonstration</AlertTitle>
-          <AlertDescription>{notice}</AlertDescription>
-        </Alert>
-      )}
+      <div role="group" aria-label="Exemples" className="flex flex-wrap items-center gap-2">
+        <span className="text-caption text-muted-foreground">Exemples</span>
+        {examples.map((example) => {
+          const active = JSON.stringify(example.form) === JSON.stringify(form)
+          return (
+            <Button
+              key={example.id}
+              type="button"
+              size="xs"
+              variant={active ? "secondary" : "outline"}
+              aria-pressed={active}
+              disabled={pending}
+              onClick={() => onFormChange({ ...example.form })}
+            >
+              {example.label}
+            </Button>
+          )
+        })}
+      </div>
 
       <FieldGroup className="gap-4">
         <Field>
           <FieldLabel htmlFor="email-campaign">Nom de campagne</FieldLabel>
           <Input
             id="email-campaign"
-            value={brief.campaignName}
+            required
+            placeholder="Ex. Trouver sa voie avec Studi"
+            value={form.campaignName}
             onChange={(event) => update("campaignName", event.target.value)}
           />
         </Field>
 
         <Field>
-          <FieldLabel htmlFor="email-subject">Objet</FieldLabel>
+          <FieldLabel htmlFor="email-subject">Objet {optional}</FieldLabel>
           <Input
             id="email-subject"
-            value={brief.subject}
+            aria-describedby="email-subject-help"
+            value={form.subject}
             onChange={(event) => update("subject", event.target.value)}
           />
+          <FieldDescription id="email-subject-help">Laissez vide : l&apos;IA le propose.</FieldDescription>
         </Field>
 
         <Field>
           <FieldLabel htmlFor="email-brief">Brief</FieldLabel>
           <Textarea
             id="email-brief"
+            required
             rows={5}
-            value={brief.brief}
+            aria-describedby="email-brief-help"
+            placeholder="Ex. Aider les lecteurs à clarifier leur projet et à découvrir les formations Studi."
+            value={form.brief}
             onChange={(event) => update("brief", event.target.value)}
           />
+          <FieldDescription id="email-brief-help">L&apos;intention éditoriale : ton, message, ce que le lecteur doit comprendre.</FieldDescription>
         </Field>
 
         <Field>
           <FieldLabel htmlFor="email-audience">Audience</FieldLabel>
           <Input
             id="email-audience"
-            value={brief.audience}
+            required
+            placeholder="Ex. Adultes en réflexion sur leur orientation"
+            value={form.audience}
             onChange={(event) => update("audience", event.target.value)}
           />
         </Field>
@@ -141,7 +146,7 @@ export function EmailBriefPanel({
           <FieldLabel htmlFor="email-objective">Objectif</FieldLabel>
           <Select
             items={objectives}
-            value={brief.objective}
+            value={form.objective}
             onValueChange={(value) => {
               const objective = objectives.find((item) => item.value === value)
               if (objective) update("objective", objective.value)
@@ -161,25 +166,55 @@ export function EmailBriefPanel({
             </SelectContent>
           </Select>
         </Field>
+
+        <Field data-invalid={factsError ? true : undefined}>
+          <FieldLabel htmlFor="email-facts">
+            Informations à reprendre telles quelles {optional}
+          </FieldLabel>
+          <Textarea
+            id="email-facts"
+            rows={4}
+            // `field-sizing: content` ignore `rows` : min-h-24 garantit environ 4 lignes visibles.
+            className="min-h-24"
+            aria-invalid={factsError ? true : undefined}
+            aria-describedby="email-facts-help"
+            placeholder={"Ex. Les formations sont accessibles en ligne.\nUn conseiller répond aux questions."}
+            value={form.facts}
+            onChange={(event) => update("facts", event.target.value)}
+          />
+          <FieldDescription id="email-facts-help">
+            Ajoutez ici les chiffres, dates ou informations qui doivent être respectés. Un élément par ligne.
+          </FieldDescription>
+          {factsError && <FieldError>{factsError}</FieldError>}
+        </Field>
       </FieldGroup>
 
-      <Button type="submit" disabled={pending} className="w-full">
-        {pending && <Spinner data-icon="inline-start" aria-label="Génération en cours" />}
-        {pending ? "Génération…" : "Générer l'email"}
-      </Button>
+      <div className="flex flex-col gap-2">
+        <Button type="submit" disabled={pending || !canGenerate} aria-busy={pending} className="w-full">
+          {pending && <Spinner data-icon="inline-start" aria-label="Génération en cours" />}
+          {submitLabel}
+        </Button>
+        {pending && (
+          <p className="text-caption text-muted-foreground" aria-live="polite">
+            La génération peut prendre une quinzaine de secondes.
+          </p>
+        )}
+      </div>
 
-      {error && (
+      {errorView && (
         <Alert variant="destructive" aria-live="polite">
-          <AlertTitle>{error.title}</AlertTitle>
+          <AlertTitle>{errorView.title}</AlertTitle>
           <AlertDescription>
-            <ul className="flex flex-col gap-2">
-              {error.issues.map((issue, index) => (
-                <li key={index}>
-                  <code className="font-mono text-caption">{issue.path}</code>
-                  <p>{issue.message}</p>
-                </li>
-              ))}
-            </ul>
+            {errorView.messages.length > 1 ? (
+              <ul className="flex flex-col gap-1">
+                {errorView.messages.map((message, index) => (
+                  <li key={index}>{message}</li>
+                ))}
+              </ul>
+            ) : (
+              <p>{errorView.messages[0]}</p>
+            )}
+            <p className="mt-2">{errorView.hint}</p>
           </AlertDescription>
         </Alert>
       )}

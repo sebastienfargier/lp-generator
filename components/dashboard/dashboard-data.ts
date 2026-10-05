@@ -49,8 +49,8 @@ export const tools: Tool[] = [
   },
   {
     title: "Emails",
-    description: "Mode démo : un email assemblé à partir des lames, sans IA.",
-    cta: "Ouvrir la démo",
+    description: "Décrivez votre email : l'IA le compose à partir de lames contrôlées.",
+    cta: "Générer un email",
     href: "/email-generator",
     icon: Mail,
   },

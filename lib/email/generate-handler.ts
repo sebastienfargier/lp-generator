@@ -1,7 +1,10 @@
+import { z } from "zod"
+
 import { generateEmailWithClaude, type EmailEngineResult, type EmailGenerationErrorKind } from "./anthropic"
-import { EmailBriefSchema } from "./demo-generator"
+import { emailDemoObjectives, emailDemoVisuals } from "./demo-generator"
 import type { EmailGenerationSuccess } from "./generation"
-import { emailBriefToGenerationRequest, type EmailGenerationRequest } from "./generation-request"
+import { emailFactsLimits } from "./generator-form"
+import type { EmailGenerationRequest } from "./generation-request"
 import { EmailPreviewError, toPreviewHtml } from "./preview"
 import { EmailTemplateError, renderEmail } from "./renderer"
 
@@ -9,7 +12,7 @@ import { EmailTemplateError, renderEmail } from "./renderer"
  * Logique de `POST /api/generate-email`, hors du fichier de route (Next n'y
  * autorise que les exports de méthodes HTTP). Serveur uniquement.
  *
- * Brief du formulaire → validation → refus des demandes que la V1 ne génère
+ * Corps du formulaire → validation → refus des demandes que la V1 ne génère
  * pas → UN appel au moteur Claude → rendu → réponse publique. Pas de relance,
  * et surtout pas de repli sur le mode démo : une erreur du moteur est une
  * erreur publique, jamais un faux succès déterministe. Le navigateur ne reçoit
@@ -26,6 +29,33 @@ import { EmailTemplateError, renderEmail } from "./renderer"
 
 /** Taille maximale du corps, en caractères : bien au-delà d'un brief valide. */
 const maxBodyLength = 100_000
+
+/**
+ * Corps accepté par la route. L'objet est facultatif (vide, Claude le propose ;
+ * rempli, il reste l'objet final) ; les informations à reprendre sont des
+ * lignes de texte, converties en faits `{ statement }` du contrat existant.
+ * Aucun disclaimer ne se choisit ici. `promotion` et `visual` (jeu d'essai)
+ * restent acceptés par le schéma pour être refusés explicitement plus bas,
+ * jamais traités : l'interface ne les propose plus, le serveur les refuse.
+ */
+const required = (label: string) => z.string().trim().min(1, `${label} est requis.`)
+
+const EmailGenerateBodySchema = z.strictObject({
+  campaignName: required("Le nom de campagne"),
+  subject: z
+    .string()
+    .trim()
+    .transform((value) => (value === "" ? undefined : value))
+    .optional(),
+  brief: required("Le brief"),
+  audience: required("L'audience"),
+  objective: z.enum(emailDemoObjectives.map((objective) => objective.value) as [string, ...string[]], { error: "Objectif inconnu." }),
+  visual: z.enum(emailDemoVisuals, { error: "Campagne visuelle inconnue." }).optional(),
+  facts: z
+    .array(z.string().trim().min(1, "Une information ne peut pas être vide.").max(emailFactsLimits.maxLength, `Une information tient en ${emailFactsLimits.maxLength} caractères au maximum.`))
+    .max(emailFactsLimits.maxCount, `${emailFactsLimits.maxCount} informations au maximum.`)
+    .optional(),
+})
 
 export type EmailPublicErrorCode =
   | "invalid-request"
@@ -101,6 +131,19 @@ export const emailPublicErrors: Record<EmailGenerationErrorKind, PublicMapping> 
   unexpected: internal,
 }
 
+/** Corps validé → requête du contrat existant : l'objet seulement s'il est rempli, les informations en `{ statement }`. */
+function toGenerationRequest(body: z.output<typeof EmailGenerateBodySchema>): EmailGenerationRequest {
+  return {
+    campaignName: body.campaignName,
+    ...(body.subject ? { subject: body.subject } : {}),
+    brief: body.brief,
+    audience: body.audience,
+    // Promotion est refusée avant : seuls les trois objectifs du contrat arrivent ici.
+    objective: body.objective as EmailGenerationRequest["objective"],
+    ...(body.facts && body.facts.length > 0 ? { facts: body.facts.map((statement) => ({ statement })) } : {}),
+  }
+}
+
 const headers = { "Cache-Control": "no-store" }
 
 function fail(error: PublicMapping, issues: EmailPublicError["issues"] = []) {
@@ -125,7 +168,7 @@ export async function handleEmailGeneration(request: Request, options: EmailHand
   }
 
   // 2. Le brief du formulaire : le serveur reste l'autorité, aucun appel s'il est invalide.
-  const brief = EmailBriefSchema.safeParse(body)
+  const brief = EmailGenerateBodySchema.safeParse(body)
   if (!brief.success) {
     return fail(invalidRequest, brief.error.issues.map((issue) => ({ path: issue.path.join(".") || "brief", message: issue.message })))
   }
@@ -141,7 +184,7 @@ export async function handleEmailGeneration(request: Request, options: EmailHand
   // 4. Un seul appel au moteur.
   let result: EmailEngineResult
   try {
-    result = await engine(emailBriefToGenerationRequest(brief.data))
+    result = await engine(toGenerationRequest(brief.data))
   } catch {
     log({ kind: "engine-threw" })
     return fail(internal)

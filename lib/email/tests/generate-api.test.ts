@@ -108,7 +108,7 @@ describe("route : le moteur réel, simulé", () => {
       ["pas du JSON", "pas du json", true],
       ["trop gros", "x".repeat(100_001), true],
       ["brief vide", {}, false],
-      ["champ en trop", { ...brief, facts: ["x"] }, false],
+      ["champ en trop", { ...brief, emailType: "promo" }, false],
       ["objectif inconnu", { ...brief, objective: "autre" }, false],
       ["tableau", [], false],
     ] as const) {
@@ -225,26 +225,21 @@ describe("route et client : branchement", () => {
     assert.ok(!/ANTHROPIC|process\.env|NEXT_PUBLIC/.test(handler), "le gestionnaire ne lit aucun secret")
   })
 
-  test("la clé Anthropic ne sort jamais : aucun composant client, aucune page, aucune variable publique ne l'importe", () => {
-    for (const path of ["components/email/email-workspace.tsx", "components/email/email-brief-panel.tsx", "components/email/email-preview.tsx", "app/email-generator/page.tsx"]) {
-      assert.ok(!/anthropic|ANTHROPIC|draft-prompt|generate-handler/i.test(read(path)), path)
+  test("la clé Anthropic ne sort jamais : aucun composant client, aucune page, aucune variable publique ne l'importe (types seulement)", () => {
+    for (const path of ["components/email/email-workspace.tsx", "components/email/email-brief-panel.tsx", "components/email/email-preview.tsx", "app/email-generator/page.tsx", "lib/email/generator-form.ts", "lib/email/generator-state.ts"]) {
+      const runtime = read(path).replace(/^import type [^\n]*\n/gm, "")
+      assert.ok(!/anthropic|ANTHROPIC|draft-prompt|generate-handler|process\.env/i.test(runtime), path)
     }
     assert.match(readFileSync(join(root, "components/email/email-workspace.tsx"), "utf8"), /^"use client"/)
   })
 
-  test("Q. le client garde le dernier email valide : seul un succès le remplace, une erreur ne l'efface jamais", () => {
+  test("Q. le client garde le dernier email valide : seul un succès le remplace (réducteur pur), une erreur ne l'efface jamais", () => {
     const workspace = read("components/email/email-workspace.tsx")
-    assert.equal((workspace.match(/setEmail\(/g) ?? []).length, 1)
-    assert.match(workspace, /result\.status === "success"\) \{[^}]*setEmail\(result\)/)
+    assert.match(workspace, /useReducer\(emailGeneratorReducer, initialEmailGeneratorState\)/)
     assert.match(workspace, /fetch\("\/api\/generate-email"/)
-    // Le client lit toujours `status`, `title` et `issues` : la forme de l'erreur publique les porte.
-    assert.match(workspace, /value\.status === "success" \|\| value\.status === "error"/)
-  })
-
-  test("la page garde son aperçu initial de démonstration (aucun appel Claude au chargement)", () => {
-    const page = read("app/email-generator/page.tsx")
-    assert.match(page, /runEmailGeneration\(defaultEmailBrief\)/)
-    assert.ok(!/generate-handler|anthropic/i.test(page))
+    assert.equal((workspace.match(/fetch\(/g) ?? []).length, 1)
+    assert.match(workspace, /email=\{state\.email\}|state\.email\?\.previewHtml/)
+    assert.ok(!/setEmail|useEffect|setTimeout|setInterval/.test(workspace), "aucun état d'email local, aucun effet, aucune minuterie")
   })
 })
 

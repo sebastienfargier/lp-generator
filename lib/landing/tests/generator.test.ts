@@ -244,15 +244,17 @@ describe("clarté de la démonstration", () => {
     assert.ok(!/fetch\(|requestLandingGeneration/.test(preview))
   })
 
-  test("Dashboard : Landing dit « IA » et « brief », Email dit « démo » et « sans IA », plus de « gérez » ni d'« éditeur »", () => {
+  test("Dashboard : Landing et Email disent « IA » et « Décrivez », plus de « démo » ni de « sans IA », ni de « gérez » ou d'« éditeur »", () => {
     const landing = tools.match(/title: "Landing Pages",\s*description: "([^"]+)",\s*cta: "([^"]+)"/)
     const email = tools.match(/title: "Emails",\s*description: "([^"]+)",\s*cta: "([^"]+)"/)
     assert.ok(landing && email)
     assert.match(landing[1]!, /IA/)
     assert.match(landing[1]!, /Décrivez/)
     assert.equal(landing[2], "Générer une landing page")
-    assert.match(email[1]!, /démo/i)
-    assert.match(email[1]!, /sans IA/)
+    assert.match(email[1]!, /IA/)
+    assert.match(email[1]!, /Décrivez/)
+    assert.equal(email[2], "Générer un email")
+    assert.ok(!/démo|sans IA/i.test(`${email[1]} ${email[2]}`))
     assert.ok(!/gérez|éditeur/i.test(`${tools}\n${card}`))
     assert.match(card, /\{cta\}/)
   })
