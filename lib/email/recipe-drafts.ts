@@ -36,7 +36,7 @@ import {
   type EmailRecipeSection,
 } from "./recipe-resolver"
 import { classifyEmailRecipeDiagnostics } from "./recipe-validation"
-import { emailRecipeHeroLames, emailRecipeIcons, emailRecipes, type EmailHeroLayout, type EmailRecipeId } from "./recipes"
+import { emailRecipeHeroLames, emailRecipeIcons, emailRecipes, type EmailHeroLayout, type EmailRecipe, type EmailRecipeId } from "./recipes"
 
 /* -------------------------------------------------------------------------- */
 /* Briques                                                                    */
@@ -238,12 +238,35 @@ function newsletterComposition(request: EmailRecipeRequest, draft: NewsletterDra
   }
 }
 
+/**
+ * Mode de rendu des preuves, décidé par le code d'après les IDENTIFIANTS de
+ * claims, jamais d'après un texte du modèle :
+ * - trois claims → liste numérotée ;
+ * - deux claims dont la projection d'affichage tient dans le bandeau (liste
+ *   `headline` de la recette) → deux bandeaux de chiffres clés ; leurs textes
+ *   d'appui et la clôture forment le paragraphe de contexte qui suit ;
+ * - sinon deux claims → deux titres de claim, chacun avec son appui.
+ */
+export function proofRenderMode(recipe: EmailRecipeId, claims: readonly string[]): "list" | "headline" | "titles" {
+  if (claims.length === 3) return "list"
+  const policy: EmailRecipe = emailRecipes[recipe]
+  const headline = policy.claims.headline ?? []
+  return claims.length === 2 && claims.every((claim) => headline.includes(claim)) ? "headline" : "titles"
+}
+
 function brandProofComposition(request: EmailRecipeRequest, draft: BrandProofDraft): EmailRecipeComposition {
   const heroLayout = heroLayoutFor("brand-proof", draft.visualIntent, request.campaignName)
+  const mode = proofRenderMode("brand-proof", draft.claims)
   const proofs: EmailRecipeSection[] =
-    draft.claims.length === 3
+    mode === "list"
       ? [{ kind: "claim-list", eyebrow: draft.hero.eyebrow, claims: draft.claims as unknown as Triple<ApprovedClaimId>, texts: draft.support as unknown as Triple<string> }]
-      : draft.claims.map((claim, index) => ({ kind: "claim-text" as const, claim, text: draft.support[index]! }))
+      : mode === "headline"
+        ? draft.claims.map((claim) => ({ kind: "claim-highlight" as const, claim }))
+        : draft.claims.map((claim, index) => ({ kind: "claim-text" as const, claim, text: draft.support[index]! }))
+  const context: EmailRecipeSection =
+    mode === "headline"
+      ? { kind: "text", title: draft.closing.title, text: [...draft.support, draft.closing.text].join(" ") }
+      : { kind: "text", title: draft.closing.title, text: draft.closing.text }
   return {
     recipe: "brand-proof",
     campaignName: request.campaignName,
@@ -253,7 +276,7 @@ function brandProofComposition(request: EmailRecipeRequest, draft: BrandProofDra
     visualIntent: draft.visualIntent,
     seed: request.campaignName,
     hero: heroOf(draft, heroLayout) as EmailRecipeComposition["hero"],
-    sections: [...proofs, { kind: "text", title: draft.closing.title, text: draft.closing.text }],
+    sections: [...proofs, context],
   }
 }
 

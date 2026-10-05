@@ -365,8 +365,8 @@ describe("recettes V2 : prompts par recette", () => {
     assert.ok(/steps/.test(discoverySystemPrompt) && /benefits/.test(discoverySystemPrompt) && !/edition|claims|support/.test(discoverySystemPrompt))
     assert.ok(/edition/.test(newsletterSystemPrompt) && /rubriques/.test(newsletterSystemPrompt) && !/benefits|claims|support/.test(newsletterSystemPrompt))
     assert.ok(/claims/.test(brandProofSystemPrompt) && /support/.test(brandProofSystemPrompt) && !/benefits|rubriques|edition/.test(brandProofSystemPrompt))
-    // R2 porte en plus ses principes éditoriaux (idée centrale, concret sans inventer, variété) : budget propre, total toujours sous 7 000.
-    for (const prompt of prompts()) assert.ok(prompt.system.length < (prompt.recipe === "editorial-newsletter" ? 3400 : 2600) && prompt.system.length > 1200, `${prompt.recipe} : ${prompt.system.length}`)
+    // R2 (principes éditoriaux) et R3 (copy claim-safe) portent plus de consignes : budget propre, total toujours sous 7 000.
+    for (const prompt of prompts()) assert.ok(prompt.system.length < (prompt.recipe === "discovery-reassurance" ? 2600 : 3400) && prompt.system.length > 1200, `${prompt.recipe} : ${prompt.system.length}`)
   })
 
   test("le prompt de chaque recette porte le schéma de sa recette et son contexte", () => {
@@ -559,9 +559,11 @@ describe("recettes V2 : aller-retour hors ligne (six Drafts)", () => {
       const { resolution } = resolve(id)
       assert.ok(resolution.status === "resolved")
       const text = JSON.stringify(resolution.config)
+      // Une claim est affichée en une pièce (liste, titre) ou en deux moitiés d'un bandeau (valeur + libellé) : dans les deux cas, la formulation canonique.
+      const bands = resolution.config.blocks.flatMap((block) => (block.type === "email-module-benefits-compact-highlights" ? [`${(block.slots as Record<string, { text: string }>)["valeur-cle"]!.text.replace(/\u00a0/g, " ")} ${(block.slots as Record<string, { text: string }>)["label"]!.text}`] : []))
       for (const claimId of draft.claims) {
         const statement = approvedClaims.find((claim) => claim.id === claimId)!.statement
-        assert.ok(text.includes(JSON.stringify(statement).slice(1, -1)), `${id} : ${claimId}`)
+        assert.ok(text.includes(JSON.stringify(statement).slice(1, -1)) || bands.includes(statement), `${id} : ${claimId}`)
         assert.ok(!draft.support.join(" ").includes(statement), "le Draft ne recopie aucune formulation")
       }
       assert.deepEqual(resolution.claims.map((claim) => claim.id), draft.claims)
@@ -572,7 +574,9 @@ describe("recettes V2 : aller-retour hors ligne (six Drafts)", () => {
     const b = resolve("D-R3-B").resolution
     assert.ok(a.status === "resolved" && b.status === "resolved")
     assert.ok(describeEmailRecipeConfig(a.config).sequence.includes("email-module-numbered-list"), "trois claims : liste")
-    assert.equal(describeEmailRecipeConfig(b.config).sequence.filter((type) => type === "email-module-text-only").length, 3, "deux claims : deux titres de claim et un texte de liaison")
+    const bSequence = describeEmailRecipeConfig(b.config).sequence
+    assert.equal(bSequence.filter((type) => type === "email-module-benefits-compact-highlights").length, 2, "deux claims compatibles : deux bandeaux de chiffres clés")
+    assert.equal(bSequence.filter((type) => type === "email-module-text-only").length, 1, "puis un paragraphe de contexte")
   })
 
   test("décisions du code, déterministes : disposition du hero, surface d'empathie, objet imposé", () => {

@@ -11,7 +11,7 @@ import { readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import { describe, test } from "node:test"
 
-import { approvedClaims } from "../../brand/claims"
+import { approvedClaims, getClaimDisplay } from "../../brand/claims"
 import { emailDestinationUrl, emailDestinations, type EmailDestinationId } from "../destinations"
 import { emailDisclaimers } from "../disclaimers"
 import { emailDraftBodyLames, emailDraftHeroBlocks } from "../generation-draft"
@@ -21,7 +21,6 @@ import { toPreviewHtml } from "../preview"
 import { emailRecipeFixtures, resolveEmailRecipeFixture } from "../recipe-fixtures"
 import {
   composeEmailRecipe,
-  emailClaimHighlightSplits,
   emailRecipeDisclaimers,
   resolveRecipeClaim,
   type EmailRecipeComposition,
@@ -158,10 +157,14 @@ describe("recettes Email V2 : claims approuvées", () => {
     }
   })
 
-  test("le découpage d'un bandeau redonne la formulation exacte de la claim", () => {
-    for (const [id, split] of Object.entries(emailClaimHighlightSplits)) {
-      assert.equal(`${split.value} ${split.label}`, resolveRecipeClaim(id)!.statement, id)
-      assert.ok(split.label.length < 40, `${id} : libellé court (le bandeau est étroit)`)
+  test("le découpage d'un bandeau vient de la projection contrôlée de Brand et redonne la formulation exacte de la claim", () => {
+    const headline = emailRecipes["brand-proof"].claims.headline
+    assert.deepEqual([...headline], ["apprenants-en-formation", "catalogue-formations", "formateurs-conseillers", "formations-alternance"])
+    assert.ok(!headline.includes("partenaires-academiques" as never), "sans valeur chiffrée : en titre")
+    for (const id of headline) {
+      const projection = getClaimDisplay(id)!
+      assert.equal(`${projection.value} ${projection.label}`, resolveRecipeClaim(id)!.statement, id)
+      assert.ok(projection.label.length < 62 && projection.value.length <= 13, `${id} : valeur et libellé courts (le bandeau est étroit)`)
     }
   })
 
@@ -333,7 +336,8 @@ describe("recettes Email V2 : claims, chiffres et terminologie dans les fixtures
     for (const id of claims("R3-A")) assert.ok(text.includes(JSON.stringify(resolveRecipeClaim(id)!.statement).slice(1, -1)), `${id} : formulation exacte`)
     // Bandeau : valeur + libellé = la formulation exacte.
     const band = block(configs["R3-B"], "email-module-benefits-compact-highlights")
-    assert.equal(`${band.slots["valeur-cle"]!.text} ${band.slots["label"]!.text}`, resolveRecipeClaim("apprenants-en-formation")!.statement)
+    assert.equal(`${band.slots["valeur-cle"]!.text} ${band.slots["label"]!.text}`.replace(/\u00a0/g, " "), resolveRecipeClaim("apprenants-en-formation")!.statement)
+    assert.ok(band.slots["valeur-cle"]!.text.includes("\u00a0"), "valeur en espaces insécables : le nombre ne se coupe pas en deux lignes")
   })
 
   test("la provenance des claims est conservée pour la validation interne ; aucune mention légale n'est requise", () => {
@@ -557,7 +561,7 @@ describe("recettes Email V2 : composition (resolver)", () => {
     refused({ ...r1, sections: r1.sections.filter((section) => section.kind !== "steps") }, "role")
     refused({ ...r1, sections: [...r1.sections, { kind: "grid", eyebrow: "A", title: "B", items: [{ title: "a", text: "b" }, { title: "a", text: "b" }, { title: "a", text: "b" }, { title: "a", text: "b" }] }] }, "role")
     const r3 = composition("R3-A")
-    refused({ ...r3, sections: [{ kind: "claim-highlight", claim: "catalogue-formations" }, ...r3.sections.slice(1)] }, "claim")
+    refused({ ...r3, sections: [{ kind: "claim-highlight", claim: "partenaires-academiques" }, ...r3.sections.slice(1)] }, "claim")
     refused({ ...r3, sections: [{ kind: "claim-text", claim: "plus-de-300-formations", text: "x" }] }, "claim")
     const r2 = composition("R2-B")
     refused({ ...r2, stripId: undefined }, "image")

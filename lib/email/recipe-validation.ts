@@ -76,6 +76,16 @@ const isColored = (block: EmailBlock) => {
   return (surface !== undefined && surface !== "page") || (emailIntrinsicDarkLames as readonly string[]).includes(block.type)
 }
 
+const isHighlight = (block: EmailBlock | undefined) => block?.type === "email-module-benefits-compact-highlights"
+
+/**
+ * Bandeaux de chiffres clés à la suite : un seul bloc de preuve. Chacun est un
+ * encadré sombre compact dans un fond neutre, séparé du suivant par du blanc ;
+ * deux ou trois forment ensemble UNE zone de preuve, pas plusieurs zones
+ * colorées concurrentes.
+ */
+const continuesProofGroup = (block: EmailBlock, previous: EmailBlock | undefined) => isHighlight(block) && isHighlight(previous)
+
 const isStrong = (block: EmailBlock) => {
   const surface = raw(block).surface
   return (surface !== undefined && surface !== "page" && surface !== "bloc") || (emailIntrinsicDarkLames as readonly string[]).includes(block.type)
@@ -94,7 +104,8 @@ function claimsIn(texts: readonly string[]): BrandClaim[] {
 function highlightText(block: EmailBlock) {
   if (block.type !== "email-module-benefits-compact-highlights") return undefined
   const slots = raw(block).slots as Record<string, { text: string }>
-  return `${slots["valeur-cle"]!.text} ${slots["label"]!.text}`
+  // La valeur porte des espaces insécables (présentation) : on compare à la formulation canonique avec des espaces ordinaires.
+  return `${slots["valeur-cle"]!.text} ${slots["label"]!.text}`.replace(/\u00a0/g, " ")
 }
 
 /** Tous les textes de contenu (hors shell), le bandeau de preuve étant lu comme une seule formulation. */
@@ -146,7 +157,7 @@ export function describeEmailRecipeConfig(config: EmailConfig): EmailRecipeDescr
     links: config.blocks.filter((block) => block.type === emailRecipePreheaderLame || !isShell(block.type)).flatMap(links).length,
     claimIds,
     disclaimers: legal ? Object.values(raw(legal).slots).map((slot) => (slot as { disclaimer: string }).disclaimer) : [],
-    strongZones: content.filter(isStrong).map((block) => block.id),
+    strongZones: content.filter((block, index) => isStrong(block) && !continuesProofGroup(block, content[index - 1])).map((block) => block.id),
     words: content.flatMap(emailRecipeTexts).reduce((sum, { text }) => sum + wordCount(text), 0),
     imageIds: content.flatMap(images).flatMap((slot) => {
       const id = emailBankImageIdFromSrc(slot.value.src!)
@@ -233,7 +244,7 @@ export function validateEmailRecipeConfig(recipeId: EmailRecipeId, config: Email
     const surface = raw(block).surface
     if (surface && surface !== "page" && !(recipe.surface.allowed as readonly string[]).includes(surface)) issue("surface", block.id, `Surface « ${surface} » non autorisée par cette recette.`)
     const next = blocks[index + 1]
-    if (next && isColored(block) && isColored(next)) issue("surface", block.id, `Deux zones colorées consécutives (« ${block.id} » puis « ${next.id} »).`)
+    if (next && isColored(block) && isColored(next) && !continuesProofGroup(next, block)) issue("surface", block.id, `Deux zones colorées consécutives (« ${block.id} » puis « ${next.id} »).`)
   })
   const zone = content.find(isStrong)
   if (zone && recipe.surface.zone === "hero" && zone !== content[0]) issue("surface", zone.id, "La zone colorée se pose sur le hero.")
@@ -274,7 +285,7 @@ export function validateEmailRecipeConfig(recipeId: EmailRecipeId, config: Email
   }
   // Un nombre n'est admis que s'il appartient à une claim approuvée (R3, formulation copiée) ou s'il figure dans un fait de la demande :
   // un fait se reprend parfois en partie ou sans sa ponctuation, on compare donc les nombres, pas les phrases.
-  const numbers = (value: string) => (value.match(/\d+(?:[  .,]\d+)*/g) ?? []).map((token) => token.replace(/[  ]/g, ""))
+  const numbers = (value: string) => (value.match(/\d+(?:[ \u00a0\u202f.,]\d+)*/g) ?? []).map((token) => token.replace(/[ \u00a0\u202f]/g, ""))
   const factNumbers = new Set((options.facts ?? []).flatMap(numbers))
   const claimStatements = recipe.figures === "claims-only" ? approvedClaims.map((claim) => claim.statement).sort((a, b) => b.length - a.length) : []
   const stripClaims = (value: string) => claimStatements.reduce((rest, statement) => rest.split(statement).join(" "), value)

@@ -25,7 +25,7 @@ import { provenanceOf, type BrandDocumentId } from "../brand/provenance"
 import { brandTerminologyRules } from "../brand/terminology"
 import { emailDestinations } from "./destinations"
 import { buildEmailVisualIntentView } from "./image-bank"
-import { emailRecipes, type EmailRecipeId } from "./recipes"
+import { emailRecipes, type EmailRecipe, type EmailRecipeId } from "./recipes"
 
 /* -------------------------------------------------------------------------- */
 /* Audience                                                                   */
@@ -115,7 +115,7 @@ export type RecipeBrandContext = {
   /** R1 et R3 : les intentions visuelles de la recette, avec une indication courte (jamais d'image). */
   visualIntents?: readonly { intent: string; hint: string }[]
   /** R3 seulement : les claims approuvées utilisables, par identifiant et formulation exacte. */
-  claims?: readonly { id: string; statement: string }[]
+  claims?: readonly { id: string; statement: string; headline?: true }[]
 }
 
 export type RecipeBrandProvenance = {
@@ -151,7 +151,12 @@ export function buildRecipeBrandContext(
     avoid: riskyTerms(),
     destinations: recipe.destinations.map((id) => ({ id, label: emailDestinations[id].label, usage: emailDestinations[id].usage ?? "" })),
     ...(visualIntents.length > 0 ? { visualIntents } : {}),
-    ...(exposed.length > 0 ? { claims: exposed.map((claim) => ({ id: claim.id, statement: claim.statement })) } : {}),
+    ...(exposed.length > 0 ? { claims: exposed.map((claim) => ({
+        id: claim.id,
+        statement: claim.statement,
+        // Claims que le système affiche en grands chiffres quand deux d'entre elles sont choisies (liste de la recette).
+        ...(((recipe as EmailRecipe).claims.headline ?? []).includes(claim.id) ? { headline: true as const } : {}),
+      })) } : {}),
   }
 
   const documentIds = new Set<BrandDocumentId>(["identite-marque", "promesse-editoriale", "regles-editoriales", "lexique-marque"])

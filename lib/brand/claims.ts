@@ -30,12 +30,22 @@ export type BrandClaim = {
   requiresHumanApproval: boolean
   /** Précaution propre à la claim. */
   note?: string
+  /**
+   * Projection d'affichage CONTRÔLÉE : la formulation exacte découpée en une
+   * valeur courte et son libellé, pour un format « chiffre clé ». Les deux
+   * moitiés, jointes par une espace, redonnent `statement` au caractère près
+   * (un test le garde) : le `statement` reste la seule vérité. Aucune valeur
+   * n'est dérivée d'un texte produit par un modèle.
+   */
+  displayValue?: string
+  displayLabel?: string
 }
 
 const provenance = approvedProvenanceOf("chiffres-cles")
 const scope = scopeOf("chiffres-cles")
 
-const claim = (id: string, statement: string, note?: string): BrandClaim => ({
+/** `display` : découpe valeur / libellé de `statement`, vérifiée par les tests ; absente quand la claim n'a pas de valeur chiffrée courte. */
+const claim = (id: string, statement: string, note?: string, display?: { value: string; label: string }): BrandClaim => ({
   id,
   statement,
   provenance,
@@ -43,13 +53,14 @@ const claim = (id: string, statement: string, note?: string): BrandClaim => ({
   audiences: scope.audiences,
   requiresHumanApproval: false,
   ...(note ? { note } : {}),
+  ...(display ? { displayValue: display.value, displayLabel: display.label } : {}),
 })
 
 export const approvedClaims = [
-  claim("apprenants-en-formation", "59 000 apprenants en cours de formation"),
-  claim("catalogue-formations", "Plus de 400 formations, du CAP au Bac+5, dans 18 filières"),
-  claim("formateurs-conseillers", "Près de 1 000 formateurs et conseillers pédagogiques (dont 700 formateurs)"),
-  claim("formations-alternance", "Plus de 130 formations en alternance"),
+  claim("apprenants-en-formation", "59 000 apprenants en cours de formation", undefined, { value: "59 000", label: "apprenants en cours de formation" }),
+  claim("catalogue-formations", "Plus de 400 formations, du CAP au Bac+5, dans 18 filières", undefined, { value: "Plus de 400", label: "formations, du CAP au Bac+5, dans 18 filières" }),
+  claim("formateurs-conseillers", "Près de 1 000 formateurs et conseillers pédagogiques (dont 700 formateurs)", undefined, { value: "Près de 1 000", label: "formateurs et conseillers pédagogiques (dont 700 formateurs)" }),
+  claim("formations-alternance", "Plus de 130 formations en alternance", undefined, { value: "Plus de 130", label: "formations en alternance" }),
   claim(
     "partenaires-academiques",
     "Partenaires académiques : ESG, Hetic, Elije, Digital Campus, LISAA, Naratiiv, Cours Florent...",
@@ -68,4 +79,10 @@ export const approvedClaimIds = approvedClaims.map((entry) => entry.id) as Appro
 
 export function getApprovedClaim(id: string): BrandClaim | undefined {
   return approvedClaims.find((entry) => entry.id === id)
+}
+
+/** Projection d'affichage d'une claim approuvée (valeur courte et libellé), ou `undefined` si elle n'en a pas. */
+export function getClaimDisplay(id: string): { value: string; label: string; statement: string } | undefined {
+  const entry = getApprovedClaim(id)
+  return entry?.displayValue && entry.displayLabel ? { value: entry.displayValue, label: entry.displayLabel, statement: entry.statement } : undefined
 }

@@ -19,7 +19,7 @@
  *
  * Domaine Email uniquement : aucun import depuis `lib/landing`.
  */
-import { getApprovedClaim, type ApprovedClaimId, type BrandClaim } from "../brand/claims"
+import { getApprovedClaim, getClaimDisplay, type ApprovedClaimId, type BrandClaim } from "../brand/claims"
 import { emailDestinations, emailDestinationUrl, type EmailDestinationId } from "./destinations"
 import { emailDisclaimers, type EmailDisclaimerId } from "./disclaimers"
 import {
@@ -116,18 +116,6 @@ export type EmailRecipeResolution =
 /* -------------------------------------------------------------------------- */
 /* Claims                                                                     */
 /* -------------------------------------------------------------------------- */
-
-/**
- * Découpe d'une claim chiffrée pour le bandeau : valeur + espace + libellé
- * redonnent la formulation exacte (vérifié par la résolution et par les
- * tests). Seules les claims à libellé court y figurent : le bandeau est
- * étroit et un libellé long écrase la valeur (« Près de 1 000 » passait à la
- * ligne au milieu du nombre). Les autres s'affichent en liste ou en titre.
- */
-export const emailClaimHighlightSplits = {
-  "apprenants-en-formation": { value: "59 000", label: "apprenants en cours de formation" },
-  "formations-alternance": { value: "Plus de 130", label: "formations en alternance" },
-} as const satisfies Partial<Record<ApprovedClaimId, { value: string; label: string }>>
 
 /** Une claim utilisable : approuvée par construction (`approvedClaims` ne contient que des documents approuvés). */
 export function resolveRecipeClaim(id: string): BrandClaim | undefined {
@@ -328,12 +316,15 @@ function sectionBlock(section: EmailRecipeSection, index: number, input: EmailRe
     case "claim-highlight": {
       const claim = claimFor(section.claim, ctx, `${path}.claim`)
       if (!claim) return undefined
-      const split = (emailClaimHighlightSplits as Record<string, { value: string; label: string } | undefined>)[claim.id]
-      if (!split || `${split.value} ${split.label}` !== claim.statement) {
-        ctx.issues.push({ code: "claim", path, message: `La claim « ${claim.id} » ne se découpe pas en valeur et libellé sans altérer sa formulation.` })
+      // Valeur et libellé viennent de la projection CONTRÔLÉE de Brand (jamais d'un texte du modèle) ;
+      // la recette n'accepte en bandeau que les claims dont la projection tient proprement dans le gabarit.
+      const display = getClaimDisplay(claim.id)
+      if (!display || `${display.value} ${display.label}` !== claim.statement || !(ctx.recipe.claims.headline as readonly string[] | undefined)?.includes(claim.id)) {
+        ctx.issues.push({ code: "claim", path, message: `La claim « ${claim.id} » ne s'affiche pas en chiffre clé : projection absente, altérée ou hors du bandeau de la recette.` })
         return undefined
       }
-      return asBlock({ id, type, slots: { "valeur-cle": text(split.value), label: text(split.label) } })
+      // Espaces insécables dans la valeur : présentation seulement (le nombre ne se coupe jamais en deux lignes) ; le sens et les caractères restent ceux de la claim.
+      return asBlock({ id, type, slots: { "valeur-cle": text(display.value.replace(/ /g, "\u00A0")), label: text(display.label) } })
     }
     case "claim-text": {
       const claim = claimFor(section.claim, ctx, `${path}.claim`)

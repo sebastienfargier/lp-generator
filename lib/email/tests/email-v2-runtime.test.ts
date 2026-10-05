@@ -192,13 +192,17 @@ describe("moteur V2 : bout en bout avec un fournisseur simulé", () => {
     }
   })
 
-  test("R3 : les claims sont copiées à l'identique depuis Brand — deux en titres (la première sur la zone colorée), trois en liste ; un seul bouton", async () => {
+  test("R3 : les claims sont copiées à l'identique depuis Brand — deux en bandeaux de chiffres clés (projection contrôlée), trois en liste ; un seul bouton", async () => {
     const two = success((await viaEngine(exampleForm("preuves"), () => reply(draftOf("D-R3-B")))).result)
     const three = success((await viaEngine(exampleForm("preuves"), () => reply(draftOf("D-R3-A")))).result)
     for (const [result, draft] of [[two, draftOf("D-R3-B")], [three, draftOf("D-R3-A")]] as const) {
       assert.equal(result.recipe, "brand-proof")
       const text = JSON.stringify(result.config)
-      for (const id of draft.claims as string[]) assert.ok(text.includes(JSON.stringify(approvedClaims.find((claim) => claim.id === id)!.statement).slice(1, -1)), id)
+      const bands = result.config.blocks.flatMap((block) => (block.type === "email-module-benefits-compact-highlights" ? [`${(block.slots as Record<string, { text: string }>)["valeur-cle"]!.text.replace(/\u00a0/g, " ")} ${(block.slots as Record<string, { text: string }>)["label"]!.text}`] : []))
+      for (const id of draft.claims as string[]) {
+        const statement = approvedClaims.find((claim) => claim.id === id)!.statement
+        assert.ok(text.includes(JSON.stringify(statement).slice(1, -1)) || bands.includes(statement), id)
+      }
       assert.deepEqual(describeEmailRecipeConfig(result.config).claimIds.sort(), [...draft.claims].sort())
       assert.equal(describeEmailRecipeConfig(result.config).buttons, 1)
       assert.equal(describeEmailRecipeConfig(result.config).strongZones.length, 1)
@@ -208,7 +212,8 @@ describe("moteur V2 : bout en bout avec un fournisseur simulé", () => {
     assert.ok(describeEmailRecipeConfig(three.config).sequence.includes("email-module-numbered-list"))
     const surfaces = (config: EmailV2EngineResult & { status: "success" }) => config.config.blocks.filter((block: EmailBlock) => (block as { surface?: string }).surface).map((block: EmailBlock) => block.id)
     assert.equal(surfaces(three).length, 1)
-    assert.equal(surfaces(two).length, 1)
+    assert.equal(surfaces(two).length, 0, "deux bandeaux sombres par construction : aucune surface à poser")
+    assert.equal(describeEmailRecipeConfig(two.config).sequence.filter((type) => type === "email-module-benefits-compact-highlights").length, 2)
   })
 
   test("la cible contrôlée décide de la voix : tutoiement pour les alternants, vouvoiement sinon ; surface douce pour les demandeurs d'emploi ; l'audience libre n'y est pour rien", async () => {

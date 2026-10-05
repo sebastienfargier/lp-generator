@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import { describe, test } from "node:test"
 
-import { approvedClaimIds, approvedClaims, brandDocumentIds, getApprovedClaim, isApproved, provenanceOf } from "../index"
+import { approvedClaimIds, approvedClaims, brandDocumentIds, getApprovedClaim, getClaimDisplay, isApproved, provenanceOf } from "../index"
 import { body, readCorpus } from "./corpus"
 
 const chiffresCles = readCorpus(provenanceOf("chiffres-cles").path)
@@ -99,5 +99,39 @@ describe("claims approuvées : rien de non approuvé n'entre dans le catalogue",
     const bad: (typeof approvedClaims)[number]["provenance"] = provenanceOf("lexique-marque")
     assert.equal(bad.status, "in-review")
     assert.ok(!approvedClaims.some((claim) => claim.provenance.status !== "approved"))
+  })
+})
+
+describe("claims approuvées : projection d'affichage contrôlée (valeur / libellé)", () => {
+  const displayed = approvedClaims.filter((claim) => "displayValue" in claim)
+
+  test("quatre claims chiffrées ont une projection ; les deux autres n'en ont pas", () => {
+    assert.deepEqual(displayed.map((claim) => claim.id), ["apprenants-en-formation", "catalogue-formations", "formateurs-conseillers", "formations-alternance"])
+    for (const id of ["partenaires-academiques", "financement-dispositifs"]) {
+      assert.equal(getClaimDisplay(id), undefined, id)
+      assert.ok(!("displayValue" in getApprovedClaim(id)!) && !("displayLabel" in getApprovedClaim(id)!), id)
+    }
+  })
+
+  test("valeur + libellé redonnent la formulation canonique au caractère près ; la valeur et le libellé en sont des morceaux", () => {
+    for (const claim of displayed) {
+      const projection = getClaimDisplay(claim.id)!
+      assert.equal(`${projection.value} ${projection.label}`, claim.statement, claim.id)
+      assert.equal(projection.statement, claim.statement, "le statement canonique reste la référence")
+      assert.ok(claim.statement.startsWith(projection.value) && claim.statement.endsWith(projection.label), claim.id)
+      assert.match(projection.value, /\d/, "une valeur chiffrée")
+      assert.ok(projection.value.length > 0 && projection.label.length > 0)
+    }
+  })
+
+  test("la projection garde la provenance approuvée de la claim, et aucun chiffre n'y est ajouté", () => {
+    for (const claim of displayed) {
+      assert.equal(claim.provenance.status, "approved")
+      assert.equal(claim.provenance.documentId, "chiffres-cles")
+      const digits = (value: string) => (value.match(/\d+/g) ?? []).join()
+      assert.equal(digits(`${claim.displayValue} ${claim.displayLabel}`), digits(claim.statement), claim.id)
+    }
+    assert.equal(getClaimDisplay("plus-de-300-formations"), undefined)
+    assert.equal(getClaimDisplay("financement-dispositifs"), undefined, "aucune projection pour le financement")
   })
 })

@@ -15,7 +15,7 @@ import { emailDestinations } from "../destinations"
 import { buildRecipeBrandContext } from "../recipe-brand-context"
 import { emailRecipeDraftFixtures, resolveEmailRecipeDraftFixture } from "../recipe-draft-fixtures"
 import { buildRecipeTransportSchema } from "../recipe-drafts"
-import { brandProofSystemPrompt, buildEmailRecipePrompt, discoverySystemPrompt, newsletterSystemPrompt } from "../recipe-prompts"
+import { buildEmailRecipePrompt, discoverySystemPrompt, newsletterSystemPrompt } from "../recipe-prompts"
 import { emailRecipeIds, emailRecipes } from "../recipes"
 import { measure, type JsonSchema } from "./schema-metrics"
 
@@ -23,9 +23,10 @@ const hash = (value: unknown) => createHash("sha256").update(typeof value === "s
 
 /** Empreintes mesurées AVANT le polish : tout ce qui n'est pas le prompt système de R2 doit rester identique. */
 const before = {
-  system: { "discovery-reassurance": "7daddb994de807e0", "brand-proof": "17dfc5be4ff4f9bc" },
+  // R3 : prompt et contexte modifiés ensuite, volontairement, par V2-4C (copy claim-safe, chiffres clés) ; leurs empreintes sont dans r3-proof.test.ts.
+  system: { "discovery-reassurance": "7daddb994de807e0", "editorial-newsletter": "c3c16e44a2e62968" },
   schema: { "discovery-reassurance": "6b9d61ddcfedfdd9", "editorial-newsletter": "668a8bd61e9f8f8b", "brand-proof": "ba146d9379681f65" },
-  context: { "discovery-reassurance": "895a881eaa614dab", "editorial-newsletter": "6d65c02cab11a515", "brand-proof": "2ca74e2ece10f482" },
+  context: { "discovery-reassurance": "895a881eaa614dab", "editorial-newsletter": "6d65c02cab11a515" },
   r2: { system: 2048, user: 3069, context: 2591, schemaBytes: 1708, schemaExpanded: 1462 },
 } as const
 
@@ -106,17 +107,15 @@ describe("R2 : principes éditoriaux portés par le prompt", () => {
 })
 
 describe("R2 : ce qui ne change pas", () => {
-  test("R1 et R3 : prompts système identiques octet pour octet", () => {
+  test("R1 inchangé octet pour octet ; R2 figé à l'état du polish validé (1ec7ee3)", () => {
     assert.equal(hash(discoverySystemPrompt), before.system["discovery-reassurance"])
-    assert.equal(hash(brandProofSystemPrompt), before.system["brand-proof"])
-    assert.notEqual(hash(newsletterSystemPrompt), "65dcb40008c85cf7", "seul le prompt R2 change")
+    assert.equal(hash(newsletterSystemPrompt), before.system["editorial-newsletter"])
+    assert.notEqual(hash(newsletterSystemPrompt), "65dcb40008c85cf7", "le polish R2 est conservé")
   })
 
-  test("les trois schémas de transport et les trois contextes Brand sont identiques (R2 compris : Structured Output inchangé)", () => {
-    for (const recipe of emailRecipeIds) {
-      assert.equal(hash(buildRecipeTransportSchema(recipe)), before.schema[recipe], `schéma ${recipe}`)
-      assert.equal(hash(buildRecipeBrandContext(recipe, "Adultes", "actifs_en_poste").context), before.context[recipe], `contexte ${recipe}`)
-    }
+  test("les trois schémas de transport sont identiques, ainsi que les contextes R1 et R2 (Structured Output inchangé)", () => {
+    for (const recipe of emailRecipeIds) assert.equal(hash(buildRecipeTransportSchema(recipe)), before.schema[recipe], `schéma ${recipe}`)
+    for (const recipe of ["discovery-reassurance", "editorial-newsletter"] as const) assert.equal(hash(buildRecipeBrandContext(recipe, "Adultes", "actifs_en_poste").context), before.context[recipe], `contexte ${recipe}`)
   })
 
   test("budget compact : le prompt système R2 gagne des principes, le total reste sous 7 000 caractères, contexte et schéma inchangés, risque LOW", () => {

@@ -214,9 +214,9 @@ export const emailRecipeFixtures = [
           eyebrow: "Studi aujourd'hui",
           claims: ["catalogue-formations", "formations-alternance", "formateurs-conseillers"],
           texts: [
-            "Un choix assez large pour comparer plusieurs voies avant de décider.",
-            "Une voie pour apprendre un métier en alliant études et activité professionnelle.",
-            "Ce sont eux qui font vivre la pédagogie au quotidien.",
+            "Ce repère donne une idée de l'étendue de l'offre de formation.",
+            "Ce repère situe l'ampleur de l'offre proposée en alternance.",
+            "Ce chiffre permet de situer l'échelle de l'équipe pédagogique.",
           ],
         },
         {

@@ -147,7 +147,17 @@ export type EmailRecipe = {
    * celles que la recette accepte. `financement-dispositifs` est exclue : elle
    * touche au financement, que ces recettes ne traitent pas.
    */
-  claims: Range & { allowed: readonly string[] }
+  claims: Range & {
+    allowed: readonly string[]
+    /**
+     * Claims dont la projection d'affichage (valeur courte + libellé) tient
+     * proprement dans le bandeau de chiffres clés, valeur sur une ligne à 600 et
+     * à 390 px (mesuré au rendu, espaces insécables dans la valeur : sans elles,
+     * « 59 000 » se coupait en deux sur mobile). Les claims sans valeur chiffrée
+     * (partenaires) se lisent en titre.
+     */
+    headline?: readonly string[]
+  }
   /** Mentions légales : seulement celles qu'appelle une claim utilisée. */
   disclaimers: "from-claims"
   /** Chiffres : `none` interdit tout nombre ; `claims-only` n'admet que ceux d'une claim approuvée. */
@@ -211,6 +221,7 @@ export const emailRecipes = {
       min: 2,
       max: 3,
       allowed: ["apprenants-en-formation", "catalogue-formations", "formateurs-conseillers", "formations-alternance", "partenaires-academiques"],
+      headline: ["apprenants-en-formation", "catalogue-formations", "formateurs-conseillers", "formations-alternance"],
     },
     disclaimers: "from-claims",
     figures: "claims-only",
