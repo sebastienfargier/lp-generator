@@ -172,7 +172,7 @@ function selectDestinations(request: EmailGenerationRequest, available: Availabl
 /* -------------------------------------------------------------------------- */
 
 /** Surface de la zone colorée selon le type (`recettes-couleur.md` §5). */
-function recommendedSurface(emailType: EmailType | undefined, audience: string): EmailSurface {
+export function recommendedSurface(emailType: EmailType | undefined, audience: string): EmailSurface {
   if (mentions(audience, empathyCues)) return "accent-2-soft"
   if (emailType === "promo") return "accent-1"
   if (emailType === "transactionnel") return "bloc"
