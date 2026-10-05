@@ -10,6 +10,7 @@ import {
 } from "lucide-react"
 
 import { librarySections } from "@/components/library/registry"
+import { emailBlockManifest } from "@/lib/email/manifest"
 
 /**
  * Données du dashboard : outils, ressources et navigation. Les destinations
@@ -77,8 +78,8 @@ export const resourceLibraries: ResourceLibrary[] = [
     title: "Lames Email",
     description: "Blocs réutilisables pour vos emails.",
     icon: Blocks,
-    href: null,
-    lames: null,
+    href: "/email-library",
+    lames: Object.keys(emailBlockManifest).length,
   },
 ]
 
