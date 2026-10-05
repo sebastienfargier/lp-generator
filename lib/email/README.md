@@ -532,6 +532,45 @@ des contrôles propres à la requête :
 
 Elle passe ensuite par `renderEmail`. Le prompt n'est jamais une garantie.
 
+## Banque d'images V2 (`image-bank.ts`, non branchée)
+
+Douze photos, quatre intentions visuelles (`warm-reassurance`,
+`editorial-work`, `career-movement`, `campaign-portrait`, trois images
+chacune) et deux frises de portraits prédéfinies. Le futur modèle ne verra que
+des intentions et des identifiants de frise : jamais de fichier, d'URL, de
+chemin, de recadrage, de dimension ni d'alt.
+
+- Module **additif** : `image-catalog.ts` (quatre photos de démo) reste le
+  catalogue du moteur actuel. Rien de la banque n'est importé par le prompt,
+  le brouillon ni le resolver. Les trois identifiants communs aux deux
+  catalogues n'y désignent pas les mêmes fichiers.
+- Dérivés : `public/images/email/v2/<image>--<format>.jpg`, à 2x du cadre
+  exact du template. Formats : `medium` 600×270, `large` 600×534, `split`
+  229×456, `band` 520×174 (`hero-newsletter-variant-02` et
+  `text-and-cta-variant-02` partagent le même fichier). Un dérivé n'existe que
+  si le recadrage a été jugé A ou B à l'œil ; il n'y a pas de produit
+  cartésien.
+- Frises : `portrait-strip-mixed-01` et `-02`, cinq images, jamais deux du
+  même cluster (décor), un dérivé par position (`--strip-1` à `--strip-5`,
+  cadres 96×174, 96×158, 96×190, 96×158, 104×174). La lame
+  `hero-newsletter-variant-01` n'accepte aucune image seule.
+- Recadrages : décidés hors génération dans
+  `scripts/email-image-bank/crops.json` (rectangles dans les sources
+  2016×1344, empreintes MD5 des sources). `node scripts/email-image-bank/build.mjs`
+  régénère les dérivés depuis `ressources/email/assets/` (hors dépôt, jamais
+  copiées).
+- API : `emailImagesForIntent(intent, blockType)`,
+  `resolveEmailBankImage(imageId, blockType)`, `resolveEmailPortraitStrip(stripId)`,
+  `pickEmailBankImage(intent, blockType, seed)` (choix déterministe). Erreurs
+  `EmailImageBankError` : `unknown-image`, `unknown-intent`, `unknown-strip`,
+  `incompatible-block`, `missing-derivative`.
+- Hors périmètre : `hero-cards` (186×274) et `hero-split-image-dark` (280×390)
+  ne sont pas des lames de l'IA V1 ; aucun dérivé n'est produit pour elles.
+- Provenance : **à confirmer** pour les douze sources (aucune licence ni crédit
+  connus). Aucune image n'est « approuvée production ».
+- Aperçu : les URL canoniques `demo-assets.invalid/email-v2/…` se mappent aux
+  fichiers via `emailBankPreviews`, pas encore lu par `toPreviewHtml`.
+
 ## Tests
 
 ```bash
@@ -549,6 +588,8 @@ socle ; seuls les cas de corruption injectent une source modifiée.
   chaque template identiques au manifeste.
 - `renderer.test.ts` : document, slots, échappement, surfaces, intégrité, et
   rendu des 36 lames sur Page.
+- `image-bank.test.ts` : banque V2 (12 images, 4 intentions, dérivés et
+  dimensions réels, frises, résolution, vue IA sans fichier ni URL).
 - `demo-assets.test.ts` : photos de démo, URL `.invalid` canonique, mapping
   fermé de l'aperçu, dimensions des fichiers.
 

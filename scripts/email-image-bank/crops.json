@@ -1,0 +1,608 @@
+{
+  "version": 1,
+  "output": {
+    "sourceWidth": 2016,
+    "sourceHeight": 1344,
+    "scale": 2
+  },
+  "frames": {
+    "medium": [
+      600,
+      270
+    ],
+    "large": [
+      600,
+      534
+    ],
+    "split": [
+      229,
+      456
+    ],
+    "band": [
+      520,
+      174
+    ],
+    "strip-1": [
+      96,
+      174
+    ],
+    "strip-2": [
+      96,
+      158
+    ],
+    "strip-3": [
+      96,
+      190
+    ],
+    "strip-4": [
+      96,
+      158
+    ],
+    "strip-5": [
+      104,
+      174
+    ]
+  },
+  "sources": {
+    "tablette-interieur": {
+      "file": "hf_20260910_082727_fc2acef6-1599-4693-a63b-7e83c65b69a6.png",
+      "md5": "bf54e518872f0b0f691af84cc39649e6"
+    },
+    "canape-lumiere": {
+      "file": "hf_20260910_082739_512d5197-9c82-4e73-9d6d-ae45dded4320.png",
+      "md5": "4d78106b5149afb78b7056ecc4f0076e"
+    },
+    "couloir-verriere-a": {
+      "file": "hf_20260910_085621_3b0b627d-8341-4ea4-8bc2-900a236e0bab.png",
+      "md5": "d0c9e999bc31e962ee8f55a26d60a460"
+    },
+    "mur-clair-debout": {
+      "file": "hf_20260910_101731_b505d644-d49d-4207-85b9-56b210ef4160.png",
+      "md5": "7c91267ab96d2c48e93cff20d1f44956"
+    },
+    "marche-rideau-metal": {
+      "file": "hf_20260910_141608_a22d4c9d-aa67-4d38-a51c-b1d6eb034a51.png",
+      "md5": "20211c89bb65178a9afb7682d22f4060"
+    },
+    "ecouteur-exterieur": {
+      "file": "hf_20260910_141716_66950c77-1006-4023-be22-7844884de1f9.png",
+      "md5": "75edb2da25aae9bcf76ea56798082b60"
+    },
+    "portrait-mur-rose": {
+      "file": "hf_20260910_151306_e71eba5f-f7be-4b07-b2a7-425fc9a769d9.png",
+      "md5": "b4e2e95ed45f95ed0df6789cf9ac9ddd"
+    },
+    "bureau-lampe-bleu": {
+      "file": "hf_20260911_060455_838a09cc-f096-47ed-9ffa-041692251445.png",
+      "md5": "94fba12502fd7242d756932b4e926b98"
+    },
+    "table-fenetre": {
+      "file": "hf_20260911_090255_0cb5c8bc-0897-4abf-9573-150a9efacd50.png",
+      "md5": "7e8b6572dbe333b359c6ea14fe21e960"
+    },
+    "arret-bus-bleu": {
+      "file": "hf_20260911_090321_fd568622-0147-46bf-8e0f-f6de013c5bdd.png",
+      "md5": "a580dac52d71c7ad287c9625ae311f38"
+    },
+    "quai-gare": {
+      "file": "hf_20260911_095234_3fcf136d-301b-48e8-9349-fd0244d221e8.png",
+      "md5": "c271ea283c9c1782b2c148fadf55df13"
+    },
+    "echange-motif-bleu": {
+      "file": "hf_20260911_114545_ab59279f-fb7d-4e09-bb88-a68343cab8d4.png",
+      "md5": "90c69156a5b920e8f1728f794d4a2bc4"
+    }
+  },
+  "derivatives": [
+    {
+      "image": "tablette-interieur",
+      "format": "large",
+      "rect": [
+        253,
+        0,
+        1510,
+        1344
+      ]
+    },
+    {
+      "image": "canape-lumiere",
+      "format": "large",
+      "rect": [
+        374,
+        0,
+        1510,
+        1344
+      ]
+    },
+    {
+      "image": "ecouteur-exterieur",
+      "format": "large",
+      "rect": [
+        11,
+        0,
+        1510,
+        1344
+      ]
+    },
+    {
+      "image": "portrait-mur-rose",
+      "format": "large",
+      "rect": [
+        253,
+        0,
+        1510,
+        1344
+      ]
+    },
+    {
+      "image": "bureau-lampe-bleu",
+      "format": "large",
+      "rect": [
+        374,
+        0,
+        1510,
+        1344
+      ]
+    },
+    {
+      "image": "table-fenetre",
+      "format": "large",
+      "rect": [
+        152,
+        0,
+        1510,
+        1344
+      ]
+    },
+    {
+      "image": "echange-motif-bleu",
+      "format": "large",
+      "rect": [
+        193,
+        0,
+        1510,
+        1344
+      ]
+    },
+    {
+      "image": "quai-gare",
+      "format": "large",
+      "rect": [
+        253,
+        0,
+        1510,
+        1344
+      ]
+    },
+    {
+      "image": "arret-bus-bleu",
+      "format": "large",
+      "rect": [
+        414,
+        0,
+        1510,
+        1344
+      ]
+    },
+    {
+      "image": "marche-rideau-metal",
+      "format": "large",
+      "rect": [
+        434,
+        0,
+        1510,
+        1344
+      ]
+    },
+    {
+      "image": "couloir-verriere-a",
+      "format": "large",
+      "rect": [
+        193,
+        0,
+        1510,
+        1344
+      ]
+    },
+    {
+      "image": "mur-clair-debout",
+      "format": "large",
+      "rect": [
+        334,
+        0,
+        1510,
+        1344
+      ]
+    },
+    {
+      "image": "ecouteur-exterieur",
+      "format": "split",
+      "rect": [
+        408,
+        0,
+        675,
+        1344
+      ]
+    },
+    {
+      "image": "canape-lumiere",
+      "format": "split",
+      "rect": [
+        791,
+        0,
+        675,
+        1344
+      ]
+    },
+    {
+      "image": "quai-gare",
+      "format": "split",
+      "rect": [
+        650,
+        0,
+        675,
+        1344
+      ]
+    },
+    {
+      "image": "arret-bus-bleu",
+      "format": "split",
+      "rect": [
+        872,
+        0,
+        675,
+        1344
+      ]
+    },
+    {
+      "image": "marche-rideau-metal",
+      "format": "split",
+      "rect": [
+        852,
+        0,
+        675,
+        1344
+      ]
+    },
+    {
+      "image": "couloir-verriere-a",
+      "format": "split",
+      "rect": [
+        650,
+        0,
+        675,
+        1344
+      ]
+    },
+    {
+      "image": "mur-clair-debout",
+      "format": "split",
+      "rect": [
+        751,
+        0,
+        675,
+        1344
+      ]
+    },
+    {
+      "image": "tablette-interieur",
+      "format": "medium",
+      "rect": [
+        0,
+        0,
+        2016,
+        907
+      ]
+    },
+    {
+      "image": "canape-lumiere",
+      "format": "medium",
+      "rect": [
+        0,
+        3,
+        2016,
+        907
+      ]
+    },
+    {
+      "image": "ecouteur-exterieur",
+      "format": "medium",
+      "rect": [
+        0,
+        25,
+        1680,
+        756
+      ]
+    },
+    {
+      "image": "portrait-mur-rose",
+      "format": "medium",
+      "rect": [
+        0,
+        0,
+        2016,
+        907
+      ]
+    },
+    {
+      "image": "bureau-lampe-bleu",
+      "format": "medium",
+      "rect": [
+        0,
+        0,
+        2016,
+        907
+      ]
+    },
+    {
+      "image": "table-fenetre",
+      "format": "medium",
+      "rect": [
+        0,
+        0,
+        2016,
+        907
+      ]
+    },
+    {
+      "image": "echange-motif-bleu",
+      "format": "medium",
+      "rect": [
+        0,
+        0,
+        2016,
+        907
+      ]
+    },
+    {
+      "image": "quai-gare",
+      "format": "medium",
+      "rect": [
+        192,
+        0,
+        1551,
+        698
+      ]
+    },
+    {
+      "image": "arret-bus-bleu",
+      "format": "medium",
+      "rect": [
+        469,
+        79,
+        1440,
+        648
+      ]
+    },
+    {
+      "image": "marche-rideau-metal",
+      "format": "medium",
+      "rect": [
+        559,
+        120,
+        1260,
+        567
+      ]
+    },
+    {
+      "image": "mur-clair-debout",
+      "format": "medium",
+      "rect": [
+        459,
+        79,
+        1260,
+        567
+      ]
+    },
+    {
+      "image": "tablette-interieur",
+      "format": "band",
+      "rect": [
+        0,
+        0,
+        2016,
+        675
+      ]
+    },
+    {
+      "image": "canape-lumiere",
+      "format": "band",
+      "rect": [
+        0,
+        119,
+        2016,
+        675
+      ]
+    },
+    {
+      "image": "portrait-mur-rose",
+      "format": "band",
+      "rect": [
+        0,
+        93,
+        2016,
+        675
+      ]
+    },
+    {
+      "image": "bureau-lampe-bleu",
+      "format": "band",
+      "rect": [
+        0,
+        66,
+        2016,
+        675
+      ]
+    },
+    {
+      "image": "table-fenetre",
+      "format": "band",
+      "rect": [
+        0,
+        106,
+        2016,
+        675
+      ]
+    },
+    {
+      "image": "echange-motif-bleu",
+      "format": "band",
+      "rect": [
+        0,
+        39,
+        2016,
+        675
+      ]
+    },
+    {
+      "image": "quai-gare",
+      "format": "band",
+      "rect": [
+        248,
+        0,
+        1440,
+        482
+      ]
+    },
+    {
+      "image": "marche-rideau-metal",
+      "format": "band",
+      "rect": [
+        517,
+        0,
+        1344,
+        450
+      ]
+    },
+    {
+      "image": "arret-bus-bleu",
+      "format": "band",
+      "rect": [
+        559,
+        125,
+        1260,
+        422
+      ]
+    },
+    {
+      "image": "couloir-verriere-a",
+      "format": "band",
+      "rect": [
+        255,
+        44,
+        1344,
+        450
+      ]
+    },
+    {
+      "image": "mur-clair-debout",
+      "format": "band",
+      "rect": [
+        417,
+        84,
+        1344,
+        450
+      ]
+    },
+    {
+      "image": "quai-gare",
+      "format": "strip-1",
+      "rect": [
+        617,
+        0,
+        742,
+        1344
+      ]
+    },
+    {
+      "image": "arret-bus-bleu",
+      "format": "strip-1",
+      "rect": [
+        839,
+        0,
+        742,
+        1344
+      ]
+    },
+    {
+      "image": "ecouteur-exterieur",
+      "format": "strip-2",
+      "rect": [
+        337,
+        0,
+        817,
+        1344
+      ]
+    },
+    {
+      "image": "tablette-interieur",
+      "format": "strip-2",
+      "rect": [
+        519,
+        0,
+        817,
+        1344
+      ]
+    },
+    {
+      "image": "marche-rideau-metal",
+      "format": "strip-3",
+      "rect": [
+        850,
+        0,
+        679,
+        1344
+      ]
+    },
+    {
+      "image": "mur-clair-debout",
+      "format": "strip-3",
+      "rect": [
+        749,
+        0,
+        679,
+        1344
+      ]
+    },
+    {
+      "image": "canape-lumiere",
+      "format": "strip-4",
+      "rect": [
+        720,
+        0,
+        817,
+        1344
+      ]
+    },
+    {
+      "image": "ecouteur-exterieur",
+      "format": "strip-4",
+      "rect": [
+        317,
+        0,
+        817,
+        1344
+      ]
+    },
+    {
+      "image": "couloir-verriere-a",
+      "format": "strip-5",
+      "rect": [
+        586,
+        0,
+        803,
+        1344
+      ]
+    },
+    {
+      "image": "marche-rideau-metal",
+      "format": "strip-5",
+      "rect": [
+        788,
+        0,
+        803,
+        1344
+      ]
+    }
+  ]
+}
