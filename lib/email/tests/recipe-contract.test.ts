@@ -365,7 +365,8 @@ describe("recettes V2 : prompts par recette", () => {
     assert.ok(/steps/.test(discoverySystemPrompt) && /benefits/.test(discoverySystemPrompt) && !/edition|claims|support/.test(discoverySystemPrompt))
     assert.ok(/edition/.test(newsletterSystemPrompt) && /rubriques/.test(newsletterSystemPrompt) && !/benefits|claims|support/.test(newsletterSystemPrompt))
     assert.ok(/claims/.test(brandProofSystemPrompt) && /support/.test(brandProofSystemPrompt) && !/benefits|rubriques|edition/.test(brandProofSystemPrompt))
-    for (const prompt of prompts()) assert.ok(prompt.system.length < 2600 && prompt.system.length > 1200, `${prompt.recipe} : ${prompt.system.length}`)
+    // R2 porte en plus ses principes éditoriaux (idée centrale, concret sans inventer, variété) : budget propre, total toujours sous 7 000.
+    for (const prompt of prompts()) assert.ok(prompt.system.length < (prompt.recipe === "editorial-newsletter" ? 3400 : 2600) && prompt.system.length > 1200, `${prompt.recipe} : ${prompt.system.length}`)
   })
 
   test("le prompt de chaque recette porte le schéma de sa recette et son contexte", () => {

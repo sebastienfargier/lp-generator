@@ -60,17 +60,21 @@ export const newsletterSystemPrompt = `Tu rédiges le contenu d'une NEWSLETTER S
 
 ${outputRule}
 
-But : une newsletter éditoriale, au rythme de lecture : une ouverture qui donne le sujet de l'édition, une introduction, quatre rubriques à parcourir, puis une clôture qui renvoie vers un contenu. Ce n'est ni une offre ni une relance commerciale.
+But : une newsletter utile à lire, pas un résumé du brief ni une offre. Choisis d'abord son IDÉE ÉDITORIALE CENTRALE, formulable en une phrase : le hero la porte, le reste la développe sans la reformuler, le bouton en est la suite naturelle.
 
 Structure :
-- edition : "banner" (l'édition s'ouvre sur un grand visuel et se clôt sur une section illustrée) ou "portrait-strip" (elle s'ouvre sur une frise de portraits). Tu choisis seulement l'édition qui convient au sujet ; tu ne choisis ni portraits ni visuels ;
-- subject : 30 à 45 caractères (s'il y a un request.subject, recopie-le) ; preheader : 60 à 90 caractères, qui prolonge l'objet sans le répéter ;
-- hero : eyebrow (un ou deux mots, sans date), title éditorial, text (deux phrases au plus) et cta { label, destination } ;
-- intro : title et text, un court paragraphe qui pose le sujet ;
-- rubriques : eyebrow, title et exactement 4 rubriques (title, text), chacune lisible seule ;
-- closing : title, text et ctaLabel. Son bouton mène à la même destination que hero.cta : un seul appel principal.
+- edition : "banner" (grand visuel, clôture illustrée) ou "portrait-strip" (frise de portraits) ; tu choisis seulement l'édition, ni portraits ni visuels ;
+- subject : 30 à 45 caractères (s'il y a un request.subject, recopie-le) ; un angle précis, sans paraphraser le brief ni inventer de fait, pas forcément un verbe en tête ; preheader : 60 à 90 caractères, une promesse de lecture ou une information, sans répéter l'objet ni le hero ;
+- hero : eyebrow (un ou deux mots, sans date), title (l'idée centrale : question, tension ou promesse de lecture), text (deux phrases au plus, qui donnent envie de lire la suite), cta { label, destination } ;
+- intro : title et text : pourquoi le sujet mérite quelques minutes, comment l'édition est construite ; elle ne reformule pas le hero ;
+- rubriques : eyebrow, title et exactement 4 rubriques (title, text), chacune avec une idée distincte (une action, une question à se poser, une chose à observer ou à comparer), un titre spécifique et un texte qui dit quoi faire, regarder ou comparer. Jamais deux rubriques synonymes, jamais quatre variantes de « réfléchissez à votre projet » ;
+- closing : title, text, ctaLabel : il prolonge le hero vers ce que le bouton ouvre. Même destination que hero.cta (un seul appel principal), mais un libellé différent de celui du hero ; chaque libellé, court et à l'infinitif, annonce ce que le lecteur trouvera.
 
-Boutons : libellés courts, à l'infinitif.
+Destination : d'après ce que le bouton promet ; un lien vers des profils, des parcours ou des fiches exige que le hero l'annonce.
+
+Concret sans inventer : appuie-toi sur ce que fait le lecteur, en verbe + action observable (noter, lister, comparer, relire, tester, bloquer un créneau, poser une question). Jamais de fait Studi non fourni : chiffre, durée présentée comme vérité, résultat, efficacité, service ou accompagnement précis, détail d'une formation.
+
+Variété : évite de répéter ou d'abuser de « à votre rythme », « repères concrets », « pistes concrètes », « passer à l'action », « pas à pas », « réflexion », « projet professionnel » quand une formulation plus précise existe ; ne reprends pas les mots du brief tels quels.
 
 ${factsRule}
 
