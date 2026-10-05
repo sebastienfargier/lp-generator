@@ -91,6 +91,53 @@ describe("objectif POC", () => {
   })
 })
 
+describe("objectif en lecture seule", () => {
+  const panel = code("components/generator/generator-panel.tsx")
+  const field = panel.slice(panel.indexOf('<FieldLabel htmlFor="generator-objective">'), panel.indexOf("</Field>", panel.indexOf('htmlFor="generator-objective"')))
+
+  test("A. « Découverte des formations » est affiché : libellé de l'objectif sélectionné, dans un champ lu seul", () => {
+    assert.match(field, /Objectif/)
+    assert.match(field, /<Input\s+id="generator-objective"\s+readOnly/)
+    assert.match(field, /value=\{objective\?\.label \?\? ""\}/)
+    assert.match(panel, /objectives\.find\(\(item\) => item\.value === brief\.objective\)/)
+    assert.equal(generatorObjectives.find((item) => item.value === "discover-trainings")?.label, "Découverte des formations")
+    assert.deepEqual(landingSupportedObjectives, ["discover-trainings"])
+  })
+
+  test("B. plus aucun select, aucun onChange, aucune mise à jour de l'objectif ; aucun objectif non supporté montré", () => {
+    assert.ok(!/Select|<select|role="combobox"/.test(panel))
+    assert.ok(!/update\("objective"/.test(panel))
+    assert.ok(!/onChange[^\n]*objective/.test(field))
+    for (const label of ["Génération de leads", "Téléchargement de documentation", "Prise de contact"]) assert.ok(!panel.includes(label), label)
+    assert.ok(!/<Select/.test(code("components/generator/generator-workspace.tsx")))
+  })
+
+  test("C. la valeur envoyée reste `objective` du brief, présélectionné à « discover-trainings »", () => {
+    assert.match(code("app/generator/page.tsx"), /objective: landingSupportedObjectives\[0\]/)
+    assert.match(code("components/generator/generator-workspace.tsx"), /requestLandingGeneration\(brief\)/)
+    assert.ok(!/setBrief\(/.test(code("components/generator/generator-workspace.tsx")))
+  })
+})
+
+describe("bouton Générer / Régénérer et message de durée", () => {
+  const panel = code("components/generator/generator-panel.tsx")
+  const workspace = code("components/generator/generator-workspace.tsx")
+
+  test("le libellé vient du réducteur pur et traverse le workspace jusqu'au bouton ; spinner et garde inchangés", () => {
+    assert.match(workspace, /submitLabel=\{generatorSubmitLabel\(state\)\}/)
+    assert.match(panel, /submitLabel: string/)
+    assert.match(panel, /disabled=\{pending \|\| !canGenerate\}/)
+    assert.match(panel, /\{pending && \(\s*<Spinner/)
+  })
+
+  test("J. texte de durée exact, affiché seulement pendant l'appel, sans minuteur ni estimation dynamique", () => {
+    assert.match(panel, /La génération peut prendre une vingtaine de secondes\./)
+    assert.ok(!/dizaine/.test(panel))
+    assert.match(panel, /\{pending && \(\s*<p[^>]*>\s*La génération peut prendre une vingtaine de secondes\./)
+    assert.ok(!/setInterval|setTimeout|Date\.now|useEffect/.test(panel + workspace))
+  })
+})
+
 describe("bouton Générer et états", () => {
   const panel = code("components/generator/generator-panel.tsx")
   const workspace = code("components/generator/generator-workspace.tsx")
@@ -98,7 +145,8 @@ describe("bouton Générer et états", () => {
   test("bouton actif seulement si le formulaire est prêt et qu'aucun appel n'est en cours", () => {
     assert.match(panel, /<Button[^>]*type="submit"[^>]*disabled=\{pending \|\| !canGenerate\}/)
     assert.match(panel, /aria-busy=\{pending\}/)
-    assert.match(panel, /pending \? "Génération…" : "Générer la landing page"/)
+    assert.match(panel, /\{submitLabel\}/)
+    assert.ok(!/Générer la landing page/.test(panel))
   })
 
   test("un seul POST par soumission : garde contre la double soumission, ni relance ni boucle", () => {
@@ -259,8 +307,8 @@ describe("champ « Informations à reprendre telles quelles »", () => {
     assert.match(panel, /Spinner/)
   })
 
-  test("l'objectif reste tel quel dans ce commit ; les erreurs serveur disent « Informations à reprendre »", () => {
-    assert.match(panel, /<SelectValue placeholder="Choisir un objectif" \/>/)
+  test("l'objectif est présenté à part (cf. « objectif en lecture seule ») ; les erreurs serveur disent « Informations à reprendre »", () => {
+    assert.ok(!/SelectValue/.test(panel))
     assert.match(panel, /describeFieldPath\(field\.path\)/)
     assert.ok(!/fieldLabels/.test(panel))
   })

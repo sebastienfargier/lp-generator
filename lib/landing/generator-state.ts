@@ -39,6 +39,15 @@ export function generatorReducer(state: GeneratorState, action: GeneratorAction)
   }
 }
 
+/**
+ * Libellé du bouton : « Générer » tant qu'aucune page valide n'existe, « Régénérer » dès qu'une
+ * configuration est affichée (même après une erreur ou une modification du formulaire : pas de dirty).
+ */
+export function generatorSubmitLabel(state: GeneratorState): string {
+  if (state.status === "loading") return "Génération…"
+  return state.config ? "Régénérer" : "Générer"
+}
+
 /** Validation légère pour l'UX : le serveur reste l'autorité. */
 export function canGenerate(brief: GeneratorFormInput): boolean {
   return [brief.projectName, brief.brief, brief.audience, brief.objective].every((value) => value.trim() !== "") && factsInputError(brief.facts) === null

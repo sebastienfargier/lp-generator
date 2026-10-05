@@ -8,7 +8,7 @@ import { describe, mock, test } from "node:test"
 
 import { describeFieldPath, emptyGeneratorBrief, factsInputError, maxGeneratorFacts, parseFactsInput } from "../brief"
 import { requestLandingGeneration } from "../generate-client"
-import { canGenerate, describeGeneratedPage, generatorReducer, initialGeneratorState, type GeneratorState } from "../generator-state"
+import { canGenerate, describeGeneratedPage, generatorReducer, generatorSubmitLabel, initialGeneratorState, type GeneratorState } from "../generator-state"
 import { resolveLandingDraft } from "../draft-resolver"
 import { safeParseLandingGenerationRequest } from "../generation-request"
 import { landingGenerateEndpoint, publicErrorCodes, type PublicGenerationError } from "../public-api"
@@ -195,6 +195,53 @@ describe("état de la page", () => {
     const snapshot = JSON.stringify(state)
     generatorReducer(state, { type: "start" })
     assert.equal(JSON.stringify(state), snapshot)
+  })
+})
+
+describe("libellé du bouton : Générer, Génération…, Régénérer", () => {
+  const error: PublicGenerationError = { code: "generation-failed", message: "x" }
+  const loading = generatorReducer(initialGeneratorState, { type: "start" })
+
+  test("D. avant toute génération : « Générer »", () => {
+    assert.equal(generatorSubmitLabel(initialGeneratorState), "Générer")
+  })
+
+  test("E. pendant l'appel : « Génération… », première génération comme régénération", () => {
+    assert.equal(generatorSubmitLabel(loading), "Génération…")
+    const success = generatorReducer(loading, { type: "success", config })
+    assert.equal(generatorSubmitLabel(generatorReducer(success, { type: "start" })), "Génération…")
+  })
+
+  test("F. après un succès : « Régénérer »", () => {
+    assert.equal(generatorSubmitLabel(generatorReducer(loading, { type: "success", config })), "Régénérer")
+  })
+
+  test("G. modifier le formulaire n'y change rien : le libellé ne dépend que de l'état de la page (pas de dirty)", () => {
+    const success = generatorReducer(loading, { type: "success", config })
+    const edited = { ...brief, brief: "Un autre brief.", audience: "Autre audience", facts: "Heure : 19h." }
+    assert.equal(JSON.stringify(edited) === JSON.stringify(brief), false)
+    assert.equal(generatorSubmitLabel(success), "Régénérer")
+    assert.equal(generatorSubmitLabel.length, 1, "un seul argument : l'état, jamais le formulaire")
+  })
+
+  test("H. erreur après un succès : l'ancienne preview est conservée et le bouton reste « Régénérer »", () => {
+    const success = generatorReducer(loading, { type: "success", config })
+    const failed = generatorReducer(generatorReducer(success, { type: "start" }), { type: "failure", error })
+    assert.equal(failed.status, "error")
+    assert.equal(failed.config, config)
+    assert.equal(generatorSubmitLabel(failed), "Régénérer")
+  })
+
+  test("I. erreur sur la première génération : pas de preview, le bouton revient à « Générer »", () => {
+    const failed = generatorReducer(loading, { type: "failure", error })
+    assert.equal(failed.config, null)
+    assert.equal(generatorSubmitLabel(failed), "Générer")
+  })
+
+  test("après une erreur, un nouveau succès remplace la preview et donne « Régénérer »", () => {
+    const failed = generatorReducer(loading, { type: "failure", error })
+    const next = generatorReducer(generatorReducer(failed, { type: "start" }), { type: "success", config })
+    assert.equal(generatorSubmitLabel(next), "Régénérer")
   })
 })
 

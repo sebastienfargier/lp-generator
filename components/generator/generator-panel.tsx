@@ -4,14 +4,6 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { Spinner } from "@/components/ui/spinner"
 import { Textarea } from "@/components/ui/textarea"
 import { describeFieldPath, factsInputError, type GeneratorFormValues } from "@/lib/landing/brief"
@@ -25,6 +17,8 @@ type GeneratorPanelProps = {
   pending: boolean
   /** Validation légère pour l'UX : le serveur reste l'autorité. */
   canGenerate: boolean
+  /** « Générer », « Génération… » ou « Régénérer » : dérivé de l'état de la page. */
+  submitLabel: string
   onBriefChange: (brief: GeneratorFormValues) => void
   onGenerate: () => void
 }
@@ -35,6 +29,7 @@ export function GeneratorPanel({
   error,
   pending,
   canGenerate,
+  submitLabel,
   onBriefChange,
   onGenerate,
 }: GeneratorPanelProps) {
@@ -43,6 +38,8 @@ export function GeneratorPanel({
     value: GeneratorFormValues[Key]
   ) => onBriefChange({ ...brief, [key]: value })
   const factsError = factsInputError(brief.facts)
+  // Un seul objectif est servi par le moteur : présenté en lecture seule, la valeur envoyée ne change pas.
+  const objective = objectives.find((item) => item.value === brief.objective)
 
   return (
     <form
@@ -96,27 +93,12 @@ export function GeneratorPanel({
 
         <Field>
           <FieldLabel htmlFor="generator-objective">Objectif</FieldLabel>
-          <Select
-            items={objectives}
-            value={brief.objective || null}
-            onValueChange={(value) => {
-              const objective = objectives.find((item) => item.value === value)
-              if (objective) update("objective", objective.value)
-            }}
-          >
-            <SelectTrigger id="generator-objective" className="w-full">
-              <SelectValue placeholder="Choisir un objectif" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                {objectives.map((objective) => (
-                  <SelectItem key={objective.value} value={objective.value}>
-                    {objective.label}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
+          <Input
+            id="generator-objective"
+            readOnly
+            value={objective?.label ?? ""}
+            className="bg-muted text-foreground"
+          />
         </Field>
 
         <Field data-invalid={factsError ? true : undefined}>
@@ -153,11 +135,11 @@ export function GeneratorPanel({
           {pending && (
             <Spinner data-icon="inline-start" aria-label="Génération en cours" />
           )}
-          {pending ? "Génération…" : "Générer la landing page"}
+          {submitLabel}
         </Button>
         {pending && (
           <p className="text-caption text-muted-foreground" aria-live="polite">
-            La génération prend en général une dizaine de secondes.
+            La génération peut prendre une vingtaine de secondes.
           </p>
         )}
       </div>

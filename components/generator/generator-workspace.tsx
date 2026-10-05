@@ -4,7 +4,7 @@ import { useReducer, useRef, useState } from "react"
 
 import type { GeneratorFormValues } from "@/lib/landing/brief"
 import { requestLandingGeneration } from "@/lib/landing/generate-client"
-import { canGenerate, generatorReducer, initialGeneratorState } from "@/lib/landing/generator-state"
+import { canGenerate, generatorReducer, generatorSubmitLabel, initialGeneratorState } from "@/lib/landing/generator-state"
 
 import { GeneratorPanel } from "./generator-panel"
 import { LandingPreview } from "./landing-preview"
@@ -53,6 +53,7 @@ export function GeneratorWorkspace({ initialBrief, objectives }: GeneratorWorksp
           error={state.error}
           pending={pending}
           canGenerate={canGenerate(brief)}
+          submitLabel={generatorSubmitLabel(state)}
           onBriefChange={setBrief}
           onGenerate={generate}
         />
