@@ -42,3 +42,7 @@ next-env.d.ts
 
 # banque d'images source (volumineuse, non versionnée)
 /images-banq/
+
+# corpus Studi : seuls les textes de marque et les références légères sont versionnés ;
+# les 90 PNG générés (~395 Mo, doublons de /images-banq/) restent hors dépôt
+/ressources/email/assets/
