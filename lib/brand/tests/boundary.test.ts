@@ -51,7 +51,7 @@ describe("lib/brand : frontière", () => {
     assert.ok(users.length > 100)
     const using = users.filter((path) => /lib\/brand|["']\.\.?\/(?:\.\.\/)*brand(?:\/[a-z-]+)?["']/.test(readFileSync(join(root, path), "utf8")))
     // Les recettes Email V2 (claims approuvées, lexique) : le seul usage autorisé.
-    assert.deepEqual(using.sort(), ["lib/email/recipe-resolver.ts", "lib/email/recipe-validation.ts"])
+    assert.deepEqual(using.sort(), ["lib/email/recipe-brand-context.ts", "lib/email/recipe-resolver.ts", "lib/email/recipe-validation.ts"])
   })
 
   test("les moteurs, prompts et resolvers ne mentionnent ni la marque ni ses claims", () => {

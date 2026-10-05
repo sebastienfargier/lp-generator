@@ -606,9 +606,9 @@ describe("recettes Email V2 : frontières et non-régression", () => {
     }
   })
 
-  test("Brand n'est importé que par le resolver et la validation des recettes, jamais par le moteur V1", () => {
+  test("Brand n'est importé que par le resolver, la validation et le contexte des recettes, jamais par le moteur V1", () => {
     const users = readdirSync(join(root, "lib/email")).filter((file) => file.endsWith(".ts")).filter((file) => /\.\.\/brand/.test(read(`lib/email/${file}`)))
-    assert.deepEqual(users.sort(), ["recipe-resolver.ts", "recipe-validation.ts"])
+    assert.deepEqual(users.sort(), ["recipe-brand-context.ts", "recipe-resolver.ts", "recipe-validation.ts"])
   })
 
   test("le moteur V1 (client, schéma, prompt, brouillon, resolver, route) ne connaît pas les recettes", () => {

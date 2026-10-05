@@ -171,7 +171,12 @@ function roleOf(block: EmailBlock, claimed: boolean): EmailRecipeRole | undefine
   return kind ? emailRecipeSectionRoles[kind] : undefined
 }
 
-export function validateEmailRecipeConfig(recipeId: EmailRecipeId, config: EmailConfig): EmailRecipeIssue[] {
+export type EmailRecipeValidationOptions = {
+  /** Faits de la demande : un nombre qu'ils contiennent, recopié tel quel, n'est pas un chiffre inventé. */
+  facts?: readonly string[]
+}
+
+export function validateEmailRecipeConfig(recipeId: EmailRecipeId, config: EmailConfig, options: EmailRecipeValidationOptions = {}): EmailRecipeIssue[] {
   const recipe: EmailRecipe = emailRecipes[recipeId]
   const issues: EmailRecipeIssue[] = []
   const issue = (code: string, path: string, message: string) => issues.push({ code, path, message })
@@ -264,16 +269,20 @@ export function validateEmailRecipeConfig(recipeId: EmailRecipeId, config: Email
   const texts = contentTexts(content)
   const claimCount = description.claimIds.length
   if (claimCount < recipe.claims.min || claimCount > recipe.claims.max) issue("claims", "blocks", `${claimCount} claim(s) approuvée(s) : ${recipe.claims.min} à ${recipe.claims.max} attendues.`)
-  const statements = approvedClaims.map((claim) => claim.statement).sort((a, b) => b.length - a.length)
-  const stripClaims = (text: string) => statements.reduce((rest, statement) => rest.split(statement).join(" "), text)
+  for (const id of description.claimIds) {
+    if (!(recipe.claims.allowed as readonly string[]).includes(id)) issue("claims", "blocks", `La claim « ${id} » n'est pas acceptée par cette recette.`)
+  }
+  // Un nombre n'est admis que s'il appartient à une claim approuvée (R3) ou à un fait de la demande, recopié tel quel.
+  const facts = [...(options.facts ?? [])].sort((a, b) => b.length - a.length)
+  const claimStatements = recipe.figures === "claims-only" ? approvedClaims.map((claim) => claim.statement).sort((a, b) => b.length - a.length) : []
+  const stripKnown = (text: string) => [...claimStatements, ...facts].reduce((rest, known) => rest.split(known).join(" "), text)
   const figureTexts = [
     { path: "subject", text: config.subject },
     { path: "preheader", text: config.preheader },
     ...texts,
   ]
   for (const { path, text } of figureTexts) {
-    const rest = recipe.figures === "claims-only" ? stripClaims(text) : text
-    if (/\d/.test(rest)) issue("figure", path, recipe.figures === "none" ? "Aucun chiffre dans cette recette." : "Un chiffre ne vient que d'une claim approuvée, copiée telle quelle.")
+    if (/\d/.test(stripKnown(text))) issue("figure", path, recipe.figures === "none" ? "Aucun chiffre dans cette recette, sauf ceux des faits de la demande." : "Un chiffre ne vient que d'une claim approuvée ou d'un fait de la demande, copiés tels quels.")
   }
   for (const { path, text } of figureTexts) if (placeholder.test(text)) issue("placeholder", path, "Texte de remplissage ou marqueur à confirmer.")
 
@@ -339,4 +348,43 @@ export function lintEmailRecipeContent(config: EmailConfig): EmailRecipeDiagnost
       ...(finding.conflictId ? { conflictId: finding.conflictId } : {}),
     }))
   )
+}
+
+/* -------------------------------------------------------------------------- */
+/* Politique de diagnostic                                                    */
+/* -------------------------------------------------------------------------- */
+
+export type EmailRecipeDiagnosticPolicy = {
+  /**
+   * Diagnostics qui rendraient la génération invalide (à corriger sous
+   * contrôle, jamais automatiquement) : une règle en `error` issue d'un
+   * document APPROUVÉ. Aucune des règles actuelles ne l'est : tant que le
+   * corpus n'a pas approuvé ses règles de lexique, la liste reste vide.
+   */
+  blocking: EmailRecipeDiagnostic[]
+  /** À relire par une personne : conflits connus entre documents, erreurs de règles encore en revue. */
+  humanReview: EmailRecipeDiagnostic[]
+  /** Information : avertissements, et toute règle issue d'un brouillon. */
+  advisory: EmailRecipeDiagnostic[]
+}
+
+/**
+ * Politique PROPOSÉE (aucun effet : le pipeline ne bloque rien et ne corrige
+ * rien, il range seulement). Ordre de priorité :
+ * 1. conflit connu → relecture humaine (rien n'est tranché) ;
+ * 2. règle d'un brouillon → information, jamais bloquante ;
+ * 3. erreur d'une règle approuvée → bloquante ;
+ * 4. erreur d'une règle en revue → relecture humaine ;
+ * 5. avertissement → information.
+ */
+export function classifyEmailRecipeDiagnostics(diagnostics: readonly EmailRecipeDiagnostic[]): EmailRecipeDiagnosticPolicy {
+  const policy: EmailRecipeDiagnosticPolicy = { blocking: [], humanReview: [], advisory: [] }
+  for (const diagnostic of diagnostics) {
+    if (diagnostic.level === "known-conflict") policy.humanReview.push(diagnostic)
+    else if (diagnostic.sourceStatus === "draft") policy.advisory.push(diagnostic)
+    else if (diagnostic.level === "error" && diagnostic.sourceStatus === "approved") policy.blocking.push(diagnostic)
+    else if (diagnostic.level === "error") policy.humanReview.push(diagnostic)
+    else policy.advisory.push(diagnostic)
+  }
+  return policy
 }

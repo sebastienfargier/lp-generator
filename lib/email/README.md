@@ -604,6 +604,42 @@ prompt, son resolver et la route de génération ne les connaissent pas.
   `benefits-compact-highlights` et le bandeau `preheader` (lien secondaire).
 - `lib/brand` n'est importé que par ces deux modules.
 
+### Contrat IA des recettes (non branché)
+
+Le contrat que le futur appel de Claude recevra, préparé hors ligne :
+
+```
+requête → recette (déterministe) → contexte Brand compact → prompt de la
+recette → Draft de la recette (Structured Output) → resolver V2 → EmailConfig
+→ validation Zod → validation de recette → diagnostic de terminologie →
+renderEmail → aperçu
+```
+
+- `recipe-selection.ts` : intentions V2 additives (`discovery`, `editorial`,
+  `brand-proof`) → recette ; sans intention, l'ancien vocabulaire se rattache
+  par ses champs structurés (newsletter → R2, objectif → R1), jamais par le
+  texte libre. Promotion, offre, transactionnel, fin de séquence, témoignage,
+  partenaire, visuels fournis et mention légale d'un fait : refus explicite.
+- `recipe-drafts.ts` : trois Drafts stricts, distincts, sans optionnel (R1 :
+  étapes et appuis ; R2 : édition `banner` ou `portrait-strip`, introduction et
+  quatre rubriques ; R3 : 2 à 3 identifiants de claims approuvées et un texte
+  d'appui par claim). Aucun schéma ne contient d'union des recettes. Le code
+  décide de la disposition du hero, de la frise, de la surface d'empathie et du
+  second bouton ; `resolveEmailRecipeDraft` enchaîne le tout.
+- `recipe-brand-context.ts` : projection compacte de `lib/brand` (voix de
+  l'audience, sept règles de rédaction, onze formulations à éviter,
+  destinations, intentions visuelles, claims pour R3 seulement). La provenance
+  reste à côté, jamais envoyée.
+- `recipe-prompts.ts` : `buildR1EmailPrompt`, `buildR2EmailPrompt`,
+  `buildR3EmailPrompt` et `buildEmailRecipePrompt`. Environ 5 000 caractères
+  par prompt (système, message, contexte), schémas de transport de 1 500 à
+  2 000 caractères.
+- Terminologie : `classifyEmailRecipeDiagnostics` range les diagnostics
+  (conflit connu → relecture humaine, règle de brouillon → information, erreur
+  d'une règle approuvée → bloquante, erreur d'une règle en revue → relecture).
+  Aucune règle actuelle n'est approuvée ; rien ne bloque, rien ne se corrige,
+  aucune relance.
+
 ## Tests
 
 ```bash
@@ -621,6 +657,9 @@ socle ; seuls les cas de corruption injectent une source modifiée.
   chaque template identiques au manifeste.
 - `renderer.test.ts` : document, slots, échappement, surfaces, intégrité, et
   rendu des 36 lames sur Page.
+- `recipe-contract.test.ts` : contrat IA des recettes (sélection, trois
+  Drafts, schémas de transport, contexte Brand, prompts, aller-retour de six
+  Drafts, Drafts invalides, fuites, politique de terminologie, frontières).
 - `recipes.test.ts` : recettes V2 (définitions, six fixtures rendues,
   claims, surfaces, images, terminologie, différenciation, validation,
   frontières).

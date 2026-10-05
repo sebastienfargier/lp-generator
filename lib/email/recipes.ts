@@ -142,8 +142,12 @@ export type EmailRecipe = {
     default: EmailSurface
     allowed: readonly EmailSurface[]
   }
-  /** Preuves : nombre de claims approuvées dans l'email. `max: 0` : aucune. */
-  claims: Range
+  /**
+   * Preuves : nombre de claims approuvées dans l'email (`max: 0` : aucune) et
+   * celles que la recette accepte. `financement-dispositifs` est exclue : elle
+   * touche au financement, que ces recettes ne traitent pas.
+   */
+  claims: Range & { allowed: readonly string[] }
   /** Mentions légales : seulement celles qu'appelle une claim utilisée. */
   disclaimers: "from-claims"
   /** Chiffres : `none` interdit tout nombre ; `claims-only` n'admet que ceux d'une claim approuvée. */
@@ -169,7 +173,7 @@ export const emailRecipes = {
     destinations: discoveryDestinations,
     images: { intents: ["warm-reassurance", "career-movement"], strips: [] },
     surface: { zone: "hero", default: "marque", allowed: ["marque", "accent-2-soft"] },
-    claims: { min: 0, max: 0 },
+    claims: { min: 0, max: 0, allowed: [] },
     disclaimers: "from-claims",
     figures: "none",
     density: { min: 80, max: 280 },
@@ -186,7 +190,7 @@ export const emailRecipes = {
     destinations: editorialDestinations,
     images: { intents: ["editorial-work"], strips: ["portrait-strip-mixed-01", "portrait-strip-mixed-02"] },
     surface: { zone: "hero", default: "marque", allowed: ["marque"] },
-    claims: { min: 0, max: 0 },
+    claims: { min: 0, max: 0, allowed: [] },
     disclaimers: "from-claims",
     figures: "none",
     density: { min: 110, max: 380 },
@@ -203,7 +207,11 @@ export const emailRecipes = {
     destinations: proofDestinations,
     images: { intents: ["campaign-portrait", "editorial-work"], strips: [] },
     surface: { zone: "proof", default: "marque", allowed: ["marque"] },
-    claims: { min: 2, max: 3 },
+    claims: {
+      min: 2,
+      max: 3,
+      allowed: ["apprenants-en-formation", "catalogue-formations", "formateurs-conseillers", "formations-alternance", "partenaires-academiques"],
+    },
     disclaimers: "from-claims",
     figures: "claims-only",
     density: { min: 70, max: 260 },

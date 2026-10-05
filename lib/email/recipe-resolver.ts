@@ -39,6 +39,7 @@ import {
   lintEmailRecipeContent,
   validateEmailRecipeConfig,
   type EmailRecipeDiagnostic,
+  type EmailRecipeValidationOptions,
   type EmailRecipeIssue,
 } from "./recipe-validation"
 import {
@@ -161,7 +162,7 @@ function toId(campaignName: string) {
 }
 
 /** Indice déterministe dans `[0, length)` pour une graine (FNV-1a), comme le choix d'image de la banque. */
-function stableIndex(seed: string, length: number) {
+export function stableIndex(seed: string, length: number) {
   let hash = 0x811c9dc5
   for (const char of seed) hash = Math.imul(hash ^ char.codePointAt(0)!, 0x01000193) >>> 0
   return hash % length
@@ -355,7 +356,7 @@ function zoneSurface(input: EmailRecipeComposition, ctx: Context) {
  * Composition → EmailConfig validé. Chaque étape produit des diagnostics
  * plutôt qu'un contenu de remplacement ; rien n'est deviné.
  */
-export function composeEmailRecipe(input: EmailRecipeComposition): EmailRecipeResolution {
+export function composeEmailRecipe(input: EmailRecipeComposition, options: EmailRecipeValidationOptions = {}): EmailRecipeResolution {
   if (!Object.hasOwn(emailRecipes, input.recipe)) {
     return { status: "invalid-composition", issues: [{ code: "recipe", path: "recipe", message: `Recette inconnue : « ${input.recipe} ».` }] }
   }
@@ -383,8 +384,9 @@ export function composeEmailRecipe(input: EmailRecipeComposition): EmailRecipeRe
   if (ctx.issues.length > 0) return { status: "invalid-composition", issues: ctx.issues }
   const content = [hero, ...(body as EmailBlock[])]
   const kinds = ["hero", ...input.sections.map((section) => section.kind)]
-  // Zone « proof » : la liste de claims prend la surface ; un bandeau de preuve est déjà sombre par construction.
-  const target = recipe.surface.zone === "hero" ? 0 : kinds.indexOf("claim-list")
+  // Zone « proof » : la liste de claims (ou, à défaut, la première claim en titre) prend la surface ; un bandeau de preuve est déjà sombre par construction.
+  const proofTarget = kinds.indexOf("claim-list") >= 0 ? kinds.indexOf("claim-list") : kinds.includes("claim-highlight") ? -1 : kinds.indexOf("claim-text")
+  const target = recipe.surface.zone === "hero" ? 0 : proofTarget
   const colored = content.map((block, index) => (index === target ? asBlock({ ...block, surface }) : block))
 
   /* Mentions légales : seulement celles qu'appellent les claims utilisées */
@@ -437,7 +439,7 @@ export function composeEmailRecipe(input: EmailRecipeComposition): EmailRecipeRe
     return { status: "invalid-config", issues: parsed.error.issues.map((entry) => ({ code: "config", path: entry.path.join(".") || "config", message: entry.message })) }
   }
   const config = parsed.data
-  const violations = validateEmailRecipeConfig(recipe.id, config)
+  const violations = validateEmailRecipeConfig(recipe.id, config, options)
   if (violations.length > 0) return { status: "invalid-recipe", issues: violations }
 
   return {
