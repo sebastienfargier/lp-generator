@@ -159,13 +159,7 @@ const catalog = {
     placement: "any",
     description:
       "Carrousel horizontal de contenus éditoriaux, chacun avec une catégorie, un titre et une photo.",
-    bestFor: [
-      "articles",
-      "guides",
-      "témoignages éditoriaux",
-      "ressources",
-      "inspiration",
-    ],
+    bestFor: ["thèmes", "sujets", "inspiration"],
     avoidWhen: [
       "le contenu est essentiel au parcours principal et doit être vu entièrement sans interaction",
     ],

@@ -43,8 +43,27 @@ describe("ai-view : sections", () => {
   test("les 10 candidates historiques sont inchangées par l'ajout de CampaignSpotlight (même texte, mêmes champs)", () => {
     const historical = ["editorial-hero", "immersive-hero", "value-props", "pillars", "content-carousel", "audience-switcher", "narrative-split", "step-sequence", "destination-cards", "final-cta"]
     assert.deepEqual(view.sections.filter((entry) => entry.type !== "campaign-spotlight").map((entry) => entry.type), historical)
-    // Taille des 10 anciennes entrées, mesurée avant CampaignSpotlight (6 562 avec la vue V2) : aucune compression.
-    assert.equal(JSON.stringify(view.sections.filter((entry) => entry.type !== "campaign-spotlight")).length, 6562)
+    // Taille des 10 anciennes entrées : 6 562 avec la vue V2, puis 6 522 après l'alignement de ContentCarousel
+    // (bestFor sans témoignages) ; toute autre entrée est restée identique.
+    assert.equal(JSON.stringify(view.sections.filter((entry) => entry.type !== "campaign-spotlight")).length, 6522)
+  })
+
+  test("ContentCarousel : collection de contenus éditoriaux génériques, sans témoignage, avis ni contenu nommé", () => {
+    const carousel = view.sections.find((entry) => entry.type === "content-carousel")!
+    const text = JSON.stringify(carousel)
+    assert.ok(!/témoignage|\bavis\b|success.?stor/i.test(text), "pas de témoignage, d'avis ni de success story")
+    assert.ok(!/articles?\b|guides?\b|ressources?\b|actualités?|études? de cas/i.test(carousel.bestFor.join(" ")), "aucun contenu nommé comme usage")
+    assert.deepEqual(carousel.bestFor, ["thèmes", "sujets", "inspiration"])
+    assert.match(carousel.description, /^Carrousel horizontal de contenus éditoriaux/)
+    assert.match(carousel.description, /catégorie, un titre et une photo/)
+    assert.ok(!("guidance" in carousel), "aucune guidance ajoutée")
+  })
+
+  test("ContentCarousel reste distinct d'AudienceSwitcher (aucun terme d'audience, usages disjoints)", () => {
+    const carousel = view.sections.find((entry) => entry.type === "content-carousel")!
+    const switcher = view.sections.find((entry) => entry.type === "audience-switcher")!
+    assert.ok(!/audience|persona|profil|situation/i.test(JSON.stringify(carousel)))
+    assert.ok(carousel.bestFor.every((usage) => !switcher.bestFor.includes(usage)))
   })
 
   test("CampaignSpotlight : ni hero, ni category, guidance présente, textes du catalogue", () => {
@@ -323,6 +342,8 @@ describe("ai-view : contexte statique et request mesurés séparément", () => {
     const staticContext = JSON.stringify(view).length
     // Baseline V2 avant CampaignSpotlight : 9 013 ; avec la candidate : 9 744 ; budget relevé ponctuellement à 9 800.
     assert.ok(staticContext < 9800, `contexte statique : ${staticContext}`)
+    // Non-régression de l'alignement ContentCarousel : le contexte ne dépasse jamais sa baseline d'avant le fix (9 744).
+    assert.ok(staticContext <= 9744, `contexte statique : ${staticContext}`)
     assert.ok(staticContext > 8000, "le test détecte aussi un contexte anormalement vide")
   })
 
