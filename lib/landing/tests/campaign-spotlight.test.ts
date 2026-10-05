@@ -122,10 +122,28 @@ describe("CampaignSpotlight : composant, renderer, exemple", () => {
     assert.equal((component.match(/<PageContainer>/g) ?? []).length, 1)
     assert.equal((component.match(/<h2\b/g) ?? []).length, 1)
     assert.equal((component.match(/<Image\b/g) ?? []).length, 1)
-    assert.match(component, /overflow-hidden rounded-xl bg-background/)
+    assert.match(component, /overflow-hidden rounded-xl bg-brand-green/)
     assert.match(component, /lg:grid-cols-12/)
     assert.match(component, /lg:col-span-5/)
     assert.match(component, /lg:col-span-7/)
+  })
+
+  test("panneau de marque sombre : bande n100 conservée, panneau brand-green, titre blanc, accent lime, texte neutral-300", () => {
+    assert.match(component, /<section[^>]*bg-neutral-100 py-8 text-foreground md:py-12/)
+    assert.match(component, /mx-auto grid max-w-3xl overflow-hidden rounded-xl bg-brand-green lg:max-w-none lg:grid-cols-12/)
+    assert.match(component, /<h2 id=\{titleId\} className="text-h1 text-balance text-neutral-0">/)
+    assert.match(component, /<span className="text-accent-1">/)
+    assert.match(component, /max-w-xl text-body text-pretty text-neutral-300/)
+    // Aucun texte clair-sur-clair ni sombre sur le panneau : plus de couleur de texte du fond clair.
+    assert.ok(!/text-muted-foreground|text-brand-green|bg-background/.test(component))
+    // La section elle-même n'est jamais pleine de vert.
+    assert.ok(!/<section[^>]*bg-brand-green/.test(component))
+  })
+
+  test("l'image est inchangée : même source, mêmes sizes, même cadrage, même colonne", () => {
+    assert.match(component, /relative aspect-3\/2 bg-muted sm:aspect-video lg:col-span-5 lg:aspect-auto/)
+    assert.match(component, /src=\{visual\.src\}\s*alt=\{visual\.alt\}\s*fill\s*sizes="\(min-width: 1024px\) 500px, 100vw"\s*className="object-cover object-center"/)
+    assert.match(component, /p-6 sm:p-8 lg:col-span-7 lg:p-12/)
   })
 
   test("visuel : ratios contrôlés, jamais de hauteur fixe, toujours à gauche, remplit sa colonne", () => {
@@ -136,16 +154,17 @@ describe("CampaignSpotlight : composant, renderer, exemple", () => {
   })
 
   test("titre et accent : un seul h2, deux fragments séparés par une espace, sans HTML injecté", () => {
-    assert.match(component, /\{title\}\s*\{accent && \(\s*<>\s*\{" "\}\s*<span className="text-brand-green">\{accent\}<\/span>\s*<\/>\s*\)\}/)
+    assert.match(component, /\{title\}\s*\{accent && \(\s*<>\s*\{" "\}\s*<span className="text-accent-1">\{accent\}<\/span>\s*<\/>\s*\)\}/)
     assert.ok(!/dangerouslySetInnerHTML|<br|line-clamp|truncate|text-ellipsis/.test(component))
     assert.match(component, /text-h1 text-balance/)
   })
 
-  test("CTA unique : Button default xl, flèche inline-end, via le lien du projet", () => {
+  test("CTA unique : Button inverse xl, flèche inline-end, via le lien du projet", () => {
     assert.equal((component.match(/<Button\b/g) ?? []).length, 1)
     assert.equal((component.match(/<Link\b/g) ?? []).length, 1)
     assert.match(component, /size="xl"/)
-    assert.ok(!/variant=/.test(component), "variante par défaut")
+    assert.match(component, /<Button\s+variant="inverse"\s+size="xl"/)
+    assert.ok(!/variant="(accent|default|outline)"/.test(component), "ni lime ni encre : inverse sur fond sombre")
     assert.match(component, /nativeButton=\{false\}\s*render=\{<Link href=\{primaryAction\.href\} \/>\}/)
     assert.match(component, /w-full sm:w-auto sm:self-start/)
     assert.match(component, /primaryAction\.icon === undefined \? ArrowRightIcon/)

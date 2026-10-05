@@ -21,9 +21,12 @@ export type CampaignSpotlightProps = {
 }
 
 /**
- * Une communication précise mise à l'affiche : un grand panneau arrondi, le
- * visuel bord à bord, un message fort et une action unique (toujours présente :
- * sans elle, la lame ne se distinguerait plus de NarrativeSplit).
+ * Une communication précise mise à l'affiche : un grand panneau arrondi en
+ * `brand-green` posé sur la bande claire de la page (une respiration de marque,
+ * pas une section pleine largeur), le visuel bord à bord, un message fort (titre
+ * blanc, fin du titre en `accent-1`, texte `neutral-300`) et une action unique,
+ * en `inverse` comme sur les autres fonds sombres. L'action est toujours
+ * présente : sans elle, la lame ne se distinguerait plus de NarrativeSplit.
  *
  * Sous `lg`, le visuel passe au-dessus du texte (3:2, puis 16:9 dès `sm`) et le
  * panneau est plafonné à `max-w-3xl` pour ne pas devenir immense à 768-1023 px.
@@ -49,7 +52,7 @@ export function CampaignSpotlight({
       className={cn("bg-neutral-100 py-8 text-foreground md:py-12", className)}
     >
       <PageContainer>
-        <div className="mx-auto grid max-w-3xl overflow-hidden rounded-xl bg-background lg:max-w-none lg:grid-cols-12">
+        <div className="mx-auto grid max-w-3xl overflow-hidden rounded-xl bg-brand-green lg:max-w-none lg:grid-cols-12">
           <div className="relative aspect-3/2 bg-muted sm:aspect-video lg:col-span-5 lg:aspect-auto">
             <Image
               src={visual.src}
@@ -62,22 +65,23 @@ export function CampaignSpotlight({
 
           <div className="flex flex-col justify-center gap-6 p-6 sm:p-8 lg:col-span-7 lg:p-12">
             <div className="flex flex-col gap-4">
-              <h2 id={titleId} className="text-h1 text-balance">
+              <h2 id={titleId} className="text-h1 text-balance text-neutral-0">
                 {title}
                 {accent && (
                   <>
                     {" "}
-                    <span className="text-brand-green">{accent}</span>
+                    <span className="text-accent-1">{accent}</span>
                   </>
                 )}
               </h2>
               {description && (
-                <p className="max-w-xl text-body text-pretty text-muted-foreground">
+                <p className="max-w-xl text-body text-pretty text-neutral-300">
                   {description}
                 </p>
               )}
             </div>
             <Button
+              variant="inverse"
               size="xl"
               nativeButton={false}
               render={<Link href={primaryAction.href} />}
