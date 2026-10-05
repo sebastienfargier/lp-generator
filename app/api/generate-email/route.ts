@@ -1,27 +1,12 @@
-import { runEmailGeneration } from "@/lib/email/generation"
+import { handleEmailGeneration } from "@/lib/email/generate-handler"
 
 /**
- * POST /api/generate-email — mode démo du générateur d'emails : brief →
- * EmailConfig déterministe → validation Zod → HTML rendu. Aucune IA, aucun
- * service externe. Indépendant de /api/generate (landing pages).
+ * POST /api/generate-email : génération d'un email par Claude. Route EMAIL
+ * uniquement (Landing a la sienne, `/api/generate`). Toute la logique est dans
+ * `generate-handler` : Next n'autorise ici que les exports de méthodes HTTP.
+ * Serveur uniquement : la clé Anthropic n'en sort jamais. Le moteur
+ * déterministe de démonstration n'est plus appelé par cette route.
  */
 export async function POST(request: Request) {
-  let body: unknown
-  try {
-    body = await request.json()
-  } catch {
-    return Response.json(
-      {
-        status: "error",
-        title: "Requête invalide",
-        issues: [{ path: "(racine)", message: "Le corps doit être du JSON." }],
-      },
-      { status: 400 }
-    )
-  }
-
-  const result = runEmailGeneration(body)
-  const status =
-    result.status === "success" ? 200 : result.title === "Brief incomplet" ? 400 : 500
-  return Response.json(result, { status })
+  return handleEmailGeneration(request)
 }

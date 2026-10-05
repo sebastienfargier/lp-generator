@@ -138,13 +138,31 @@ type Issue = { path: string; message: string }
 type Slots = Record<string, Record<string, unknown> | undefined>
 
 /**
- * Seconde couche après Zod : la réponse n'utilise que ce que la requête et le
- * contexte autorisent. Les faits recopiés (code, compte à rebours,
- * témoignage, partenaire, date de fin) doivent être identiques.
+ * Ressources autorisées pour une validation finale. Le mode « EmailConfig
+ * direct » les tire du prompt (lames candidates, liens du contexte, visuels de
+ * la requête) ; le mode Draft les tire de ses vocabulaires contrôlés
+ * (`draft-prompt.ts`). Les contrôles sont les mêmes.
  */
-export function validateGeneratedEmail(
+export type EmailValidationPolicy = {
+  request: EmailGenerationRequest
+  /** Lames autorisées, avec leur éventuelle restriction de surface. */
+  candidates: ReadonlyMap<string, { onlySurfaces?: readonly string[] }>
+  /** Toutes les valeurs de `href` admises. */
+  hrefs: ReadonlySet<string>
+  /** Toutes les valeurs de `src` admises. */
+  visuals: ReadonlySet<string>
+  /** Identifiants de disclaimers admis. */
+  disclaimers: ReadonlySet<string>
+}
+
+/**
+ * Seconde couche après Zod : la configuration n'utilise que ce que la
+ * politique autorise. Les faits recopiés (code, compte à rebours,
+ * témoignage, partenaire, date de fin) doivent être identiques à la requête.
+ */
+export function validateEmailAgainst(
   output: unknown,
-  prompt: Extract<EmailAiPrompt, { status: "ready" }>
+  policy: EmailValidationPolicy
 ): { status: "valid"; config: EmailConfig } | { status: "invalid"; issues: Issue[] } {
   const parsed = safeParseEmailConfig(output)
   if (!parsed.success) {
@@ -154,12 +172,8 @@ export function validateGeneratedEmail(
     }
   }
 
-  const { request, context } = prompt
+  const { request, candidates, hrefs, visuals, disclaimers } = policy
   const issues: Issue[] = []
-  const candidates = new Map(context.sections.map((section) => [section.type, section]))
-  const hrefs = new Set<string>([...context.links.map((link) => link.url), emailHrefPlaceholders.urlToConfirm])
-  const visuals = new Set((request.visuals ?? []).map((visual) => visual.src))
-  const disclaimers = new Set(context.disclaimers?.map((entry) => entry.id) ?? [])
   const offer = request.offer
 
   parsed.data.blocks.forEach((block, index) => {
@@ -188,7 +202,7 @@ export function validateGeneratedEmail(
         issues.push({ path: at(`slots.${slot}.src`), message: "Visuel non fourni par la requête." })
       }
       if (typeof value.disclaimer === "string") {
-        if (!disclaimers.has(value.disclaimer as never)) {
+        if (!disclaimers.has(value.disclaimer)) {
           issues.push({ path: at(`slots.${slot}.disclaimer`), message: "Disclaimer non proposé par le contexte." })
         }
         if ("endDate" in value && value.endDate !== offer?.endDate) {
@@ -206,4 +220,19 @@ export function validateGeneratedEmail(
   })
 
   return issues.length > 0 ? { status: "invalid", issues } : { status: "valid", config: parsed.data }
+}
+
+/** Validation d'une réponse du mode « EmailConfig direct » : la politique vient du prompt. */
+export function validateGeneratedEmail(
+  output: unknown,
+  prompt: Extract<EmailAiPrompt, { status: "ready" }>
+): { status: "valid"; config: EmailConfig } | { status: "invalid"; issues: Issue[] } {
+  const { request, context } = prompt
+  return validateEmailAgainst(output, {
+    request,
+    candidates: new Map(context.sections.map((section) => [section.type, section])),
+    hrefs: new Set<string>([...context.links.map((link) => link.url), emailHrefPlaceholders.urlToConfirm]),
+    visuals: new Set((request.visuals ?? []).map((visual) => visual.src)),
+    disclaimers: new Set(context.disclaimers?.map((entry) => entry.id) ?? []),
+  })
 }

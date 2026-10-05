@@ -45,6 +45,16 @@ export const emailDraftImageIds = emailImageIds.filter((id) =>
   emailImageBlocks(id).some((type) => (emailDraftHeroBlocks as readonly string[]).includes(type))
 ) as [EmailImageId, ...EmailImageId[]]
 
+/** Lames du corps produites par les six types de blocs de corps (le resolver s'y conforme : testé). */
+export const emailDraftBodyLames = [
+  "email-module-numbered-list",
+  "email-module-numbererd-grid",
+  "email-module-icons-list",
+  "email-module-text-only",
+  "email-module-text-and-feature-card",
+  "email-module-text-and-cta-variant-01",
+] as const satisfies readonly EmailBlockType[]
+
 /**
  * Destinations proposables à un CTA (identifiants de `destinations.ts`) : les
  * pages du catalogue et des services utiles aux objectifs V1. Hors V1 : les

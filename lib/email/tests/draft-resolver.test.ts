@@ -9,7 +9,7 @@ import { describe, test } from "node:test"
 
 import { emailDestinations, emailDestinationUrl } from "../destinations"
 import { resolveEmailDraftToConfig, resolveEmailGenerationDraft } from "../draft-resolver"
-import { emailDraftDestinations, safeParseEmailGenerationDraft } from "../generation-draft"
+import { emailDraftBodyLames, emailDraftDestinations, emailDraftHeroBlocks, safeParseEmailGenerationDraft } from "../generation-draft"
 import type { EmailGenerationRequest } from "../generation-request"
 import { emailImageCatalog, resolveEmailImage } from "../image-catalog"
 import { emailBlockManifest } from "../manifest"
@@ -274,6 +274,21 @@ describe("resolver : déterminisme et pipeline", () => {
       }
     }
     assert.ok(count > 100, `${count} combinaisons`)
+  })
+})
+
+describe("resolver : lames produites = vocabulaire de la validation finale", () => {
+  test("chaque type de bloc se résout vers une lame de emailDraftHeroBlocks ou emailDraftBodyLames, et toutes y sont utilisées", () => {
+    const used = new Set<string>()
+    const pool = [referenceDraft.blocks[1]!, bodyFixtures.icons, bodyFixtures.grid, bodyFixtures.text, bodyFixtures.feature, referenceDraft.blocks[2]!]
+    for (const hero of heroImages) {
+      for (const body of pool) {
+        for (const block of resolve(draftRequest, draftWith(hero, body)).blocks.slice(1, 3)) used.add(block.type)
+      }
+    }
+    const allowed = new Set<string>([...emailDraftHeroBlocks, ...emailDraftBodyLames])
+    for (const type of used) assert.ok(allowed.has(type), type)
+    assert.deepEqual([...allowed].sort(), [...used].sort())
   })
 })
 
