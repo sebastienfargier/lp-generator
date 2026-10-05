@@ -215,3 +215,59 @@ describe("clarté de la démonstration", () => {
     assert.ok(!/Zod|JSON|React|Tailwind/.test(library.slice(library.indexOf("description="), library.indexOf("/>", library.indexOf("description=")))))
   })
 })
+
+describe("champ « Informations à reprendre telles quelles »", () => {
+  const panel = code("components/generator/generator-panel.tsx")
+  const workspace = code("components/generator/generator-workspace.tsx")
+  const flat = (source: string) => source.replace(/\s+/g, " ")
+
+  test("un champ de texte facultatif, avec son libellé et sa description, sans système dynamique de tags", () => {
+    assert.match(panel, /<FieldLabel htmlFor="generator-facts">\s*Informations à reprendre telles quelles\s*<\/FieldLabel>/)
+    assert.match(flat(panel), /Une information par ligne\. Utilisez ce champ pour les dates, horaires ou autres informations factuelles que la page doit respecter\./)
+    assert.match(panel, /<Textarea\s+id="generator-facts"\s+rows=\{4\}\s+className="min-h-24"/)
+    assert.ok(!/id="generator-facts"[^>]*required/.test(panel), "facultatif")
+    assert.ok(!/useState|\.map\(\(fact|addFact|removeFact|tags?\b/i.test(panel), "ni tags, ni champs multiples")
+  })
+
+  test("composants du formulaire existants : Field, FieldDescription, FieldError ; aucun CSS spécifique", () => {
+    assert.match(panel, /import \{ Field, FieldDescription, FieldError, FieldGroup, FieldLabel \} from "@\/components\/ui\/field"/)
+    const block = panel.slice(panel.indexOf('<Field data-invalid'), panel.indexOf("</FieldGroup>"))
+    assert.ok(!/style=/.test(block))
+    assert.equal((block.match(/className=/g) ?? []).length, 1, "une seule classe d'utilitaire : min-h-24, pour environ 4 lignes visibles")
+  })
+
+  test("l'erreur de limite est affichée près du champ, avec aria-invalid", () => {
+    assert.match(panel, /const factsError = factsInputError\(brief\.facts\)/)
+    assert.match(panel, /aria-invalid=\{factsError \? true : undefined\}/)
+    assert.match(panel, /\{factsError && <FieldError>\{factsError\}<\/FieldError>\}/)
+  })
+
+  test("le champ suit le même cycle de vie que les autres : un seul état, jamais réinitialisé par une génération", () => {
+    assert.match(panel, /onChange=\{\(event\) => update\("facts", event\.target\.value\)\}/)
+    assert.match(panel, /value=\{brief\.facts\}/)
+    assert.equal((workspace.match(/useState\(initialBrief\)/g) ?? []).length, 1)
+    assert.ok(!/setBrief\(/.test(workspace), "aucune réécriture du brief : ni après succès, ni après erreur")
+    assert.match(workspace, /onBriefChange=\{setBrief\}/)
+    assert.match(workspace, /requestLandingGeneration\(brief\)/)
+    assert.match(code("app/generator/page.tsx"), /facts: ""/)
+  })
+
+  test("les comportements existants ne changent pas : double soumission, spinner, aperçu conservé", () => {
+    assert.match(panel, /disabled=\{pending \|\| !canGenerate\}/)
+    assert.match(workspace, /if \(inFlight\.current \|\| !canGenerate\(brief\)\) return/)
+    assert.match(workspace, /<LandingPreview config=\{state\.config\} loading=\{pending\}/)
+    assert.match(panel, /Spinner/)
+  })
+
+  test("l'objectif reste tel quel dans ce commit ; les erreurs serveur disent « Informations à reprendre »", () => {
+    assert.match(panel, /<SelectValue placeholder="Choisir un objectif" \/>/)
+    assert.match(panel, /describeFieldPath\(field\.path\)/)
+    assert.ok(!/fieldLabels/.test(panel))
+  })
+
+  test("aucun moteur n'est touché : le client n'importe ni Anthropic, ni transport, ni résolveur", () => {
+    for (const path of ["lib/landing/generate-client.ts", "lib/landing/brief.ts", "lib/landing/generator-state.ts", ...componentFiles]) {
+      assert.ok(!/anthropic|transport-draft|draft-resolver|generation-draft|section-catalog/.test(code(path)), path)
+    }
+  })
+})

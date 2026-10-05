@@ -1,4 +1,4 @@
-import type { GeneratorBrief } from "./brief"
+import { factsInputError, parseFactsInput, type GeneratorFormInput } from "./brief"
 import { landingGenerateEndpoint, publicErrorCodes, type PublicErrorField, type PublicGenerationError } from "./public-api"
 import { safeParseLandingPage } from "./schemas"
 import type { LandingPageConfig } from "./types"
@@ -40,15 +40,28 @@ function toPublicError(value: unknown): PublicGenerationError | undefined {
 }
 
 export async function requestLandingGeneration(
-  brief: GeneratorBrief,
+  brief: GeneratorFormInput,
   // Résolu à chaque appel : le `fetch` global du moment.
   fetchImpl: typeof fetch = (input, init) => fetch(input, init)
 ): Promise<GenerationOutcome> {
+  // Trop d'informations : refus côté client, aucune requête (le serveur resterait l'autorité).
+  const factsError = factsInputError(brief.facts)
+  if (factsError) {
+    return {
+      status: "error",
+      error: { code: "invalid-request", message: "Le brief est incomplet ou invalide : vérifiez les informations du formulaire.", fields: [{ path: "facts", message: factsError }] },
+    }
+  }
+
+  // `facts` : une information non vide par ligne, au format de `request.facts` (`{ value }`) ;
+  // absent quand le champ est vide.
+  const facts = parseFactsInput(brief.facts)
   const payload = {
     projectName: brief.projectName.trim(),
     brief: brief.brief.trim(),
     audience: brief.audience.trim(),
     objective: brief.objective,
+    ...(facts.length > 0 ? { facts: facts.map((value) => ({ value })) } : {}),
   }
 
   let response: Response

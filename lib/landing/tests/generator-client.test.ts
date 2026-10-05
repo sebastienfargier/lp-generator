@@ -6,10 +6,11 @@
 import assert from "node:assert/strict"
 import { describe, mock, test } from "node:test"
 
-import { emptyGeneratorBrief } from "../brief"
+import { describeFieldPath, emptyGeneratorBrief, factsInputError, maxGeneratorFacts, parseFactsInput } from "../brief"
 import { requestLandingGeneration } from "../generate-client"
 import { canGenerate, describeGeneratedPage, generatorReducer, initialGeneratorState, type GeneratorState } from "../generator-state"
 import { resolveLandingDraft } from "../draft-resolver"
+import { safeParseLandingGenerationRequest } from "../generation-request"
 import { landingGenerateEndpoint, publicErrorCodes, type PublicGenerationError } from "../public-api"
 import { context, request, validDraft } from "./fixtures"
 import { generationDraftFor } from "./generate-fixtures"
@@ -46,9 +47,9 @@ describe("requestLandingGeneration : un seul POST", () => {
     assert.deepEqual(outcome, { status: "success", config })
   })
 
-  test("le corps ne contient que le brief : ni faits, ni clé, ni champ de plus", async () => {
+  test("le corps ne contient que les champs du formulaire : un champ inconnu n'est jamais transmis, sans faits il n'y a pas de `facts`", async () => {
     const { calls, fetchImpl } = fakeFetch(() => json({ ok: true, config }))
-    await requestLandingGeneration({ ...brief, extra: "x", facts: [{ value: "x" }] } as typeof brief, fetchImpl)
+    await requestLandingGeneration({ ...brief, extra: "x", apiKey: "secret" } as typeof brief, fetchImpl)
     assert.deepEqual(Object.keys(JSON.parse(calls[0]!.init.body as string)), ["projectName", "brief", "audience", "objective"])
   })
 
@@ -238,5 +239,161 @@ describe("légende du résultat : « Page générée · N sections »", () => {
     const success = generatorReducer(loading, { type: "success", config })
     const failed = generatorReducer(generatorReducer(success, { type: "start" }), { type: "failure", error: { code: "timeout", message: "x" } as PublicGenerationError })
     assert.equal(legend(failed), legend(success))
+  })
+})
+
+/* -------------------------------------------------------------------------- */
+/* Informations à reprendre telles quelles (request.facts)                    */
+/* -------------------------------------------------------------------------- */
+
+describe("informations à reprendre : lecture du champ", () => {
+  test("une ligne non vide = une information ; lignes vides supprimées, lignes rognées, contenu conservé", () => {
+    assert.deepEqual(parseFactsInput("Date du live : 15 octobre 2026.\n\nHeure : 18h30.\nLe live est gratuit.\n"), ["Date du live : 15 octobre 2026.", "Heure : 18h30.", "Le live est gratuit."])
+    assert.deepEqual(parseFactsInput("   Heure : 18h30.   \n\t\n  Une   information  avec  des espaces  "), ["Heure : 18h30.", "Une   information  avec  des espaces"])
+    assert.deepEqual(parseFactsInput("a\r\nb\r\n\r\nc"), ["a", "b", "c"])
+    assert.deepEqual(parseFactsInput("L'inscription est nécessaire. — é à ç"), ["L'inscription est nécessaire. — é à ç"])
+  })
+
+  test("champ vide, blanc ou absent : aucune information", () => {
+    for (const input of ["", "   ", "\n\n", " \n \t \n", undefined]) assert.deepEqual(parseFactsInput(input), [], JSON.stringify(input))
+  })
+
+  test("12 informations acceptées, 13 refusées côté client (les lignes vides ne comptent pas)", () => {
+    const lines = (count: number) => Array.from({ length: count }, (_, index) => `Information ${index + 1}.`)
+    assert.equal(maxGeneratorFacts, 12)
+    assert.equal(factsInputError(lines(12).join("\n")), null)
+    assert.equal(factsInputError(lines(12).join("\n\n")), null)
+    assert.equal(factsInputError(lines(13).join("\n")), "12 informations au plus (13 saisies).")
+    assert.equal(factsInputError(`${lines(12).join("\n")}\n\n\n`), null)
+    assert.equal(canGenerate({ ...brief, facts: lines(12).join("\n") }), true)
+    assert.equal(canGenerate({ ...brief, facts: lines(13).join("\n") }), false)
+  })
+
+  test("le champ est facultatif : sans information, la génération reste possible", () => {
+    for (const facts of [undefined, "", "   \n  "]) assert.equal(canGenerate({ ...brief, facts }), true, JSON.stringify(facts))
+  })
+
+  test("libellé des chemins renvoyés par le serveur : l'information n° N (non vide), pas la ligne du texte", () => {
+    assert.equal(describeFieldPath("facts"), "Informations à reprendre")
+    assert.equal(describeFieldPath("facts.0.value"), "Informations à reprendre (n° 1)")
+    assert.equal(describeFieldPath("facts.2.value"), "Informations à reprendre (n° 3)")
+    assert.equal(describeFieldPath("projectName"), "Nom du projet")
+    assert.equal(describeFieldPath("inconnu"), "inconnu")
+  })
+})
+
+describe("informations à reprendre : requête envoyée à /api/generate", () => {
+  const send = async (facts: string | undefined) => {
+    const { calls, fetchImpl } = fakeFetch(() => json({ ok: true, config }))
+    const outcome = await requestLandingGeneration({ ...brief, facts }, fetchImpl)
+    return { calls, outcome, body: calls[0] ? (JSON.parse(calls[0].init.body as string) as Record<string, unknown>) : undefined }
+  }
+
+  test("A. aucune information : une requête, sans champ `facts`", async () => {
+    for (const facts of [undefined, "", "  \n "]) {
+      const { calls, outcome, body } = await send(facts)
+      assert.equal(calls.length, 1)
+      assert.equal(outcome.status, "success")
+      assert.ok(!("facts" in body!))
+    }
+  })
+
+  test("B. une ligne : facts = [{ value }] ; C. quatre lignes : quatre informations", async () => {
+    assert.deepEqual((await send("Heure : 18h30.")).body!.facts, [{ value: "Heure : 18h30." }])
+    const four = (await send("a\nb\nc\nd")).body!.facts as { value: string }[]
+    assert.deepEqual(four, [{ value: "a" }, { value: "b" }, { value: "c" }, { value: "d" }])
+  })
+
+  test("D. lignes vides intermédiaires supprimées ; E. espaces autour d'une ligne rognés", async () => {
+    assert.deepEqual((await send("a\n\n\nb\n  \nc")).body!.facts, [{ value: "a" }, { value: "b" }, { value: "c" }])
+    assert.deepEqual((await send("   a   \n\tb\t")).body!.facts, [{ value: "a" }, { value: "b" }])
+  })
+
+  test("F. douze informations : acceptées et envoyées", async () => {
+    const twelve = Array.from({ length: 12 }, (_, index) => `Information ${index + 1}.`)
+    const { calls, body } = await send(twelve.join("\n"))
+    assert.equal(calls.length, 1)
+    assert.deepEqual(body!.facts, twelve.map((value) => ({ value })))
+  })
+
+  test("G. treize informations : refus côté client, AUCUNE requête, erreur près du champ", async () => {
+    const thirteen = Array.from({ length: 13 }, (_, index) => `Information ${index + 1}.`).join("\n")
+    const { calls, outcome } = await send(thirteen)
+    assert.equal(calls.length, 0)
+    assert.equal(outcome.status, "error")
+    if (outcome.status !== "error") return
+    assert.equal(outcome.error.code, "invalid-request")
+    assert.deepEqual(outcome.error.fields, [{ path: "facts", message: "12 informations au plus (13 saisies)." }])
+  })
+
+  test("J. une seconde génération utilise les informations modifiées ; K. le corps contient exactement les informations attendues", async () => {
+    const { calls, fetchImpl } = fakeFetch(() => json({ ok: true, config }))
+    await requestLandingGeneration({ ...brief, facts: "Heure : 18h30." }, fetchImpl)
+    await requestLandingGeneration({ ...brief, facts: "Heure : 19h00.\nLe live est gratuit." }, fetchImpl)
+    await requestLandingGeneration({ ...brief, facts: "" }, fetchImpl)
+    const bodies = calls.map((call) => JSON.parse(call.init.body as string))
+    assert.deepEqual(bodies[0].facts, [{ value: "Heure : 18h30." }])
+    assert.deepEqual(bodies[1].facts, [{ value: "Heure : 19h00." }, { value: "Le live est gratuit." }])
+    assert.ok(!("facts" in bodies[2]))
+    assert.deepEqual(Object.keys(bodies[1]), ["projectName", "brief", "audience", "objective", "facts"])
+  })
+
+  test("I. après une erreur serveur, la même saisie peut être renvoyée telle quelle (le formulaire n'est pas modifié par l'appel)", async () => {
+    const values = { ...brief, facts: "Heure : 18h30.\nLe live est gratuit." }
+    const snapshot = JSON.stringify(values)
+    const { calls, fetchImpl } = fakeFetch(() => failure({ code: "generation-failed", message: "Réessayez." }, 422))
+    const first = await requestLandingGeneration(values, fetchImpl)
+    assert.equal(first.status, "error")
+    assert.equal(JSON.stringify(values), snapshot, "l'appel ne modifie pas la saisie")
+    const second = await requestLandingGeneration(values, fetchImpl)
+    assert.equal(second.status, "error")
+    assert.deepEqual(JSON.parse(calls[1]!.init.body as string), JSON.parse(calls[0]!.init.body as string))
+  })
+
+  test("l'état de la page n'efface ni ne remplace jamais les informations saisies (H, I)", () => {
+    const form = { ...brief, facts: "Heure : 18h30." }
+    const snapshot = JSON.stringify(form)
+    let state: GeneratorState = initialGeneratorState
+    state = generatorReducer(state, { type: "start" })
+    state = generatorReducer(state, { type: "success", config })
+    state = generatorReducer(state, { type: "start" })
+    state = generatorReducer(state, { type: "failure", error: { code: "generation-failed", message: "x" } })
+    assert.equal(JSON.stringify(form), snapshot)
+    assert.deepEqual(Object.keys(state).sort(), ["config", "error", "status"], "le réducteur ne porte aucune saisie")
+  })
+})
+
+describe("informations à reprendre : scénario de démo « Studi Live Orientation »", () => {
+  const demo = {
+    projectName: "Studi Live Orientation",
+    audience: "adultes en réflexion sur leur orientation ou leur reconversion",
+    objective: "discover-trainings",
+    brief:
+      "Studi organise un live consacré à l'orientation et à la reconversion.\nLa landing page doit annoncer clairement ce rendez-vous, puis aider\nles visiteurs à explorer les formations et à préciser leur projet.\nLe live doit constituer un temps fort visible de la page, sans\ntransformer toute la landing en page événementielle.",
+    facts: "Date du live : 15 octobre 2026.\nHeure : 18h30.\nLe live est gratuit.\nL'inscription est nécessaire.",
+  }
+  const expected = ["Date du live : 15 octobre 2026.", "Heure : 18h30.", "Le live est gratuit.", "L'inscription est nécessaire."]
+
+  test("la saisie donne exactement les quatre informations attendues", () => {
+    assert.deepEqual(parseFactsInput(demo.facts), expected)
+    assert.equal(canGenerate(demo), true)
+  })
+
+  test("la requête envoyée contient ces informations (format `{ value }` de request.facts), sans appel réel", async () => {
+    const { calls, fetchImpl } = fakeFetch(() => json({ ok: true, config }))
+    await requestLandingGeneration(demo, fetchImpl)
+    assert.equal(calls.length, 1)
+    const body = JSON.parse(calls[0]!.init.body as string)
+    assert.deepEqual(body.facts, expected.map((value) => ({ value })))
+    assert.equal(body.projectName, "Studi Live Orientation")
+    assert.equal(body.objective, "discover-trainings")
+  })
+
+  test("cette requête est acceptée par le contrat serveur existant, qui garde les informations dans l'ordre", async () => {
+    const { calls, fetchImpl } = fakeFetch(() => json({ ok: true, config }))
+    await requestLandingGeneration(demo, fetchImpl)
+    const parsed = safeParseLandingGenerationRequest(JSON.parse(calls[0]!.init.body as string))
+    assert.equal(parsed.success, true)
+    if (parsed.success) assert.deepEqual(parsed.data.facts?.map((fact) => fact.value), expected)
   })
 })

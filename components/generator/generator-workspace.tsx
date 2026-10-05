@@ -2,7 +2,7 @@
 
 import { useReducer, useRef, useState } from "react"
 
-import type { GeneratorBrief } from "@/lib/landing/brief"
+import type { GeneratorFormValues } from "@/lib/landing/brief"
 import { requestLandingGeneration } from "@/lib/landing/generate-client"
 import { canGenerate, generatorReducer, initialGeneratorState } from "@/lib/landing/generator-state"
 
@@ -10,7 +10,7 @@ import { GeneratorPanel } from "./generator-panel"
 import { LandingPreview } from "./landing-preview"
 
 type GeneratorWorkspaceProps = {
-  initialBrief: GeneratorBrief
+  initialBrief: GeneratorFormValues
   objectives: readonly { value: string; label: string }[]
 }
 

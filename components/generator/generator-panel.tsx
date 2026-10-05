@@ -2,7 +2,7 @@
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
+import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import {
   Select,
@@ -14,26 +14,19 @@ import {
 } from "@/components/ui/select"
 import { Spinner } from "@/components/ui/spinner"
 import { Textarea } from "@/components/ui/textarea"
-import type { GeneratorBrief } from "@/lib/landing/brief"
+import { describeFieldPath, factsInputError, type GeneratorFormValues } from "@/lib/landing/brief"
 import type { PublicGenerationError } from "@/lib/landing/public-api"
 
 type GeneratorPanelProps = {
-  brief: GeneratorBrief
+  brief: GeneratorFormValues
   objectives: readonly { value: string; label: string }[]
   /** Erreur de la dernière génération ; l'aperçu précédent reste affiché. */
   error: PublicGenerationError | null
   pending: boolean
   /** Validation légère pour l'UX : le serveur reste l'autorité. */
   canGenerate: boolean
-  onBriefChange: (brief: GeneratorBrief) => void
+  onBriefChange: (brief: GeneratorFormValues) => void
   onGenerate: () => void
-}
-
-const fieldLabels: Record<string, string> = {
-  projectName: "Nom du projet",
-  brief: "Brief",
-  audience: "Audience",
-  objective: "Objectif",
 }
 
 export function GeneratorPanel({
@@ -45,10 +38,11 @@ export function GeneratorPanel({
   onBriefChange,
   onGenerate,
 }: GeneratorPanelProps) {
-  const update = <Key extends keyof GeneratorBrief>(
+  const update = <Key extends keyof GeneratorFormValues>(
     key: Key,
-    value: GeneratorBrief[Key]
+    value: GeneratorFormValues[Key]
   ) => onBriefChange({ ...brief, [key]: value })
+  const factsError = factsInputError(brief.facts)
 
   return (
     <form
@@ -124,6 +118,29 @@ export function GeneratorPanel({
             </SelectContent>
           </Select>
         </Field>
+
+        <Field data-invalid={factsError ? true : undefined}>
+          <FieldLabel htmlFor="generator-facts">
+            Informations à reprendre telles quelles
+          </FieldLabel>
+          <Textarea
+            id="generator-facts"
+            rows={4}
+            // `field-sizing: content` ignore `rows` : min-h-24 garantit environ 4 lignes visibles.
+            className="min-h-24"
+            aria-invalid={factsError ? true : undefined}
+            aria-describedby="generator-facts-help"
+            placeholder={"Ex. Date du live : 15 octobre 2026.\nHeure : 18h30."}
+            value={brief.facts}
+            onChange={(event) => update("facts", event.target.value)}
+          />
+          <FieldDescription id="generator-facts-help">
+            Une information par ligne. Utilisez ce champ pour les dates,
+            horaires ou autres informations factuelles que la page doit
+            respecter.
+          </FieldDescription>
+          {factsError && <FieldError>{factsError}</FieldError>}
+        </Field>
       </FieldGroup>
 
       <div className="flex flex-col gap-2">
@@ -155,7 +172,7 @@ export function GeneratorPanel({
                 {error.fields.map((field, index) => (
                   <li key={index}>
                     <span className="font-medium">
-                      {fieldLabels[field.path] ?? field.path}
+                      {describeFieldPath(field.path)}
                     </span>{" "}
                     : {field.message}
                   </li>

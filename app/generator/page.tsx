@@ -28,7 +28,7 @@ export default function GeneratorPage() {
         <h1 className="text-body font-semibold">Landing Page Generator</h1>
       </header>
       <GeneratorWorkspace
-        initialBrief={{ ...emptyGeneratorBrief, objective: landingSupportedObjectives[0] }}
+        initialBrief={{ ...emptyGeneratorBrief, objective: landingSupportedObjectives[0], facts: "" }}
         objectives={objectives}
       />
     </div>

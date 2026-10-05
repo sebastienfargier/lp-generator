@@ -1,4 +1,4 @@
-import type { GeneratorBrief } from "./brief"
+import { factsInputError, type GeneratorFormInput } from "./brief"
 import type { PublicGenerationError } from "./public-api"
 import type { LandingPageConfig } from "./types"
 
@@ -40,8 +40,8 @@ export function generatorReducer(state: GeneratorState, action: GeneratorAction)
 }
 
 /** Validation légère pour l'UX : le serveur reste l'autorité. */
-export function canGenerate(brief: GeneratorBrief): boolean {
-  return [brief.projectName, brief.brief, brief.audience, brief.objective].every((value) => value.trim() !== "")
+export function canGenerate(brief: GeneratorFormInput): boolean {
+  return [brief.projectName, brief.brief, brief.audience, brief.objective].every((value) => value.trim() !== "") && factsInputError(brief.facts) === null
 }
 
 /** Légende compacte d'un résultat : dérivée de la configuration affichée, sans état en plus. */

@@ -1,6 +1,6 @@
 import { z } from "zod"
 
-import { generatorObjectives, GeneratorBriefSchema } from "./brief"
+import { generatorObjectives, GeneratorBriefSchema, maxGeneratorFacts } from "./brief"
 
 /**
  * Contrat d'entrée d'une génération Landing : uniquement ce que la personne
@@ -48,7 +48,7 @@ export const LandingGenerationRequestSchema = GeneratorBriefSchema.extend({
   audience: text("L'audience", 300),
   objective: z.enum(landingSupportedObjectives, { error: "Objectif non pris en charge par la génération IA pour l'instant." }),
   /** Faits validés ; absents, le modèle n'écrit aucun fait de ce type. */
-  facts: z.array(LandingFactSchema).max(12, "12 faits au plus.").optional(),
+  facts: z.array(LandingFactSchema).max(maxGeneratorFacts, "12 faits au plus.").optional(),
 })
 
 export type LandingGenerationRequest = z.infer<typeof LandingGenerationRequestSchema>
