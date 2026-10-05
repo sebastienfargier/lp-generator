@@ -44,15 +44,10 @@ describe("LandingHeader : composant", () => {
     assert.ok(!/<svg|<img\b/.test(header))
   })
 
-  test("primitives du projet : PageContainer, Button outline ; aucune valeur arbitraire", () => {
+  test("primitives du projet : PageContainer ; aucune valeur arbitraire", () => {
     assert.match(header, /<header className="bg-background py-4">/)
-    assert.match(header, /<PageContainer className="flex items-center justify-between gap-4">/)
+    assert.match(header, /<PageContainer className="flex items-center">/)
     assert.match(header, /import \{ PageContainer \} from "@\/components\/layout\/page-container"/)
-    assert.match(header, /import \{ Button \} from "@\/components\/ui\/button"/)
-    assert.match(header, /variant="outline"/)
-    assert.match(header, /size="xl"/)
-    assert.match(header, /border-foreground/)
-    assert.match(header, /shadow-none/)
     assert.ok(!/#[0-9a-fA-F]{3,8}\b/.test(header), "hex")
     assert.ok(!/style=/.test(header), "style inline")
     assert.ok(!/\b(absolute|fixed|sticky|relative)\b/.test(header), "positionnement")
@@ -60,17 +55,24 @@ describe("LandingHeader : composant", () => {
     assert.ok(!/shadow-(?!none)|border-b|divide-/.test(header), "ni ombre ni filet")
   })
 
-  test("CTA : placeholder « CTA », bouton non navigant, aucun lien, aucune destination, aucun contrôle de Claude", () => {
-    assert.match(header, /<Button\s+type="button"/)
-    assert.match(header, />\s*CTA\s*</)
-    assert.ok(!/next\/link|<Link|href|render=|nativeButton|destination|landingDestination|https?:\/\/|studi\.com|\/fr\//.test(header))
+  test("aucun CTA : ni bouton, ni lien, ni texte « CTA », ni href vide ou « # », ni aria-label orphelin", () => {
+    assert.ok(!/<Button\b|<button\b|components\/ui\/button/.test(header), "bouton")
+    assert.ok(!/\bCTA\b/.test(header), "texte CTA")
+    assert.ok(!/next\/link|<Link\b|<a\b|href|onClick|role=|tabIndex|aria-label|render=|nativeButton/.test(header), "lien ou contrôle interactif")
+    assert.ok(!/destination|landingDestination|https?:\/\/|studi\.com|\/fr\//.test(header))
     assert.ok(!/Découvrir|formations|catalogue/i.test(header))
   })
 
-  test("aucun menu, aucune navigation, aucun téléphone : uniquement le logo et le CTA", () => {
+  test("aucun menu, aucune navigation, aucun téléphone : uniquement le logo", () => {
     assert.ok(!/<nav|<ul|<li\b|Formations|MBA|Financement|propos|questions|\d{2} \d{2} \d{2}/i.test(header))
     assert.equal((header.match(/<Image\b/g) ?? []).length, 1)
-    assert.equal((header.match(/<Button\b/g) ?? []).length, 1)
+    assert.equal((header.match(/<Button\b/g) ?? []).length, 0)
+  })
+
+  test("structure responsive inchangée : logo h-8 puis sm:h-10, shrink-0, conteneur flex centré", () => {
+    assert.match(header, /className="h-8 w-auto shrink-0 sm:h-10"/)
+    assert.match(header, /<header className="bg-background py-4">/)
+    assert.equal((header.match(/<PageContainer\b/g) ?? []).length, 1)
   })
 })
 

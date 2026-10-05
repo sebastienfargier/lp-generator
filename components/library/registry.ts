@@ -296,7 +296,7 @@ export const libraryShellParts: LibraryShellPart[] = [
     slug: "landing-header",
     name: "LandingHeader",
     description:
-      "Header global : logo Studi à gauche, un bouton CTA (placeholder, non navigant) à droite, sur fond de page.",
+      "Header global : logo Studi seul, à gauche, sur fond de page. Aucun bouton ni lien.",
     importPath: "@/components/landing/landing-header",
     example: "/examples/landing-header",
     usage: `<LandingHeader />`,

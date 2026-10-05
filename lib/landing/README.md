@@ -5,7 +5,7 @@ Une landing page est composée de deux choses distinctes :
 **SHELL GLOBAL** (`LandingHeader` et `LandingFooter`)
 - automatiquement présent, rendu par `LandingPageRenderer` autour des sections ;
 - hors de `sections[]` : ni `LandingPageSchema`, ni `LandingGenerationDraft`, ni `section-catalog`, ni `nonGenerableSections` ne le connaissent ;
-- non choisi par Claude : son contenu (logo, CTA du header ; liens du footer dans `footer-links.ts`) est fixé dans le code ;
+- non choisi par Claude : son contenu (logo du header ; liens du footer dans `footer-links.ts`) est fixé dans le code ;
 - présenté à part dans `/library`, sous « Shell global » (`libraryShellParts` dans le registre), sans statut « Générable par IA » ni « Bibliothèque uniquement ».
 
 **SECTIONS** (les lames)
