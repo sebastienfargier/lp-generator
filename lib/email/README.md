@@ -569,7 +569,40 @@ chemin, de recadrage, de dimension ni d'alt.
 - Provenance : **à confirmer** pour les douze sources (aucune licence ni crédit
   connus). Aucune image n'est « approuvée production ».
 - Aperçu : les URL canoniques `demo-assets.invalid/email-v2/…` se mappent aux
-  fichiers via `emailBankPreviews`, pas encore lu par `toPreviewHtml`.
+  fichiers via `emailBankPreviews`, lu par `toPreviewHtml` (en plus du mapping
+  des visuels de démo, inchangé).
+
+## Recettes V2 (hors ligne, non branchées)
+
+Trois recettes de composition (`recipes.ts`) : `discovery-reassurance` (R1),
+`editorial-newsletter` (R2), `brand-proof` (R3). Une recette décrit des
+contraintes (hero autorisés, rôles requis et facultatifs, 3 à 5 sections de
+contenu hors shell, budget de boutons, politique d'images, zone colorée,
+claims, chiffres, longueur), jamais du HTML ni du CSS. Le Draft V1, son
+prompt, son resolver et la route de génération ne les connaissent pas.
+
+- `recipe-resolver.ts` : `composeEmailRecipe(composition)` → EmailConfig. La
+  composition ne contient que du sémantique : recette, disposition du hero,
+  intention visuelle, frise, intention de surface (`default` ou `empathy`),
+  textes, identifiants de destination, d'icône et de claim. Le resolver décide
+  des lames, des identifiants, de la surface, des images (banque V2), des
+  liens, du shell, des mentions légales (déduites des claims) et du découpage
+  d'un bandeau de preuve. Il valide par `safeParseEmailConfig`, puis par la
+  recette.
+- `recipe-validation.ts` : `validateEmailRecipeConfig` (séquence, rôles,
+  boutons, destinations, images, une seule zone colorée, claims, chiffres,
+  mentions, densité) et `lintEmailRecipeContent` (`lintBrandText` sur tous les
+  textes : diagnostic `error` / `warning` / `known-conflict`, jamais de
+  réécriture ni de blocage).
+- `recipe-fixtures.ts` : six compositions écrites à la main (R1-A/B, R2-A/B,
+  R3-A/B), rendues par le vrai renderer.
+- Claims : seules les six claims de `lib/brand/claims.ts` (document approuvé),
+  copiées au caractère près ; un bandeau n'accepte que les claims à libellé
+  court (valeur + libellé = la formulation exacte).
+- Nouvelles lames ouvertes hors ligne : `hero-newsletter-variant-01` et `-02`
+  (via la banque d'images), `text-and-cta-variant-02`,
+  `benefits-compact-highlights` et le bandeau `preheader` (lien secondaire).
+- `lib/brand` n'est importé que par ces deux modules.
 
 ## Tests
 
@@ -588,6 +621,9 @@ socle ; seuls les cas de corruption injectent une source modifiée.
   chaque template identiques au manifeste.
 - `renderer.test.ts` : document, slots, échappement, surfaces, intégrité, et
   rendu des 36 lames sur Page.
+- `recipes.test.ts` : recettes V2 (définitions, six fixtures rendues,
+  claims, surfaces, images, terminologie, différenciation, validation,
+  frontières).
 - `image-bank.test.ts` : banque V2 (12 images, 4 intentions, dérivés et
   dimensions réels, frises, résolution, vue IA sans fichier ni URL).
 - `demo-assets.test.ts` : photos de démo, URL `.invalid` canonique, mapping

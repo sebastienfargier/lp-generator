@@ -46,10 +46,12 @@ describe("lib/brand : frontière", () => {
     }
   })
 
-  test("rien ne l'utilise encore : ni Landing, ni Email, ni les composants, ni les routes", () => {
+  test("seules les recettes Email V2 (hors ligne) l'utilisent : ni Landing, ni composants, ni routes, ni moteur Email V1", () => {
     const users = [...files("lib/email", (p) => /\.(ts|tsx)$/.test(p)), ...files("lib/landing", (p) => /\.(ts|tsx)$/.test(p)), ...files("components", (p) => /\.(ts|tsx)$/.test(p)), ...files("app", (p) => /\.(ts|tsx)$/.test(p))]
     assert.ok(users.length > 100)
-    for (const path of users) assert.ok(!/lib\/brand|["']\.\.?\/(?:\.\.\/)*brand["']/.test(readFileSync(join(root, path), "utf8")), path)
+    const using = users.filter((path) => /lib\/brand|["']\.\.?\/(?:\.\.\/)*brand(?:\/[a-z-]+)?["']/.test(readFileSync(join(root, path), "utf8")))
+    // Les recettes Email V2 (claims approuvées, lexique) : le seul usage autorisé.
+    assert.deepEqual(using.sort(), ["lib/email/recipe-resolver.ts", "lib/email/recipe-validation.ts"])
   })
 
   test("les moteurs, prompts et resolvers ne mentionnent ni la marque ni ses claims", () => {

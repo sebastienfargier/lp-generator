@@ -1,6 +1,7 @@
 import { parse, type DefaultTreeAdapterTypes } from "parse5"
 
 import { emailDemoAssetPreviews } from "./demo-assets"
+import { emailBankPreviews } from "./image-bank"
 import { emailIconNames } from "./manifest"
 import { emailSystemElements } from "./system"
 
@@ -14,8 +15,10 @@ import { emailSystemElements } from "./system"
  *   catalogue uniquement (un autre nom est une erreur)
  * - `[URL_CDN_SOCIAL_01…04]` → pixel transparent : aucun réseau n'est
  *   attribué à ces positions, l'emplacement reste vide sans image cassée
- * - les quatre visuels du mode démo (`https://demo-assets.invalid/…`) →
- *   `/images/email-demo-….jpg`, par un mapping fermé (`demo-assets.ts`) :
+ * - les visuels du mode démo (`https://demo-assets.invalid/…`) →
+ *   `/images/email-demo-….jpg`, par un mapping fermé (`demo-assets.ts`), et
+ *   les dérivés de la banque V2 (`https://demo-assets.invalid/email-v2/…`) →
+ *   `/images/email/v2/….jpg`, par le mapping fermé de `image-bank.ts` :
  *   une autre URL, même sur ce domaine, reste telle quelle
  * - `<a href="…">` → `<a data-preview-href="…">` : lien inerte, destination
  *   inspectable, sans script
@@ -61,7 +64,7 @@ function* elements(node: { childNodes?: DefaultTreeAdapterTypes.ChildNode[] }): 
 function previewSource(src: string) {
   if (src === logoToken) return previewLogo
   if (socialTokens.has(src)) return transparentPixel
-  const demoAsset = emailDemoAssetPreviews.get(src)
+  const demoAsset = emailDemoAssetPreviews.get(src) ?? emailBankPreviews.get(src)
   if (demoAsset !== undefined) return demoAsset
   const icon = iconToken.exec(src)?.[1]
   if (icon !== undefined) {

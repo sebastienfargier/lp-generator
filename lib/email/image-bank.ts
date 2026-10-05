@@ -326,7 +326,7 @@ export function pickEmailBankImage(intent: string, blockType: string, seed = "")
   return candidates[hash % candidates.length]!
 }
 
-/** Mapping fermé URL canonique → fichier local, pour l'aperçu uniquement (pas encore branché au renderer d'aperçu). */
+/** Mapping fermé URL canonique → fichier local, pour l'aperçu uniquement (lu par `toPreviewHtml`). */
 export const emailBankPreviews: ReadonlyMap<string, string> = new Map(
   [
     ...emailBankImageIds.flatMap((id) => emailBank[id].formats.map((format) => emailBankDerivative(id, format))),
@@ -334,7 +334,14 @@ export const emailBankPreviews: ReadonlyMap<string, string> = new Map(
   ].map((entry) => [entry.src, entry.preview])
 )
 
-export type EmailVisualIntentView = { intent: EmailVisualIntent; hint: string }
+/** Image d'un `src` canonique de la banque, ou `undefined` si ce n'est pas une URL de la banque (validation des recettes). */
+export function emailBankImageIdFromSrc(src: string): EmailBankImageId | undefined {
+  if (!emailBankPreviews.has(src)) return undefined
+  const id = /\/email-v2\/([a-z0-9-]+?)--(?:medium|large|split|band|strip-[1-5])\.jpg$/.exec(src)?.[1]
+  return isEmailBankImageId(id) ? id : undefined
+}
+
+export type EmailVisualIntentView ={ intent: EmailVisualIntent; hint: string }
 export type EmailPortraitStripView = { id: EmailPortraitStripId; hint: string }
 
 /**

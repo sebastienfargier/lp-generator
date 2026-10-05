@@ -133,7 +133,7 @@ describe("banque d'images Email V2 : contenu", () => {
 
   test("le catalogue du moteur actuel est inchangé et ne dépend pas de la banque", () => {
     assert.deepEqual(emailImageIds, ["tablette-interieur", "ecouteur-exterieur", "canape-lumiere", "duo-ciel-bleu"])
-    for (const file of ["image-catalog", "draft-prompt", "draft-resolver", "generation-draft", "anthropic", "anthropic-schema", "preview", "generate-handler", "generation-context"]) {
+    for (const file of ["image-catalog", "draft-prompt", "draft-resolver", "generation-draft", "anthropic", "anthropic-schema", "generate-handler", "generation-context"]) {
       const source = readFileSync(join(root, `lib/email/${file}.ts`), "utf8")
       assert.ok(!/image-bank/.test(source), `${file}.ts ne doit pas dépendre de la banque V2`)
     }
