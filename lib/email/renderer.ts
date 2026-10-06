@@ -97,6 +97,21 @@ export function renderEmail(
   config: EmailConfig,
   { source = emailFileTemplateSource }: RenderOptions = {}
 ): string {
+  const { head, blocks, tail } = renderEmailParts(config, { source })
+  return [head, ...blocks, tail].join("\n")
+}
+
+/**
+ * Le même rendu, en morceaux : l'en-tête du socle (objet et préheader résolus,
+ * jusqu'au marqueur de début des lames), le HTML de chaque lame dans l'ordre,
+ * puis la fin du socle. `renderEmail` en est exactement la jointure par "\n".
+ * Sert à repérer les lames dans l'HTML (canvas du Builder) sans les chercher
+ * après coup dans le texte rendu.
+ */
+export function renderEmailParts(
+  config: EmailConfig,
+  { source = emailFileTemplateSource }: RenderOptions = {}
+): { head: string; blocks: string[]; tail: string } {
   const blocks = config.blocks.map((block) => renderBlock(block, source))
   return renderDocument(source.socle(), config, blocks)
 }
@@ -155,7 +170,7 @@ function renderDocument(socle: string, config: EmailConfig, blocks: string[]) {
     .replace(emailDocumentTokens.preheader, () => escapeText(config.preheader))
 
   // Les lames, dans l'ordre de config.blocks, entre les deux marqueurs.
-  return [filledHead, ...blocks, socle.slice(end)].join("\n")
+  return { head: filledHead, blocks, tail: socle.slice(end) }
 }
 
 function expectOnce(html: string, token: string, label: string) {
