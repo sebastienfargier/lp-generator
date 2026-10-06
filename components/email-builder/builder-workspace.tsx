@@ -11,6 +11,7 @@ import type { BuilderRenderResponse } from "@/lib/email-builder/render-handler"
 import { AssistantPanel } from "./assistant-panel"
 import { BuilderCanvas, type CanvasViewport } from "./builder-canvas"
 import { BuilderTopbar } from "./builder-topbar"
+import { ImagePickerPanel } from "./image-picker-panel"
 import { LameLibraryPanel } from "./lame-library-panel"
 
 type BuilderWorkspaceProps = {
@@ -73,14 +74,15 @@ export function BuilderWorkspace({ initialDocument, initialHtml, lames }: Builde
   }, [notice, noticeKey])
 
   const lamesByType = Object.fromEntries(lames.map((lame) => [lame.type, { name: lame.name, surfaceMode: lame.surfaceMode }]))
-  const libraryIndex = state.library?.index
+  const panel = state.panel
+  const libraryIndex = panel?.kind === "library" ? panel.index : undefined
+  const imageBlock = panel?.kind === "images" ? document.config.blocks.find((block) => block.id === panel.blockId) : undefined
 
   function onKeyDown(event: React.KeyboardEvent) {
     const target = event.target as HTMLElement
-    if (target.closest("input, textarea, select, [contenteditable=true]")) return
+    if (target.closest("input, textarea, select")) return
     if (event.key === "Escape") {
-      if (state.library) dispatch({ type: "close-library" })
-      else if (state.selectedId) dispatch({ type: "select", blockId: null })
+      dispatch({ type: "escape" })
     } else if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "z") {
       event.preventDefault()
       dispatch({ type: event.shiftKey ? "redo" : "undo" })
@@ -103,12 +105,20 @@ export function BuilderWorkspace({ initialDocument, initialHtml, lames }: Builde
       />
 
       <div className="relative flex min-h-0 flex-1">
-        {state.library && (
+        {panel?.kind === "library" && (
           <LameLibraryPanel
             lames={lames}
             where={libraryIndex === undefined ? "Avant les mentions légales et le footer" : `En position ${libraryIndex + 1}`}
             onPick={(lame) => lame.starter && dispatch({ type: "operation", operation: { type: "add-block", blockType: lame.type, slots: lame.starter, ...(libraryIndex === undefined ? {} : { index: libraryIndex }) } })}
-            onClose={() => dispatch({ type: "close-library" })}
+            onClose={() => dispatch({ type: "close-panel" })}
+          />
+        )}
+        {panel?.kind === "images" && imageBlock && (
+          <ImagePickerPanel
+            blockType={imageBlock.type}
+            currentSrc={(imageBlock as unknown as { slots: Record<string, { src?: string }> }).slots[panel.slot]?.src}
+            onPick={(imageId) => dispatch({ type: "operation", operation: { type: "set-image", blockId: panel.blockId, slot: panel.slot, imageId } })}
+            onClose={() => dispatch({ type: "close-panel" })}
           />
         )}
 
@@ -118,10 +128,15 @@ export function BuilderWorkspace({ initialDocument, initialHtml, lames }: Builde
               html={html}
               document={document}
               lames={lamesByType}
-              selectedId={state.selectedId}
+              selection={state.selection}
               viewport={viewport}
-              interactive={current !== undefined && !renderError}
-              onSelect={(blockId) => dispatch({ type: "select", blockId })}
+              interactive={!renderError}
+              onSelectBlock={(blockId) => dispatch({ type: "select-block", blockId })}
+              onSelectElement={(blockId, slot) => dispatch({ type: "select-element", blockId, slot })}
+              onStartEdit={(blockId, slot) => dispatch({ type: "start-edit", blockId, slot })}
+              onCommitEdit={(blockId, slot, draft) => dispatch({ type: "commit-edit", blockId, slot, draft })}
+              onCancelEdit={() => dispatch({ type: "escape" })}
+              onReplaceImage={(blockId, slot) => dispatch({ type: "open-images", blockId, slot })}
               onInsert={(index) => dispatch({ type: "open-library", index })}
               onMove={(blockId, toIndex) => dispatch({ type: "operation", operation: { type: "move-block", blockId, toIndex } })}
               onSurface={(blockId, surface) => dispatch({ type: "operation", operation: { type: "set-surface", blockId, surface } })}

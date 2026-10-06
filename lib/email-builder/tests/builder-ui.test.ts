@@ -15,7 +15,7 @@ const root = process.cwd()
 const read = (path: string) => readFileSync(join(root, path), "utf8")
 const code = (path: string) => read(path).replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|\s)\/\/.*$/gm, "")
 
-const components = ["builder-workspace", "builder-topbar", "builder-canvas", "block-toolbar", "lame-library-panel", "assistant-panel"]
+const components = ["builder-workspace", "builder-topbar", "builder-canvas", "block-toolbar", "lame-library-panel", "image-picker-panel", "inline-editor", "assistant-panel"]
 const files = [...components.map((name) => `components/email-builder/${name}.tsx`), "app/email-builder/page.tsx"]
 
 describe("Builder — structure et frontières", () => {
@@ -46,7 +46,7 @@ describe("Builder — structure et frontières", () => {
     for (const path of files.filter((entry) => entry.startsWith("components/"))) {
       const source = code(path)
       assert.ok(!/lib\/email\/renderer|node:fs|renderEmail|toPreviewHtml/.test(source), path)
-      assert.ok(!/data-slot|email-module-/.test(source), `${path} ne recrée aucune lame`)
+      assert.ok(!/data-slot=|email-module-/.test(source), `${path} ne recrée aucune lame`)
     }
     assert.match(code("app/email-builder/page.tsx"), /renderCanvasHtml/)
   })
@@ -120,7 +120,7 @@ describe("Builder — accessibilité et interactions", () => {
     assert.match(code("components/email-builder/builder-canvas.tsx"), /focus-visible:outline/)
     const workspace = code("components/email-builder/builder-workspace.tsx")
     assert.match(workspace, /event\.key === "Escape"/)
-    assert.match(workspace, /close-library/)
+    assert.match(workspace, /type: "escape"/)
   })
 
   test("la suppression n'a pas de modale : un seul geste, annulable", () => {
@@ -141,7 +141,7 @@ describe("Builder — bibliothèque et assistant", () => {
     assert.match(library, /\/email-library\/preview\//)
     assert.match(library, /Fermer la bibliothèque/)
     assert.match(read("components/email-builder/lame-library-panel.tsx"), /exemple provisoire/)
-    assert.match(code("components/email-builder/builder-workspace.tsx"), /\{state\.library && \(/)
+    assert.match(code("components/email-builder/builder-workspace.tsx"), /panel\?\.kind === "library" && \(/)
   })
 
   test("l'assistant est un emplacement : aucun état, aucun appel, repliable, masqué sous 1280 px", () => {
@@ -151,5 +151,82 @@ describe("Builder — bibliothèque et assistant", () => {
     assert.match(raw, /Bientôt disponible/)
     assert.match(assistant, /Replier l'assistant/)
     assert.match(assistant, /hidden[^"]*xl:flex/)
+  })
+})
+
+describe("Builder — édition directe du contenu (V2.3)", () => {
+  const editor = code("components/email-builder/inline-editor.tsx")
+  const canvas = code("components/email-builder/builder-canvas.tsx")
+  const picker = code("components/email-builder/image-picker-panel.tsx")
+  const workspace = code("components/email-builder/builder-workspace.tsx")
+
+  test("l'iframe n'est jamais un éditeur : ni contenteditable, ni designMode, ni écriture dans son document ; le champ vit AU-DESSUS", () => {
+    for (const source of [canvas, editor, workspace, picker]) {
+      assert.ok(!/contenteditable|contentEditable|designMode|execCommand/.test(source))
+      assert.ok(!/contentDocument[^;\n]*(\.write|\.open|innerHTML|textContent\s*=|appendChild|insertBefore|setAttribute|\.style\b)/.test(source))
+    }
+    assert.match(canvas, /<InlineEditor/)
+    assert.match(editor, /absolute z-40/)
+  })
+
+  test("le document n'est jamais reconstruit depuis le HTML : lame et slot viennent des repères et du document, la valeur initiale du document", () => {
+    assert.match(canvas, /data-slot/)
+    assert.match(canvas, /initialDraft\(editingEditor, slotValue\(/)
+    assert.ok(!/innerText|textContent/.test(canvas.replace(/\/\/.*$/gm, "")), "aucun texte lu dans le HTML rendu")
+  })
+
+  test("le brouillon est LOCAL : la frappe ne touche ni au reducer, ni au rendu ; une seule validation", () => {
+    assert.match(editor, /useState<SlotDraft>\(initial\)/)
+    assert.ok(!/onChange=\{[^}]*(onCommit|dispatch|fetch)/.test(editor))
+    assert.ok(!/fetch\(|dispatch/.test(editor))
+    assert.equal((editor.match(/onCommit\(draft\)/g) ?? []).length, 1, "un seul point de validation")
+    assert.match(editor, /if \(done\.current\) return/)
+  })
+
+  test("Entrée valide, Échap annule (sans propager), la perte du focus valide ; un bouton valide libellé et lien ensemble", () => {
+    assert.match(editor, /event\.key === "Escape"/)
+    assert.match(editor, /event\.stopPropagation\(\)/)
+    assert.match(editor, /event\.key === "Enter"/)
+    assert.match(editor, /onBlur=\{commit\}/)
+    assert.match(editor, /contains\(event\.relatedTarget/)
+    assert.match(editor, /Appliquer/)
+  })
+
+  test("le design system contrôle la forme : le champ reprend la typographie de l'élément et n'offre ni police, ni taille, ni couleur", () => {
+    assert.match(editor, /captureFieldStyle/)
+    assert.ok(!/type="color"|<select|fontFamily=\{|setFont|bold|italic/i.test(editor.replace(/fontFamily: style\.fontFamily/g, "")))
+  })
+
+  test("l'élément a priorité sur la lame : ses contrôles sont au-dessus ; la barre de lame n'apparaît que pour une LAME sélectionnée", () => {
+    assert.match(canvas, /selection\.kind === "block" && selection\.blockId === zone\.id/)
+    assert.match(canvas, /absolute z-10 outline-offset-2/)
+    assert.match(canvas, /selected && \(\s*<div className="absolute top-2 right-2 z-30">/)
+    assert.match(canvas, /tabIndex=\{blockSelected \? 0 : -1\}/)
+  })
+
+  test("images : « Remplacer » ouvre la banque Studi existante ; ni upload, ni URL libre, ni seconde banque", () => {
+    assert.match(canvas, /Remplacer/)
+    assert.match(picker, /emailBankImageBlocks/)
+    assert.match(picker, /resolveEmailBankImage/)
+    assert.ok(!/type="file"|FileReader|drop|upload|new Image|https?:\/\//i.test(picker.replace(/\/\/.*$/gm, "")))
+    assert.match(workspace, /type: "set-image"/)
+    assert.match(workspace, /type: "open-images"/)
+  })
+
+  test("accessibilité : chaque contenu éditable est un bouton nommé, avec focus visible ; actions image au clavier", () => {
+    assert.match(canvas, /aria-label=\{`\$\{editor === "image" \? "Image"/)
+    assert.match(canvas, /focus-visible:outline-2/)
+    assert.match(code("components/email-builder/image-picker-panel.tsx"), /aria-label=\{`\$\{emailBank\[id\]\.alt\}/)
+    assert.match(editor, /aria-label=\{label\}/)
+  })
+
+  test("silence quand tout va bien : aucun message de réussite", () => {
+    for (const path of files) assert.ok(!/(modifié|enregistré|sauvegardé|appliqué) avec succès/i.test(read(path)), path)
+  })
+
+  test("V2.3 n'ajoute rien de ce qui est hors périmètre : pas de dépendance, ni modèle, ni persistance, ni upload", () => {
+    const pkg = JSON.parse(read("package.json")) as { dependencies: Record<string, string> }
+    assert.ok(!Object.keys(pkg.dependencies).some((name) => /dnd|slate|tiptap|prosemirror|lexical|draft-js|quill|ckeditor|prisma|drizzle/i.test(name)))
+    for (const path of files) assert.ok(!/anthropic|localStorage|FileReader|type="file"/i.test(code(path)), path)
   })
 })

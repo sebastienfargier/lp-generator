@@ -12,11 +12,11 @@ import { buildExportableEmailHtml, validateExportHtml } from "../../email/export
 import { toPreviewHtml } from "../../email/preview"
 import { renderEmail, renderEmailParts } from "../../email/renderer"
 import { builderLames } from "../catalog"
-import { canvasBlockEnd, canvasBlockStart, renderCanvasHtml, renderMarkedHtml } from "../canvas"
+import { canvasBlockEnd, canvasBlockStart, renderCanvasHtml, renderMarkedHtml, stripCanvasMarkers } from "../canvas"
 import { buildDemoDocument } from "../demo-document"
 import { applyDocumentOperation } from "../operations"
 
-const strip = (html: string) => html.replace(/<!--\/?builder-block[^>]*-->/g, "")
+const strip = stripCanvasMarkers
 const markerIds = (html: string) => [...html.matchAll(/<!--builder-block:([^>]+)-->/g)].map((match) => match[1])
 
 describe("renderEmailParts — le renderer en morceaux, sans changer son rendu", () => {
@@ -104,6 +104,7 @@ describe("canvas — frontières", () => {
     const source = readFileSync(join(process.cwd(), "lib/email-builder/canvas.ts"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|\s)\/\/.*$/gm, "")
     assert.match(source, /renderEmailParts/)
     assert.match(source, /toPreviewHtml/)
-    assert.ok(!/<table|<td|<tr|data-slot|node:fs/.test(source))
+    assert.ok(!/<table|<td|<tr|node:fs/.test(source))
+    assert.match(source, /slotMarkers: true/)
   })
 })

@@ -10,7 +10,7 @@ import { after, before, describe, mock, test } from "node:test"
 import { builderLames } from "../catalog"
 import { buildDemoDocument } from "../demo-document"
 import { validateDocumentIntegrity } from "../integrity"
-import { builderCanRedo, builderCanUndo, builderDocument, builderReducer, createBuilderState, type BuilderAction, type BuilderState } from "../builder-state"
+import { builderCanRedo, builderCanUndo, builderDocument, builderReducer, createBuilderState, selectedBlockId, type BuilderAction, type BuilderState } from "../builder-state"
 import type { DocumentOperation } from "../operations"
 
 const fetchGuard = mock.method(globalThis, "fetch", () => {
@@ -36,16 +36,16 @@ describe("Builder — document initial", () => {
     assert.deepEqual(ids(state), ["header", "offer", "support", "closing", "mentions-legales", "footer"])
     assert.equal(builderDocument(state).config.name, "Offre alternance, démonstration B")
     assert.deepEqual(validateDocumentIntegrity(builderDocument(state)), [])
-    assert.equal(state.selectedId, null)
-    assert.equal(state.library, null)
+    assert.equal(selectedBlockId(state), null)
+    assert.equal(state.panel, null)
     assert.equal(state.notice, null)
     assert.equal(builderCanUndo(state), false)
     assert.equal(builderCanRedo(state), false)
   })
 
   test("l'état ne contient que l'historique de documents et un peu d'interface : jamais de HTML, jamais un second modèle de l'email", () => {
-    const state = run(start(), { type: "select", blockId: "offer" }, { type: "open-library", index: 2 })
-    assert.deepEqual(Object.keys(state).sort(), ["history", "library", "notice", "noticeKey", "selectedId"])
+    const state = run(start(), { type: "select-block", blockId: "offer" }, { type: "open-library", index: 2 })
+    assert.deepEqual(Object.keys(state).sort(), ["history", "notice", "noticeKey", "panel", "selection"])
     assert.ok(!/<html|<table|<!--/i.test(JSON.stringify(state)))
     assert.deepEqual(Object.keys(state.history).sort(), ["future", "past", "present"])
   })
@@ -57,17 +57,17 @@ describe("Builder — document initial", () => {
 
 describe("Builder — sélection", () => {
   test("sélectionner une lame, la changer, désélectionner ; une lame inconnue ne se sélectionne pas", () => {
-    let state = run(start(), { type: "select", blockId: "offer" })
-    assert.equal(state.selectedId, "offer")
-    state = run(state, { type: "select", blockId: "closing" })
-    assert.equal(state.selectedId, "closing")
-    assert.equal(run(state, { type: "select", blockId: "fantome" }).selectedId, null)
-    assert.equal(run(state, { type: "select", blockId: null }).selectedId, null)
+    let state = run(start(), { type: "select-block", blockId: "offer" })
+    assert.equal(selectedBlockId(state), "offer")
+    state = run(state, { type: "select-block", blockId: "closing" })
+    assert.equal(selectedBlockId(state), "closing")
+    assert.equal(selectedBlockId(run(state, { type: "select-block", blockId: "fantome" })), null)
+    assert.equal(selectedBlockId(run(state, { type: "select-block", blockId: null })), null)
   })
 
   test("sélectionner ne modifie jamais le document ni l'historique", () => {
     const state = start()
-    const selected = run(state, { type: "select", blockId: "offer" })
+    const selected = run(state, { type: "select-block", blockId: "offer" })
     assert.equal(builderDocument(selected), builderDocument(state))
     assert.equal(builderCanUndo(selected), false)
   })
@@ -76,11 +76,11 @@ describe("Builder — sélection", () => {
 describe("Builder — ajouter une lame (add-block)", () => {
   test("depuis une position précise : la lame s'insère à cet index, elle est sélectionnée, la bibliothèque se ferme", () => {
     const opened = run(start(), { type: "open-library", index: 3 })
-    assert.deepEqual(opened.library, { index: 3 })
+    assert.deepEqual(opened.panel, { kind: "library", index: 3 })
     const state = operate(opened, add("email-module-text-only", 3))
     assert.deepEqual(ids(state), ["header", "offer", "support", "email-module-text-only", "closing", "mentions-legales", "footer"])
-    assert.equal(state.selectedId, "email-module-text-only")
-    assert.equal(state.library, null)
+    assert.equal(selectedBlockId(state), "email-module-text-only")
+    assert.equal(state.panel, null)
     assert.equal(builderCanUndo(state), true)
     assert.deepEqual(builderDocument(state).blockMeta["email-module-text-only"], { origin: "builder" })
   })
@@ -125,27 +125,27 @@ describe("Builder — ajouter une lame (add-block)", () => {
 describe("Builder — supprimer une lame (remove-block)", () => {
   test("la lame disparaît, la sélection aussi ; annuler la rend, exactement", () => {
     const before = start()
-    const selected = run(before, { type: "select", blockId: "support" })
+    const selected = run(before, { type: "select-block", blockId: "support" })
     const removed = operate(selected, { type: "remove-block", blockId: "support" })
     assert.deepEqual(ids(removed), ["header", "offer", "closing", "mentions-legales", "footer"])
-    assert.equal(removed.selectedId, null)
+    assert.equal(selectedBlockId(removed), null)
     const restored = run(removed, { type: "undo" })
     assert.deepEqual(builderDocument(restored), builderDocument(before))
     assert.equal(builderCanRedo(restored), true)
   })
 
   test("supprimer une autre lame que la sélection garde la sélection", () => {
-    const state = operate(run(start(), { type: "select", blockId: "offer" }), { type: "remove-block", blockId: "support" })
-    assert.equal(state.selectedId, "offer")
+    const state = operate(run(start(), { type: "select-block", blockId: "offer" }), { type: "remove-block", blockId: "support" })
+    assert.equal(selectedBlockId(state), "offer")
   })
 })
 
 describe("Builder — déplacer une lame (move-block)", () => {
   test("monter, descendre : l'ordre change, la sélection suit la lame", () => {
-    let state = run(start(), { type: "select", blockId: "closing" })
+    let state = run(start(), { type: "select-block", blockId: "closing" })
     state = operate(state, { type: "move-block", blockId: "closing", toIndex: 2 })
     assert.deepEqual(ids(state), ["header", "offer", "closing", "support", "mentions-legales", "footer"])
-    assert.equal(state.selectedId, "closing")
+    assert.equal(selectedBlockId(state), "closing")
     state = operate(state, { type: "move-block", blockId: "closing", toIndex: 3 })
     assert.deepEqual(ids(state), ["header", "offer", "support", "closing", "mentions-legales", "footer"])
   })
@@ -227,7 +227,7 @@ describe("Builder — recommandations et refus", () => {
     state = run(state, { type: "dismiss-notice" })
     assert.equal(state.notice, null)
     const document = builderDocument(state)
-    state = run(state, { type: "open-library", index: 1 }, { type: "close-library" })
+    state = run(state, { type: "open-library", index: 1 }, { type: "close-panel" })
     assert.equal(builderDocument(state), document)
   })
 })
@@ -272,7 +272,7 @@ describe("Builder — annuler / rétablir", () => {
 
   test("la sélection suit l'historique : annuler l'ajout d'une lame sélectionnée la désélectionne", () => {
     const state = run(operate(start(), add("email-module-text-only", 3)), { type: "undo" })
-    assert.equal(state.selectedId, null)
+    assert.equal(selectedBlockId(state), null)
     assert.equal(ids(state).includes("email-module-text-only"), false)
   })
 

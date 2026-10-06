@@ -12,7 +12,14 @@
  *
  * Les commentaires ne changent ni le rendu ni la mise en page ; le navigateur
  * les retrouve (`createTreeWalker`) pour mesurer la zone de chaque lame et y
- * poser les contrôles. Les templates et l'export ne sont PAS modifiés : l'HTML
+ * poser les contrôles.
+ *
+ * Reliance HTML ↔ slot : le renderer rend la lame avec l'attribut `data-slot`
+ * que ses templates portent déjà (`slotMarkers`, ajouté au renderer : il
+ * retire normalement cet attribut). Un élément visible porte donc son nom de
+ * slot, et sa lame est celle dont les repères l'encadrent : blockId + slotName,
+ * sans jamais deviner un slot d'après un texte. L'attribut n'a aucun effet
+ * visuel et n'existe que dans ce HTML d'aperçu. Les templates et l'export ne sont PAS modifiés : l'HTML
  * exporté ne passe jamais ici.
  *
  * Les fragments viennent de `renderEmailParts` (ajout minimal au renderer : le
@@ -33,10 +40,13 @@ export const canvasBlockEnd = "<!--/builder-block-->"
  * `renderEmail` (même jointure : `renderEmailParts`).
  */
 export function renderMarkedHtml(document: EmailDocument): string {
-  const { head, blocks, tail } = renderEmailParts(document.config)
+  const { head, blocks, tail } = renderEmailParts(document.config, { slotMarkers: true })
   const marked = blocks.map((html, index) => `${canvasBlockStart(document.config.blocks[index]!.id)}${html}${canvasBlockEnd}`)
   return [head, ...marked, tail].join("\n")
 }
+
+/** Retire les repères du Builder (commentaires de lame, `data-slot`) : redonne exactement le HTML du renderer. */
+export const stripCanvasMarkers = (html: string) => html.replace(/<!--\/?builder-block[^>]*-->/g, "").replace(/\sdata-slot="[^"]*"/g, "")
 
 /** HTML du canvas : rendu du renderer, repères de lames, adaptation d'aperçu (logo et pictos locaux, liens inertes). */
 export function renderCanvasHtml(document: EmailDocument): string {

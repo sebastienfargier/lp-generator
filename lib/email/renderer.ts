@@ -86,7 +86,16 @@ export class EmailTemplateError extends Error {
 /* API                                                                        */
 /* -------------------------------------------------------------------------- */
 
-type RenderOptions = { source?: EmailTemplateSource }
+type RenderOptions = {
+  source?: EmailTemplateSource
+  /**
+   * Garde l'attribut `data-slot` de chaque slot dans le HTML rendu. Réservé à
+   * l'aperçu du Builder, qui retrouve ainsi « quelle lame, quel slot » sans rien
+   * deviner dans le texte : jamais pour l'email envoyé ni l'export. Aucun effet
+   * visuel ; faux par défaut.
+   */
+  slotMarkers?: boolean
+}
 
 /**
  * Rend un email complet. `config` doit déjà être valide (`parseEmailConfig`) :
@@ -110,9 +119,9 @@ export function renderEmail(
  */
 export function renderEmailParts(
   config: EmailConfig,
-  { source = emailFileTemplateSource }: RenderOptions = {}
+  { source = emailFileTemplateSource, slotMarkers = false }: RenderOptions = {}
 ): { head: string; blocks: string[]; tail: string } {
-  const blocks = config.blocks.map((block) => renderBlock(block, source))
+  const blocks = config.blocks.map((block) => renderBlock(block, source, slotMarkers))
   return renderDocument(source.socle(), config, blocks)
 }
 
@@ -211,7 +220,7 @@ type PreparedTemplate = {
   /** Attributs `style` porteurs de couleurs (lames configurables). */
   styles: StyleAttribute[]
   /** Attributs internes à retirer du HTML final (espace précédent inclus). */
-  internalAttributes: Range[]
+  internalAttributes: (Range & { name: string })[]
 }
 
 /** Attributs du renderer, jamais publiés dans l'email. */
@@ -273,7 +282,7 @@ function prepareTemplate(
   const systems = new Set<string>()
   const optionalRows = new Map<string, Range[]>()
   const styles: StyleAttribute[] = []
-  const internalAttributes: Range[] = []
+  const internalAttributes: (Range & { name: string })[] = []
 
   const optional = new Set(entry.optional ?? [])
   const declaredSystem = new Set<string>(entry.system ?? [])
@@ -297,7 +306,7 @@ function prepareTemplate(
       const range = attrRange(name)
       if (!range) continue
       const start = /\s/.test(html[range.start - 1] ?? "") ? range.start - 1 : range.start
-      internalAttributes.push({ start, end: range.end })
+      internalAttributes.push({ start, end: range.end, name })
     }
 
     const slot = attr("data-slot")
@@ -465,7 +474,7 @@ function colorDeclarations(style: string): ColorDeclaration[] {
 
 type Edit = Range & { text: string }
 
-function renderBlock(block: EmailBlock, source: EmailTemplateSource) {
+function renderBlock(block: EmailBlock, source: EmailTemplateSource, slotMarkers = false) {
   const entry: ManifestEntry = emailBlockManifest[block.type]
   const template = prepare(block.type, source)
   const values: Record<string, unknown> = block.slots
@@ -516,6 +525,7 @@ function renderBlock(block: EmailBlock, source: EmailTemplateSource) {
   // Attributs internes retirés en dernier, dans la même passe (positions du
   // template d'origine), sauf dans les lignes déjà supprimées.
   for (const range of template.internalAttributes) {
+    if (slotMarkers && range.name === "data-slot") continue
     const inRemovedRow = removedRows.some(
       (row) => row.start <= range.start && range.end <= row.end
     )
