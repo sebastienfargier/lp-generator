@@ -25,6 +25,7 @@ import { provenanceOf, type BrandDocumentId } from "../brand/provenance"
 import { brandTerminologyRules } from "../brand/terminology"
 import { emailDestinations } from "./destinations"
 import { buildEmailVisualIntentView } from "./image-bank"
+import { promotionVisualIntents } from "./promotion-draft"
 import { emailRecipes, type EmailRecipe, type EmailRecipeId } from "./recipes"
 
 /* -------------------------------------------------------------------------- */
@@ -166,4 +167,35 @@ export function buildRecipeBrandContext(
     claims: exposed.map((claim) => ({ id: claim.id, documentId: claim.provenance.documentId, status: claim.provenance.status })),
   }
   return { context, provenance }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Contexte de la promotion (R4)                                              */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Contexte Brand de R4 : la voix de la cible, les règles de rédaction, les
+ * formulations à fort risque et les intentions visuelles de la promotion. Ni
+ * claim (aucun chiffre de marque dans une promotion V1), ni destination à
+ * choisir (elle vient de la demande), ni valeur d'offre : celles-ci arrivent
+ * dans la requête, à part.
+ */
+export type PromotionBrandContext = Pick<RecipeBrandContext, "voice" | "rules" | "avoid"> & { visualIntents: readonly { intent: string; hint: string }[] }
+
+export function buildPromotionBrandContext(audience: string, target?: BrandAudienceId): { context: PromotionBrandContext; provenance: RecipeBrandProvenance } {
+  const matched = target ?? matchBrandAudience(audience)
+  const profile = matched ? brandAudiences[matched] : undefined
+  const context: PromotionBrandContext = {
+    voice: {
+      address: profile?.addressMode ?? "vouvoiement",
+      tone: profile?.tone ?? defaultTone,
+      ...(profile ? { audience: { label: profile.label, keyPoints: profile.keyPoints } } : {}),
+    },
+    rules: emailWritingRules.map((rule) => rule.text),
+    avoid: riskyTerms(),
+    visualIntents: buildEmailVisualIntentView().filter((entry) => (promotionVisualIntents as readonly string[]).includes(entry.intent)),
+  }
+  const documentIds = new Set<BrandDocumentId>(["identite-marque", "promesse-editoriale", "regles-editoriales", "lexique-marque"])
+  if (profile) documentIds.add("adaptation-par-cible")
+  return { context, provenance: { documents: [...documentIds].map((id) => ({ documentId: id, status: provenanceOf(id).status })), claims: [] } }
 }

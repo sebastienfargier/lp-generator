@@ -10,6 +10,8 @@ import {
   emailGeneratorTargetValues,
   type EmailGeneratorIntent,
 } from "./generator-form"
+import { checkPromotionRequest } from "./promotion-prompt"
+import { PromotionFactsSchema, type EmailPromotionRequest } from "./promotion-facts"
 import type { EmailRecipeRequest } from "./recipe-selection"
 import { EmailPreviewError, toPreviewHtml } from "./preview"
 import { EmailTemplateError, renderEmail } from "./renderer"
@@ -48,7 +50,8 @@ const maxBodyLength = 100_000
  */
 const required = (label: string) => z.string().trim().min(1, `${label} est requis.`)
 
-const EmailGenerateBodySchema = z.strictObject({
+const EmailGenerateBodySchema = z
+  .strictObject({
   campaignName: required("Le nom de campagne"),
   subject: z
     .string()
@@ -62,7 +65,17 @@ const EmailGenerateBodySchema = z.strictObject({
     .array(z.string().trim().min(1, "Une information ne peut pas être vide.").max(emailFactsLimits.maxLength, `Une information tient en ${emailFactsLimits.maxLength} caractères au maximum.`))
     .max(emailFactsLimits.maxCount, `${emailFactsLimits.maxCount} informations au maximum.`)
     .optional(),
-})
+  /** Données de l'offre (Promotion Facts) : seulement avec l'intention « promotion ». Jamais générées. */
+  promotion: PromotionFactsSchema.optional(),
+  })
+  .superRefine((body, ctx) => {
+    if (body.intent === "promotion") {
+      if (!body.promotion) ctx.addIssue({ code: "custom", path: ["promotion"], message: "Une promotion exige les données de l'offre." })
+      if (body.facts && body.facts.length > 0) ctx.addIssue({ code: "custom", path: ["facts"], message: "Une promotion ne reprend pas d'informations libres : les valeurs de l'offre viennent des données de l'offre." })
+    } else if (body.promotion) {
+      ctx.addIssue({ code: "custom", path: ["promotion"], message: "Les données d'offre ne s'utilisent qu'avec l'intention « promotion »." })
+    }
+  })
 
 export type EmailPublicErrorCode =
   | "invalid-request"
@@ -91,7 +104,7 @@ export type EmailPublicError = {
 export type EmailGenerateResponse = EmailGenerationSuccess | EmailPublicError
 
 /** Moteur Email V2 : requête de recette → email résolu ou erreur. */
-export type EmailEngine = (request: EmailRecipeRequest) => Promise<EmailV2EngineResult>
+export type EmailEngine = (request: EmailRecipeRequest | EmailPromotionRequest) => Promise<EmailV2EngineResult>
 
 export type EmailHandlerOptions = {
   /** Moteur de génération ; par défaut Claude. Injecté par les tests. */
@@ -148,12 +161,12 @@ export const emailPublicErrors: Record<EmailGenerationErrorKind, PublicMapping> 
  * texte du brief. « Accompagnement » et « orientation » mènent à la même
  * famille d'email, avec un angle différent.
  */
-const intentRequests = {
+const intentRequests: Record<Exclude<EmailGeneratorIntent, "promotion">, Partial<EmailRecipeRequest>> = {
   orientation: { intent: "discovery", objective: "decouverte-formations" },
   accompagnement: { intent: "discovery", objective: "accompagnement" },
   newsletter: { intent: "editorial", emailType: "newsletter" },
   preuves: { intent: "brand-proof" },
-} as const satisfies Record<EmailGeneratorIntent, Partial<EmailRecipeRequest>>
+}
 
 /** Corps validé → requête V2 : la cible contrôlée est transmise telle quelle, son libellé tient lieu d'audience. */
 export function toEmailRecipeRequest(body: z.output<typeof EmailGenerateBodySchema>): EmailRecipeRequest {
@@ -164,8 +177,26 @@ export function toEmailRecipeRequest(body: z.output<typeof EmailGenerateBodySche
     brief: body.brief,
     audience: target.label,
     target: target.value,
-    ...intentRequests[body.intent],
+    ...intentRequests[body.intent as Exclude<EmailGeneratorIntent, "promotion">],
     ...(body.facts && body.facts.length > 0 ? { facts: body.facts.map((statement) => ({ statement })) } : {}),
+  }
+}
+
+/**
+ * Corps validé → requête du moteur : une promotion suit son propre contrat
+ * (Promotion Facts) ; le brief reste du texte, l'offre reste des données.
+ */
+export function toEmailEngineRequest(body: z.output<typeof EmailGenerateBodySchema>): EmailRecipeRequest | EmailPromotionRequest {
+  if (body.intent !== "promotion") return toEmailRecipeRequest(body)
+  const target = emailGeneratorTargets.find((entry) => entry.value === body.target)!
+  return {
+    campaignName: body.campaignName,
+    ...(body.subject ? { subject: body.subject } : {}),
+    brief: body.brief,
+    audience: target.label,
+    target: target.value,
+    intent: "promotion",
+    promotion: body.promotion!,
   }
 }
 
@@ -179,7 +210,7 @@ function fail(error: PublicMapping, issues: EmailPublicError["issues"] = []) {
 const defaultLog: NonNullable<EmailHandlerOptions["log"]> = (entry) => console.error("[email-generation]", JSON.stringify(entry))
 
 export async function handleEmailGeneration(request: Request, options: EmailHandlerOptions = {}): Promise<Response> {
-  const engine = options.engine ?? ((input: EmailRecipeRequest) => generateEmailV2(input))
+  const engine = options.engine ?? ((input: EmailRecipeRequest | EmailPromotionRequest) => generateEmailV2(input))
   const log = options.log ?? defaultLog
 
   // 1. Le corps : borné, JSON.
@@ -199,9 +230,15 @@ export async function handleEmailGeneration(request: Request, options: EmailHand
   }
 
   // 3. Un seul appel au moteur V2 ; la recette est choisie par le moteur, avant l'appel.
+  const engineRequest = toEmailEngineRequest(brief.data)
+  // Promotion : valeurs, date et texte libre se vérifient AVANT tout appel (deux vérités possibles, date passée, objet qui presse).
+  if (brief.data.intent === "promotion") {
+    const check = checkPromotionRequest(engineRequest)
+    if (check.status === "invalid") return fail(invalidRequest, check.issues)
+  }
   let result: EmailV2EngineResult
   try {
-    result = await engine(toEmailRecipeRequest(brief.data))
+    result = await engine(engineRequest)
   } catch {
     log({ kind: "engine-threw" })
     return fail(internal)

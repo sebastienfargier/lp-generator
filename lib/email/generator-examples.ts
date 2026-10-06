@@ -1,13 +1,14 @@
 /**
  * Exemples de brief de /email-generator : un par famille d'email que le moteur
  * compose (orientation, newsletter, preuves Studi). Un clic préremplit le
- * formulaire, sans lancer de génération. Aucun n'est une promotion ni ne
- * contient un chiffre : les repères chiffrés viennent des claims approuvées,
- * choisies par le moteur.
+ * formulaire, sans lancer de génération. Seul l'exemple Promo porte des valeurs
+ * (une remise, un code, une date) : ce sont des DONNÉES DE DÉMONSTRATION, pas une
+ * offre Studi, marquées `illustrative`. Les autres ne contiennent aucun chiffre : les
+ * repères chiffrés viennent des claims approuvées, choisies par le moteur.
  *
  * Module pur, utilisable côté client : il n'importe rien du moteur.
  */
-import type { EmailGeneratorExample } from "./generator-form"
+import { emptyEmailPromotionForm, type EmailGeneratorExample } from "./generator-form"
 
 export const emailGeneratorExamples: readonly EmailGeneratorExample[] = [
   {
@@ -20,6 +21,7 @@ export const emailGeneratorExamples: readonly EmailGeneratorExample[] = [
       brief: "Aider les lecteurs à clarifier leur projet et à découvrir les métiers et les formations Studi.",
       subject: "",
       facts: "",
+      promotion: emptyEmailPromotionForm,
     },
   },
   {
@@ -32,6 +34,7 @@ export const emailGeneratorExamples: readonly EmailGeneratorExample[] = [
       brief: "Une newsletter qui aide à organiser sa formation à côté du travail : méthode, motivation, demande d'aide.",
       subject: "",
       facts: "",
+      promotion: emptyEmailPromotionForm,
     },
   },
   {
@@ -44,6 +47,21 @@ export const emailGeneratorExamples: readonly EmailGeneratorExample[] = [
       brief: "Donner quelques repères vérifiés sur Studi à des personnes qui comparent des écoles avant de se décider.",
       subject: "",
       facts: "",
+      promotion: emptyEmailPromotionForm,
+    },
+  },
+  {
+    id: "promotion",
+    label: "Promo",
+    illustrative: true,
+    form: {
+      campaignName: "Offre de rentrée",
+      intent: "promotion",
+      target: "actifs_en_poste",
+      brief: "Présenter une offre de rentrée à des personnes en poste qui veulent développer leurs compétences, sans les presser.",
+      subject: "",
+      facts: "",
+      promotion: { offerType: "percent", value: "20", code: "DEMO20", endDate: "2026-10-31", scope: "les formations diplômantes", destination: "catalogue-formations" },
     },
   },
 ]

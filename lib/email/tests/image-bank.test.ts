@@ -159,12 +159,13 @@ describe("banque d'images Email V2 : formats et cadres réels", () => {
     assert.equal(emailPortraitStripFrames.length, 5)
   })
 
-  test("les formats couvrent medium, large, split et la bannière 520×174 des deux lames", () => {
+  test("les formats couvrent medium, large, split, la bannière 520×174 des deux lames et le hero d'offre 600×300", () => {
     assert.deepEqual(
       formats.map((format) => [format, emailImageFormats[format].frame.width, emailImageFormats[format].frame.height]),
-      [["medium", 600, 270], ["large", 600, 534], ["split", 229, 456], ["band", 520, 174]]
+      [["medium", 600, 270], ["large", 600, 534], ["split", 229, 456], ["band", 520, 174], ["offer", 600, 300]]
     )
     assert.deepEqual([...emailImageFormats.band.blocks], ["email-hero-newsletter-variant-02", "email-module-text-and-cta-variant-02"])
+    assert.deepEqual([...emailImageFormats.offer.blocks], ["email-module-hero-offer-image-top"])
   })
 })
 
@@ -200,7 +201,7 @@ describe("banque d'images Email V2 : dérivés", () => {
       crops.derivatives.map((entry) => `${entry.image}--${entry.format}.jpg`).sort(),
       [...expectedFiles].sort()
     )
-    for (const file of onDisk) assert.match(file, /^[a-z0-9-]+--(medium|large|split|band|strip-[1-5])\.jpg$/)
+    for (const file of onDisk) assert.match(file, /^[a-z0-9-]+--(medium|large|split|band|offer|strip-[1-5])\.jpg$/)
   })
 
   test("poids raisonnable : aucun dérivé au-delà de 250 Ko, ensemble sous 5 Mo", () => {
@@ -268,7 +269,7 @@ describe("banque d'images Email V2 : compatibilités et résolution", () => {
         const image = resolveEmailBankImage(id, block)
         assert.ok(ImageAssetSlotSchema.safeParse(image).success, `${id} / ${block}`)
         assert.equal(image.alt, emailBank[id].alt)
-        assert.match(image.src, /^https:\/\/demo-assets\.invalid\/email-v2\/[a-z0-9-]+--(medium|large|split|band)\.jpg$/)
+        assert.match(image.src, /^https:\/\/demo-assets\.invalid\/email-v2\/[a-z0-9-]+--(medium|large|split|band|offer)\.jpg$/)
         assert.deepEqual(resolveEmailBankImage(id, block), image, "déterministe")
       }
     }

@@ -18,6 +18,7 @@ export const emailGeneratorIntents = [
   { value: "accompagnement", label: "Accompagnement / évolution", hint: "Expliquer l'accompagnement et rassurer sur une évolution." },
   { value: "newsletter", label: "Newsletter / contenu éditorial", hint: "Une newsletter à lire : rubriques et conseils." },
   { value: "preuves", label: "Preuves Studi / chiffres clés", hint: "Des repères vérifiés sur Studi, sans offre." },
+  { value: "promotion", label: "Promotion / offre commerciale", hint: "Une offre dont les valeurs (montant, code, date) sont saisies, jamais générées." },
 ] as const
 
 export type EmailGeneratorIntent = (typeof emailGeneratorIntents)[number]["value"]
@@ -42,6 +43,41 @@ export type EmailGeneratorTarget = (typeof emailGeneratorTargets)[number]["value
 
 export const emailGeneratorTargetValues = emailGeneratorTargets.map((target) => target.value) as [EmailGeneratorTarget, ...EmailGeneratorTarget[]]
 
+/**
+ * Données de l'offre d'une promotion : saisies, jamais générées. Types et
+ * destinations sont des identifiants fermés (un test garde l'égalité avec les
+ * Promotion Facts du serveur) ; le serveur reste l'autorité.
+ */
+export const emailPromotionOfferTypes = [
+  { value: "percent", label: "Remise en pourcentage", unit: "%" },
+  { value: "amount", label: "Remise en montant", unit: "€" },
+] as const
+export type EmailPromotionOfferType = (typeof emailPromotionOfferTypes)[number]["value"]
+
+export const emailPromotionDestinations = [
+  { value: "catalogue-formations", label: "Catalogue Studi" },
+  { value: "alternance", label: "Catalogue Alternance" },
+  { value: "diplomes", label: "Formations par niveau de diplôme" },
+  { value: "certificats", label: "Certificats professionnels" },
+] as const
+export type EmailPromotionDestination = (typeof emailPromotionDestinations)[number]["value"]
+
+export type EmailPromotionForm = {
+  /** Vide tant que l'utilisateur n'a pas choisi. */
+  offerType: EmailPromotionOfferType | ""
+  /** Entier : euros ou pourcentage selon le type. */
+  value: string
+  /** Facultatif ; capitales, chiffres, tirets. */
+  code: string
+  /** AAAA-MM-JJ. */
+  endDate: string
+  /** Groupe nominal, ex. « les formations diplômantes ». */
+  scope: string
+  destination: EmailPromotionDestination | ""
+}
+
+export const emptyEmailPromotionForm: EmailPromotionForm = { offerType: "", value: "", code: "", endDate: "", scope: "", destination: "" }
+
 export type EmailGeneratorForm = {
   campaignName: string
   /** Vide tant que l'utilisateur n'a pas choisi. */
@@ -53,10 +89,16 @@ export type EmailGeneratorForm = {
   subject: string
   /** Une information par ligne ; facultatif. */
   facts: string
+  /** Données de l'offre : seulement avec l'intention « promotion ». */
+  promotion: EmailPromotionForm
 }
 
-/** Un exemple de brief : un clic préremplit le formulaire, sans lancer de génération. */
-export type EmailGeneratorExample = { id: string; label: string; form: EmailGeneratorForm }
+/**
+ * Un exemple de brief : un clic préremplit le formulaire, sans lancer de
+ * génération. `illustrative` : les valeurs de l'offre sont une illustration,
+ * pas une offre Studi (voir `generator-examples.ts`).
+ */
+export type EmailGeneratorExample = { id: string; label: string; form: EmailGeneratorForm; illustrative?: true }
 
 /* -------------------------------------------------------------------------- */
 /* Informations à reprendre telles quelles                                    */
@@ -95,6 +137,22 @@ export const emptyEmailGeneratorForm: EmailGeneratorForm = {
   brief: "",
   subject: "",
   facts: "",
+  promotion: emptyEmailPromotionForm,
+}
+
+const codePattern = /^[A-Z0-9][A-Z0-9-]{1,19}$/
+
+/** Donnée de l'offre mal saisie, par champ ; `null` : tout est saisi. Le serveur reste l'autorité. */
+export function emailPromotionFormError(promotion: EmailPromotionForm): string | null {
+  if (promotion.offerType === "") return "Choisissez le type d'offre."
+  const value = promotion.value.trim()
+  if (!/^\d+$/.test(value) || Number(value) < 1) return "La valeur est un nombre entier positif."
+  if (promotion.offerType === "percent" && Number(value) > 100) return "Un pourcentage ne dépasse pas 100."
+  if (promotion.code.trim() !== "" && !codePattern.test(promotion.code.trim())) return "Le code : capitales, chiffres et tirets (2 à 20 caractères)."
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(promotion.endDate)) return "Indiquez la date de fin de l'offre."
+  if (promotion.scope.trim().length < 3) return "Indiquez ce que couvre l'offre."
+  if (promotion.destination === "") return "Choisissez la destination du bouton."
+  return null
 }
 
 /** Champs obligatoires remplis, intention et cible valides, informations dans leurs limites. L'objet est facultatif. */
@@ -103,7 +161,7 @@ export function canGenerateEmail(form: EmailGeneratorForm): boolean {
     [form.campaignName, form.brief].every((value) => value.trim() !== "") &&
     (emailGeneratorIntentValues as readonly string[]).includes(form.intent) &&
     (emailGeneratorTargetValues as readonly string[]).includes(form.target) &&
-    emailFactsInputError(form.facts) === null
+    (form.intent === "promotion" ? emailPromotionFormError(form.promotion) === null : emailFactsInputError(form.facts) === null)
   )
 }
 
@@ -114,7 +172,9 @@ export function canGenerateEmail(form: EmailGeneratorForm): boolean {
  */
 export function toEmailRequestBody(form: EmailGeneratorForm) {
   const subject = form.subject.trim()
-  const facts = parseEmailFactsInput(form.facts)
+  const promotion = form.intent === "promotion"
+  // Une promotion n'a pas d'informations libres : l'offre vient de ses propres données.
+  const facts = promotion ? [] : parseEmailFactsInput(form.facts)
   return {
     campaignName: form.campaignName.trim(),
     ...(subject ? { subject } : {}),
@@ -122,6 +182,20 @@ export function toEmailRequestBody(form: EmailGeneratorForm) {
     intent: form.intent,
     target: form.target,
     ...(facts.length > 0 ? { facts } : {}),
+    ...(promotion ? { promotion: toPromotionBody(form.promotion) } : {}),
+  }
+}
+
+/** Données de l'offre du formulaire → Promotion Facts (le nombre est converti, rien n'est inventé). */
+export function toPromotionBody(promotion: EmailPromotionForm) {
+  const value = Number(promotion.value.trim())
+  const code = promotion.code.trim()
+  return {
+    offer: promotion.offerType === "amount" ? { type: "amount" as const, amount: value } : { type: "percent" as const, percent: value },
+    ...(code ? { code } : {}),
+    endDate: promotion.endDate,
+    scope: promotion.scope.trim(),
+    destination: promotion.destination,
   }
 }
 
@@ -164,6 +238,7 @@ const fieldLabels: Record<string, string> = {
   intent: "Intention",
   target: "Cible",
   facts: "Informations à reprendre telles quelles",
+  promotion: "Données de l'offre",
 }
 
 export type EmailErrorView = {

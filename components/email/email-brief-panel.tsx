@@ -17,7 +17,11 @@ import { Textarea } from "@/components/ui/textarea"
 import {
   describeEmailError,
   emailFactsInputError,
+  emailPromotionDestinations,
+  emailPromotionFormError,
+  emailPromotionOfferTypes,
   type EmailGeneratorExample,
+  type EmailPromotionForm,
   type EmailGeneratorForm,
   type EmailGeneratorIntent,
   type EmailGeneratorTarget,
@@ -61,6 +65,14 @@ export function EmailBriefPanel({
     onFormChange({ ...form, [key]: value })
   const factsError = emailFactsInputError(form.facts)
   const errorView = error ? describeEmailError(error) : null
+  const isPromotion = form.intent === "promotion"
+  const updatePromotion = <Key extends keyof EmailPromotionForm>(key: Key, value: EmailPromotionForm[Key]) =>
+    onFormChange({ ...form, promotion: { ...form.promotion, [key]: value } })
+  const promotion = form.promotion
+  const promotionTouched = Object.values(promotion).some((value) => value !== "")
+  const promotionError = promotionTouched ? emailPromotionFormError(promotion) : null
+  const activeExample = examples.find((example) => JSON.stringify(example.form) === JSON.stringify(form))
+  const unit = emailPromotionOfferTypes.find((type) => type.value === promotion.offerType)?.unit
 
   return (
     <form
@@ -99,6 +111,14 @@ export function EmailBriefPanel({
           )
         })}
       </div>
+
+      {activeExample?.illustrative && (
+        <p className="text-caption text-muted-foreground">
+          Valeurs d&apos;illustration : remplacez le montant, le code et la date par ceux de votre offre.
+        </p>
+      )}
+
+      {isPromotion && <h3 className="text-caption font-semibold uppercase tracking-wide text-muted-foreground">Contenu à générer</h3>}
 
       <FieldGroup className="gap-4">
         <Field>
@@ -189,26 +209,132 @@ export function EmailBriefPanel({
           <FieldDescription id="email-subject-help">Laissez vide : l&apos;IA le propose.</FieldDescription>
         </Field>
 
-        <Field data-invalid={factsError ? true : undefined}>
-          <FieldLabel htmlFor="email-facts">
-            Informations à reprendre telles quelles {optional}
-          </FieldLabel>
-          <Textarea
-            id="email-facts"
-            rows={4}
-            // `field-sizing: content` ignore `rows` : min-h-24 garantit environ 4 lignes visibles.
-            className="min-h-24"
-            aria-invalid={factsError ? true : undefined}
-            aria-describedby="email-facts-help"
-            placeholder={"Ex. Les formations sont accessibles en ligne.\nUn conseiller répond aux questions."}
-            value={form.facts}
-            onChange={(event) => update("facts", event.target.value)}
-          />
-          <FieldDescription id="email-facts-help">
-            Ajoutez ici les chiffres, dates ou informations qui doivent être respectés. Un élément par ligne.
-          </FieldDescription>
-          {factsError && <FieldError>{factsError}</FieldError>}
-        </Field>
+        {!isPromotion && (
+          <Field data-invalid={factsError ? true : undefined}>
+            <FieldLabel htmlFor="email-facts">
+              Informations à reprendre telles quelles {optional}
+            </FieldLabel>
+            <Textarea
+              id="email-facts"
+              rows={4}
+              // `field-sizing: content` ignore `rows` : min-h-24 garantit environ 4 lignes visibles.
+              className="min-h-24"
+              aria-invalid={factsError ? true : undefined}
+              aria-describedby="email-facts-help"
+              placeholder={"Ex. Les formations sont accessibles en ligne.\nUn conseiller répond aux questions."}
+              value={form.facts}
+              onChange={(event) => update("facts", event.target.value)}
+            />
+            <FieldDescription id="email-facts-help">
+              Ajoutez ici les chiffres, dates ou informations qui doivent être respectés. Un élément par ligne.
+            </FieldDescription>
+            {factsError && <FieldError>{factsError}</FieldError>}
+          </Field>
+        )}
+
+        {isPromotion && (
+          <fieldset className="flex flex-col gap-4 rounded-lg border p-3" aria-describedby="email-promotion-help">
+            <legend className="px-1 text-caption font-semibold uppercase tracking-wide text-muted-foreground">Données de l&apos;offre</legend>
+            <p id="email-promotion-help" className="text-caption text-muted-foreground">
+              Reprises telles quelles dans l&apos;email : l&apos;IA ne les écrit ni ne les modifie.
+            </p>
+
+            <Field>
+              <FieldLabel htmlFor="email-promo-type">Type d&apos;offre</FieldLabel>
+              <Select
+                items={emailPromotionOfferTypes}
+                value={promotion.offerType || null}
+                onValueChange={(value) => {
+                  const type = emailPromotionOfferTypes.find((item) => item.value === value)
+                  if (type) updatePromotion("offerType", type.value)
+                }}
+              >
+                <SelectTrigger id="email-promo-type" className="w-full">
+                  <SelectValue placeholder="Choisir un type d'offre" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    {emailPromotionOfferTypes.map((type) => (
+                      <SelectItem key={type.value} value={type.value}>
+                        {type.label}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </Field>
+
+            <Field>
+              <FieldLabel htmlFor="email-promo-value">Valeur{unit ? ` (${unit})` : ""}</FieldLabel>
+              <Input
+                id="email-promo-value"
+                inputMode="numeric"
+                placeholder="Ex. 20"
+                value={promotion.value}
+                onChange={(event) => updatePromotion("value", event.target.value)}
+              />
+            </Field>
+
+            <Field>
+              <FieldLabel htmlFor="email-promo-code">Code promo {optional}</FieldLabel>
+              <Input
+                id="email-promo-code"
+                autoCapitalize="characters"
+                placeholder="Ex. RENTREE20"
+                value={promotion.code}
+                onChange={(event) => updatePromotion("code", event.target.value.toUpperCase())}
+              />
+            </Field>
+
+            <Field>
+              <FieldLabel htmlFor="email-promo-end">Date de fin</FieldLabel>
+              <Input id="email-promo-end" type="date" value={promotion.endDate} onChange={(event) => updatePromotion("endDate", event.target.value)} />
+            </Field>
+
+            <Field>
+              <FieldLabel htmlFor="email-promo-scope">Périmètre de l&apos;offre</FieldLabel>
+              <Input
+                id="email-promo-scope"
+                aria-describedby="email-promo-scope-help"
+                placeholder="Ex. les formations diplômantes"
+                value={promotion.scope}
+                onChange={(event) => updatePromotion("scope", event.target.value)}
+              />
+              <FieldDescription id="email-promo-scope-help">Complète « Offre valable sur … » dans l&apos;email.</FieldDescription>
+            </Field>
+
+            <Field>
+              <FieldLabel htmlFor="email-promo-destination">Destination du bouton</FieldLabel>
+              <Select
+                items={emailPromotionDestinations}
+                value={promotion.destination || null}
+                onValueChange={(value) => {
+                  const destination = emailPromotionDestinations.find((item) => item.value === value)
+                  if (destination) updatePromotion("destination", destination.value)
+                }}
+              >
+                <SelectTrigger id="email-promo-destination" className="w-full">
+                  <SelectValue placeholder="Choisir une destination" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    {emailPromotionDestinations.map((destination) => (
+                      <SelectItem key={destination.value} value={destination.value}>
+                        {destination.label}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </Field>
+
+            {promotionError && (
+              <p className="text-caption text-destructive" aria-live="polite">
+                {promotionError}
+              </p>
+            )}
+          </fieldset>
+        )}
       </FieldGroup>
 
       <div className="flex flex-col gap-2">

@@ -136,8 +136,8 @@ export function emailRecipeDisclaimers(claims: readonly Pick<BrandClaim, "discla
 /* Shell                                                                      */
 /* -------------------------------------------------------------------------- */
 
-/** Footer : les trois liens éditoriaux du template (mêmes destinations que le Draft V1). */
-const footerDestinations = ["catalogue-formations", "alternance", "trajectoire-magazine"] as const satisfies readonly EmailDestinationId[]
+/** Footer : les trois liens éditoriaux du template (mêmes destinations que le Draft V1). Exportée : R4 partage le même shell. */
+export const footerDestinations = ["catalogue-formations", "alternance", "trajectoire-magazine"] as const satisfies readonly EmailDestinationId[]
 
 function toId(campaignName: string) {
   const slug = campaignName

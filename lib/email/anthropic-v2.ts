@@ -1,6 +1,10 @@
 import { createClient, EMAIL_MAX_TOKENS, failure, mapApiError, readStructuredOutput, resolveEmailModel, type CreateParams, type EmailClaudeDependencies, type EmailClaudeUsage, type EmailEngineError, type EmailEngineIssue } from "./anthropic"
+import { isEmailPromotionInput } from "./promotion-facts"
+import { buildPromotionPrompt } from "./promotion-prompt"
+import { resolvePromotionDraft } from "./promotion-resolver"
 import { resolveEmailRecipeDraft, type EmailRecipeDraftResolution } from "./recipe-drafts"
 import { buildEmailRecipePrompt } from "./recipe-prompts"
+import type { PromotionDraftResolution } from "./promotion-resolver"
 import type { EmailRecipeDiagnostic } from "./recipe-validation"
 import type { EmailRecipeId } from "./recipes"
 import type { EmailConfig } from "./types"
@@ -41,7 +45,7 @@ export type EmailV2EngineResult =
       status: "success"
       config: EmailConfig
       /** Recette utilisée : serveur uniquement, jamais renvoyée au navigateur. */
-      recipe: EmailRecipeId
+      recipe: EmailRecipeId | "promotion"
       diagnostics: EmailRecipeDiagnostic[]
       model: string
       stopReason: string
@@ -55,7 +59,7 @@ type Meta = { usage?: EmailClaudeUsage; requestId?: string }
 const toIssues = (issues: readonly { path: string; message: string }[]): EmailEngineIssue[] => issues.map(({ path, message }) => ({ path, message }))
 
 /** Résolution hors ligne → erreur du moteur, sans contenu de remplacement. */
-function resolutionFailure(resolution: Exclude<EmailRecipeDraftResolution, { status: "resolved" }>, meta: Meta, output: string): EmailV2EngineResult {
+function resolutionFailure(resolution: Exclude<EmailRecipeDraftResolution | PromotionDraftResolution, { status: "resolved" }>, meta: Meta, output: string): EmailV2EngineResult {
   switch (resolution.status) {
     case "invalid-draft":
       return failure({ ...meta, kind: "invalid-draft", message: "Le brouillon généré ne respecte pas le contrat de la recette.", issues: toIssues(resolution.issues), output })
@@ -89,7 +93,8 @@ export function brandPolicyFailure(policy: { blocking: readonly EmailRecipeDiagn
  * pas : renvoie un résultat.
  */
 export async function generateEmailV2(request: unknown, dependencies: EmailClaudeDependencies = {}): Promise<EmailV2EngineResult> {
-  const prompt = buildEmailRecipePrompt(request)
+  // Une promotion suit son propre contrat (Promotion Facts) : demande, prompt, schéma et resolver distincts.
+  const prompt = isEmailPromotionInput(request) ? buildPromotionPrompt(request) : buildEmailRecipePrompt(request)
   if (prompt.status === "invalid-request") return failure({ kind: "invalid-request", message: "La demande est invalide.", issues: toIssues(prompt.issues) })
   if (prompt.status === "unsupported") return failure({ kind: "unsupported", message: prompt.issues.map((issue) => issue.message).join(" ") })
 
@@ -127,7 +132,7 @@ export async function generateEmailV2(request: unknown, dependencies: EmailClaud
   const read = readStructuredOutput(response)
   if (!read.ok) return read.failure
 
-  const resolution = resolveEmailRecipeDraft(prompt.request, prompt.recipe, read.output)
+  const resolution = prompt.recipe === "promotion" ? resolvePromotionDraft(prompt.request, read.output) : resolveEmailRecipeDraft(prompt.request, prompt.recipe, read.output)
   if (resolution.status !== "resolved") return resolutionFailure(resolution, read.meta, read.text)
 
   // Seule une erreur d'une règle approuvée bloque ; le reste est un diagnostic.

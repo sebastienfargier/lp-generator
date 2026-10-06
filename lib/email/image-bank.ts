@@ -49,6 +49,8 @@ export const emailImageFormats = {
   large: { frame: { width: 600, height: 534 }, blocks: ["email-module-hero-promotional-image-large"] },
   split: { frame: { width: 229, height: 456 }, blocks: ["email-module-hero-split-image"] },
   band: { frame: { width: 520, height: 174 }, blocks: ["email-hero-newsletter-variant-02", "email-module-text-and-cta-variant-02"] },
+  /** Hero d'offre (R4, promotion) : image en tête du panneau sombre de l'offre. */
+  offer: { frame: { width: 600, height: 300 }, blocks: ["email-module-hero-offer-image-top"] },
 } as const satisfies Record<string, { frame: { width: number; height: number }; blocks: readonly EmailBlockType[] }>
 
 export type EmailImageFormat = keyof typeof emailImageFormats
@@ -135,21 +137,21 @@ export const emailBank = {
     alt: "Personne debout sur un quai de gare, un téléphone à la main.",
     cluster: "transit",
     provenance: "a-confirmer",
-    formats: ["medium", "large", "split", "band"],
+    formats: ["medium", "large", "split", "band", "offer"],
   },
   "arret-bus-bleu": {
     intent: "career-movement",
     alt: "Personne debout devant une paroi bleue, un casque sur la tête et un gobelet à la main.",
     cluster: "transit",
     provenance: "a-confirmer",
-    formats: ["medium", "large", "split", "band"],
+    formats: ["medium", "large", "split", "band", "offer"],
   },
   "marche-rideau-metal": {
     intent: "career-movement",
     alt: "Personne en marche devant un rideau métallique, un téléphone à la main.",
     cluster: "rideau-metal",
     provenance: "a-confirmer",
-    formats: ["medium", "large", "split", "band"],
+    formats: ["medium", "large", "split", "band", "offer"],
   },
   // campaign-portrait
   "portrait-mur-rose": {
@@ -157,7 +159,7 @@ export const emailBank = {
     alt: "Personne assise dans un fauteuil devant un mur rose, face à l'objectif.",
     cluster: "mur-rose",
     provenance: "a-confirmer",
-    formats: ["medium", "large", "band"],
+    formats: ["medium", "large", "band", "offer"],
   },
   "couloir-verriere-a": {
     intent: "campaign-portrait",
@@ -171,7 +173,7 @@ export const emailBank = {
     alt: "Personne debout devant un mur clair, une main dans la poche.",
     cluster: "verriere",
     provenance: "a-confirmer",
-    formats: ["medium", "large", "split", "band"],
+    formats: ["medium", "large", "split", "band", "offer"],
   },
 } as const satisfies Record<string, EmailBankEntry>
 
@@ -337,7 +339,7 @@ export const emailBankPreviews: ReadonlyMap<string, string> = new Map(
 /** Image d'un `src` canonique de la banque, ou `undefined` si ce n'est pas une URL de la banque (validation des recettes). */
 export function emailBankImageIdFromSrc(src: string): EmailBankImageId | undefined {
   if (!emailBankPreviews.has(src)) return undefined
-  const id = /\/email-v2\/([a-z0-9-]+?)--(?:medium|large|split|band|strip-[1-5])\.jpg$/.exec(src)?.[1]
+  const id = /\/email-v2\/([a-z0-9-]+?)--(?:medium|large|split|band|offer|strip-[1-5])\.jpg$/.exec(src)?.[1]
   return isEmailBankImageId(id) ? id : undefined
 }
 

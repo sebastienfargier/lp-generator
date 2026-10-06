@@ -23,6 +23,7 @@ import {
   emailGeneratorIntents,
   emailGeneratorTargets,
   emptyEmailGeneratorForm,
+  emptyEmailPromotionForm,
   parseEmailFactsInput,
   toEmailRequestBody,
   type EmailGeneratorForm,
@@ -64,6 +65,7 @@ const form = (over: Partial<EmailGeneratorForm> = {}): EmailGeneratorForm => ({
   brief: "Aider les lecteurs à explorer les formations.",
   subject: "",
   facts: "",
+  promotion: emptyEmailPromotionForm,
   ...over,
 })
 
@@ -73,11 +75,11 @@ const email = (blockCount: number): EmailGenerationSuccess => ({ status: "succes
 function resolvingEngine() {
   const requests: EmailRecipeRequest[] = []
   const engine: EmailEngine = async (request) => {
-    requests.push(request)
-    const selection = selectEmailRecipe(request)
+    requests.push(request as EmailRecipeRequest)
+    const selection = selectEmailRecipe(request as EmailRecipeRequest)
     if (selection.status !== "selected") throw new Error(JSON.stringify(selection))
     const fixture = emailRecipeDraftFixtures.find((entry) => entry.recipe === selection.recipe)!
-    const resolved = resolveEmailRecipeDraft(request, selection.recipe, fixture.draft)
+    const resolved = resolveEmailRecipeDraft(request as EmailRecipeRequest, selection.recipe, fixture.draft)
     if (resolved.status !== "resolved") throw new Error(JSON.stringify(resolved))
     return { status: "success", config: resolved.config, recipe: selection.recipe, diagnostics: resolved.diagnostics, model: "m", stopReason: "end_turn" }
   }
@@ -139,10 +141,11 @@ describe("exemples, intentions et cibles", () => {
   const examples = emailGeneratorExamples
   const visible = (path: string) => code(path).replace(/^import [^\n]*\n/gm, "")
 
-  test("exactement trois exemples (Orientation, Newsletter, Preuves Studi), groupe « Exemples », sans génération au clic", () => {
-    assert.deepEqual(examples.map((example) => example.label), ["Orientation", "Newsletter", "Preuves Studi"])
-    assert.deepEqual(examples.map((example) => example.id), ["orientation", "newsletter", "preuves"])
-    assert.deepEqual(examples.map((example) => example.form.intent), ["orientation", "newsletter", "preuves"])
+  test("exactement quatre exemples (Orientation, Newsletter, Preuves Studi, Promo), groupe « Exemples », sans génération au clic", () => {
+    assert.deepEqual(examples.map((example) => example.label), ["Orientation", "Newsletter", "Preuves Studi", "Promo"])
+    assert.deepEqual(examples.map((example) => example.id), ["orientation", "newsletter", "preuves", "promotion"])
+    assert.deepEqual(examples.map((example) => example.form.intent), ["orientation", "newsletter", "preuves", "promotion"])
+    assert.deepEqual(examples.filter((example) => example.illustrative).map((example) => example.id), ["promotion"], "seul l'exemple Promo porte des valeurs, et il est marqué comme illustratif")
     for (const example of examples) {
       assert.ok(canGenerateEmail(example.form), example.id)
       assert.equal(example.form.facts, "")
@@ -157,8 +160,8 @@ describe("exemples, intentions et cibles", () => {
     assert.ok(!/\bpresets?\b/i.test(panel), "le vocabulaire utilisateur est « Exemples »")
   })
 
-  test("les exemples sont acceptés par la route, sans appel au clic : un appel du moteur par génération demandée, aucune promotion", async () => {
-    for (const example of examples) {
+  test("les exemples sont acceptés par la route, sans appel au clic : un appel du moteur par génération demandée, aucune promotion hors de l'exemple Promo", async () => {
+    for (const example of examples.filter((candidate) => candidate.form.intent !== "promotion")) {
       const { engine, requests } = resolvingEngine()
       assert.equal(requests.length, 0, "choisir un exemple n'appelle rien")
       const { response } = await post(toEmailRequestBody(example.form), engine)
@@ -168,18 +171,18 @@ describe("exemples, intentions et cibles", () => {
     }
   })
 
-  test("Promotion, Black Friday, Studi Days, Studi Meet et campagnes visuelles absents de l'interface", () => {
+  test("Black Friday, Studi Days, Studi Meet et campagnes visuelles absents de l'interface ; la promotion passe par son intention et ses données d'offre", () => {
     for (const path of [...uiFiles, ...generatorModules]) {
-      assert.ok(!/Promotion|Black Friday|Studi Days|Studi Meet|campagnes? visuelles?|\bvisual\b|\bpromo\b/i.test(visible(path)), path)
+      assert.ok(!/Black Friday|Studi Days|Studi Meet|campagnes? visuelles?|\bvisual\b/i.test(visible(path)), path)
     }
-    assert.ok(!/"promotion"/.test(code("lib/email/generator-form.ts")))
+    assert.ok(/"promotion"/.test(code("lib/email/generator-form.ts")), "l'intention Promotion est une intention métier")
     assert.ok(!/emailDemoObjectives|demo-generator/.test(code("app/email-generator/page.tsx")), "la page n'expose pas les objectifs de démo")
     assert.ok(emailDemoObjectives.some((objective) => objective.value === "promotion"), "le jeu d'essai garde Promotion, sans l'exposer")
   })
 
-  test("quatre intentions métier, avec leurs libellés ; aucune recette ni vocabulaire technique n'est visible", () => {
-    assert.deepEqual(emailGeneratorIntents.map((intent) => intent.value), ["orientation", "accompagnement", "newsletter", "preuves"])
-    assert.deepEqual(emailGeneratorIntents.map((intent) => intent.label), ["Découverte / orientation", "Accompagnement / évolution", "Newsletter / contenu éditorial", "Preuves Studi / chiffres clés"])
+  test("cinq intentions métier, avec leurs libellés ; aucune recette ni vocabulaire technique n'est visible", () => {
+    assert.deepEqual(emailGeneratorIntents.map((intent) => intent.value), ["orientation", "accompagnement", "newsletter", "preuves", "promotion"])
+    assert.deepEqual(emailGeneratorIntents.map((intent) => intent.label), ["Découverte / orientation", "Accompagnement / évolution", "Newsletter / contenu éditorial", "Preuves Studi / chiffres clés", "Promotion / offre commerciale"])
     assert.match(code("app/email-generator/page.tsx"), /intents=\{emailGeneratorIntents\}/)
     const technical = /\bR[123]\b|recipe|recette|discovery-reassurance|editorial-newsletter|brand-proof|visualIntent|claim|stripId|portrait-strip|banner|\bedition\b/i
     for (const path of [...uiFiles, ...generatorModules]) {
@@ -317,7 +320,7 @@ describe("formulaire : objet facultatif, informations à reprendre, validation",
     assert.match(code("components/email/email-workspace.tsx"), /if \(inFlight\.current \|\| !canGenerateEmail\(form\)\) return/)
     assert.match(panel, /Tous les champs sont obligatoires, sauf ceux marqués « facultatif »\./)
     assert.equal((panel.match(/\(facultatif\)/g) ?? []).length, 1, "le marqueur est défini une fois et réutilisé")
-    assert.equal((panel.match(/\{optional\}/g) ?? []).length, 2, "objet et informations")
+    assert.equal((panel.match(/\{optional\}/g) ?? []).length, 3, "objet, informations et code promo")
   })
 
   test("le brief et les informations sont distingués par leurs aides, sans documentation longue", () => {
@@ -327,7 +330,7 @@ describe("formulaire : objet facultatif, informations à reprendre, validation",
     assert.match(panel, /<FieldLabel htmlFor="email-target">Cible<\/FieldLabel>/)
     assert.ok(!/htmlFor="email-audience"|htmlFor="email-objective"|Audience|Objectif/.test(panel), "ni audience libre, ni objectif")
     assert.match(panel, /Ajoutez ici les chiffres, dates ou informations qui doivent être respectés\. Un élément par ligne\./)
-    assert.ok(panel.length < 12000)
+    assert.ok(panel.length < 20000)
   })
 })
 
@@ -530,6 +533,7 @@ describe("état du formulaire : cohérence", () => {
 
 // L'état initial du formulaire n'impose rien : tout reste à saisir, y compris l'intention et la cible.
 test("formulaire vide à l'origine : rien de présélectionné, génération impossible", () => {
-  assert.deepEqual(emptyEmailGeneratorForm, { campaignName: "", intent: "", target: "", brief: "", subject: "", facts: "" })
+  assert.deepEqual(emptyEmailGeneratorForm, { campaignName: "", intent: "", target: "", brief: "", subject: "", facts: "", promotion: emptyEmailPromotionForm })
+  assert.deepEqual(emptyEmailPromotionForm, { offerType: "", value: "", code: "", endDate: "", scope: "", destination: "" }, "aucune donnée d'offre présélectionnée")
   assert.equal(canGenerateEmail(emptyEmailGeneratorForm), false)
 })

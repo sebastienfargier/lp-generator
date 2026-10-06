@@ -52,7 +52,7 @@ const successResult: EmailV2EngineResult = {
 function fakeEngine(result: EmailV2EngineResult | (() => EmailV2EngineResult | Promise<EmailV2EngineResult>)) {
   const requests: EmailRecipeRequest[] = []
   const engine: EmailEngine = async (request) => {
-    requests.push(request)
+    requests.push(request as EmailRecipeRequest)
     return typeof result === "function" ? result() : result
   }
   return { requests, engine }
@@ -157,11 +157,14 @@ describe("route : le moteur V2, simulé", () => {
     assert.equal(requests.length, 0)
   })
 
-  test("les trois exemples de l'interface passent au moteur, une fois chacun", async () => {
+  test("les quatre exemples de l'interface passent au moteur, une fois chacun (la date de fin de l'exemple Promo est repoussée : la route la compare à l'horloge)", async () => {
     const { requests, engine } = fakeEngine(successResult)
-    for (const example of emailGeneratorExamples) assert.equal((await call(toEmailRequestBody(example.form), engine)).response.status, 200, example.id)
-    assert.equal(requests.length, 3)
-    assert.deepEqual(requests.map((request) => request.intent), ["discovery", "editorial", "brand-proof"])
+    for (const example of emailGeneratorExamples) {
+      const form = example.form.intent === "promotion" ? { ...example.form, promotion: { ...example.form.promotion, endDate: "2099-12-31" } } : example.form
+      assert.equal((await call(toEmailRequestBody(form), engine)).response.status, 200, example.id)
+    }
+    assert.equal(requests.length, 4)
+    assert.deepEqual(requests.map((request) => request.intent), ["discovery", "editorial", "brand-proof", "promotion"])
   })
 
   test("toutes les fixtures de Draft donnent un email que la route sait rendre", async () => {

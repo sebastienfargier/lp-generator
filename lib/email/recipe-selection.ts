@@ -17,9 +17,10 @@
  * champs structurés seuls (jamais par le texte libre du brief) : le type
  * « newsletter » mène à R2, un objectif de découverte à R1. Une preuve de
  * marque n'a pas d'équivalent dans l'ancien vocabulaire : elle exige son
- * intention. Tout le reste (promotion, offre, transactionnel, fin de séquence,
+ * intention. Tout le reste (offre, transactionnel, fin de séquence,
  * témoignage, partenaire, visuels fournis, mention légale d'un fait) est refusé
- * explicitement, jamais ignoré ni fabriqué.
+ * explicitement, jamais ignoré ni fabriqué. La promotion a son propre contrat
+ * (`promotion-facts.ts`, R4) : ici, un type « promo » sans ce contrat est refusé.
  *
  * Le formulaire n'est pas modifié : ce module ne le connaît pas.
  *
@@ -86,7 +87,7 @@ const unsupported = (code: EmailRecipeUnsupportedCode, message: string) => ({ co
 /** Demandes que les recettes ne composent pas encore : refusées avant tout appel. */
 function unsupportedReasons(request: EmailRecipeRequest) {
   const reasons: { code: EmailRecipeUnsupportedCode; message: string }[] = []
-  if (request.emailType === "promo") reasons.push(unsupported("promotion", "Les emails promotionnels exigent une offre validée : non pris en charge par les recettes."))
+  if (request.emailType === "promo") reasons.push(unsupported("promotion", "Une promotion n'est prise en charge que par l'intention « promotion » et ses données d'offre contrôlées (valeur, date de fin, périmètre, destination), jamais par un type d'email seul."))
   if (request.emailType === "transactionnel") reasons.push(unsupported("transactional", "Les emails transactionnels ne sont pas pris en charge par les recettes."))
   if (request.emailType === "lifecycle-fin") reasons.push(unsupported("sequence-end", "Les fins de séquence ne sont pas prises en charge par les recettes."))
   if (request.offer) reasons.push(unsupported("offer", "Les offres ne sont pas prises en charge par les recettes."))

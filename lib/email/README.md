@@ -672,6 +672,50 @@ politique de blocage → renderEmail → toPreviewHtml → réponse publique com
 - Le moteur V1 (`anthropic.ts` : `generateEmailWithClaude`, Draft, resolver,
   catalogue de quatre images) est conservé, testé, mais plus appelé par la route.
 
+### R4 — promotion / campagne commerciale
+
+Quatrième famille, branchée au même moteur V2. Principe de gouvernance (comme
+R3 pour les claims) : **Claude écrit, les Promotion Facts décident**. Aucune
+valeur commerciale ne passe par Claude.
+
+```
+formulaire (intention « Promotion » + données de l'offre) → requête R4
+→ checkPromotionRequest (refus AVANT appel) → prompt court + schéma R4
+→ UN messages.create → Draft R4 → composePromotion (Promotion Facts injectés)
+→ EmailConfig (Zod) → validatePromotionConfig → terminologie → rendu
+```
+
+- **Contrat** (`promotion-facts.ts`, strict) : `offer` = montant entier d'euros
+  OU pourcentage entier (petite union côté REQUÊTE, jamais envoyée à
+  Anthropic) ; `code` facultatif (capitales, chiffres, tirets, casse exacte) ;
+  `endDate` OBLIGATOIRE (la seule mention légale promotionnelle du catalogue,
+  `offre-promotionnelle`, porte « valable jusqu'au JJ/MM/AAAA ») ; `scope`
+  (groupe nominal) ; `destination` parmi `catalogue-formations`, `alternance`,
+  `diplomes`, `certificats`. Aucun champ de présentation, de légal ni d'URL.
+  Pas d'informations libres : pas de financement, de conditions ni de montant
+  hors faits. Un mécanisme de texte légal propre à une campagne exigerait un
+  nouveau type de slot : hors V1.
+- **Système** : valeur (`-20 %*`, espace insécable), code, date de fin
+  (étiquette de l'en-tête de campagne et mention légale), phrase « Offre valable
+  sur … », destination des boutons, lien secondaire, mention légale, image
+  (banque, format `offer` 600×300 pour le hero d'offre), composition, shell.
+  **Claude** : objet, préheader, intention visuelle (2), surtitre, accroche,
+  libellé de bouton, trois appuis (icône, titre, texte), clôture.
+- **Draft** (`promotion-draft.ts`) : six objets, aucun optionnel, aucune union.
+- **Compositions** (`promotion-resolver.ts`, choisies par les faits et le nom de
+  campagne) : `offer-hero` (code : photo, panneau sombre, grande valeur, code,
+  bouton, lien), `code-banner` (code : bandeau sans photo, clôture illustrée),
+  `banner` (sans code : grand bandeau sombre). Toutes : header de campagne →
+  offre → appuis → clôture → mention légale → footer.
+- **Copie** (`promotion-copy.ts`) : aucun chiffre dans le corps ; l'objet et le
+  préheader ne citent QUE la valeur exacte ; ni date, ni délai, ni pression, ni
+  « jusqu'à », ni code (ni mot en capitales), ni financement, gratuité,
+  garantie, conseiller.
+- Refus avant tout appel : valeur, date ou code du brief qui diffèrent des
+  faits, date dépassée, objet imposé qui presse, champ réservé.
+- Les fixtures (`promotion-fixtures.ts`) sont des **données de démonstration**,
+  jamais une offre Studi.
+
 ## Tests
 
 ```bash
