@@ -273,7 +273,7 @@ describe("route et client : branchement", () => {
     assert.match(workspace, /useReducer\(emailGeneratorReducer, initialEmailGeneratorState\)/)
     assert.match(workspace, /fetch\("\/api\/generate-email"/)
     assert.equal((workspace.match(/fetch\(/g) ?? []).length, 1)
-    assert.match(workspace, /email=\{state\.email\}|state\.email\?\.previewHtml/)
+    assert.match(workspace, /state\.email\?\.previewHtml|shownEmail\?\.previewHtml/, "l'aperçu vient du dernier email valide : la génération, ou la version affichée de l'historique")
     assert.ok(!/setEmail|useEffect|setTimeout|setInterval/.test(workspace), "aucun état d'email local, aucun effet, aucune minuterie")
   })
 })

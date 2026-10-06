@@ -716,6 +716,54 @@ formulaire (intention « Promotion » + données de l'offre) → requête R4
 - Les fixtures (`promotion-fixtures.ts`) sont des **données de démonstration**,
   jamais une offre Studi.
 
+### Édition conversationnelle (`/api/edit-email`)
+
+Après une génération, la barre latérale propose « Modifier l'email » : des
+ajustements rapides (plus direct, plus court, plus chaleureux, plus
+dynamique), un champ d'instruction libre, un historique local avec Annuler et
+Rétablir. Ce n'est pas un chatbot : une instruction modifie les TEXTES de
+l'email courant. Claude ne voit ni ne produit jamais de HTML.
+
+```
+instruction + demande d'origine + Draft courant
+→ garde-fous déterministes AVANT appel (valeur, code, date, légal, lien,
+  visuel, structure, adresse) → vue éditoriale compacte + contexte Brand
+→ UN messages.create → PATCH { summary, edits: [{ field, text }] }
+→ patch validé (champs de la liste fermée, texte brut) → copie du Draft
+→ resolver de la famille (EmailConfig, schéma, recette, valeurs contrôlées)
+→ comparaison avant / après de tout ce qui est protégé → voix (tu / vous)
+→ renderEmail → toPreviewHtml → nouvelle version
+```
+
+- **Patch plutôt que Draft complet.** Le patch ne peut nommer que des champs de
+  texte (`edit-fields.ts`, liste fermée par famille, décidée avant l'appel) :
+  il n'a aucun moyen d'exprimer un code, une valeur, une date, un lien, une
+  image, une claim ou un légal. Petit (un à quelques champs), compatible
+  Structured Output (2 objets, 4 propriétés, 0 optionnel, 0 union, un `enum`
+  de chemins), facile à valider et à annuler (chaque version garde son Draft).
+- **État.** Le serveur ne garde rien. La génération renvoie, en plus de l'email
+  rendu, son Draft éditable (textes éditoriaux, intention visuelle, icônes,
+  identifiants de claims ; jamais une valeur d'offre). Le navigateur tient
+  l'historique (V1 = la génération) et renvoie à chaque édition le corps de la
+  génération d'origine et le Draft de la version affichée. Le Draft client est
+  NON FIABLE : il est revalidé et recomposé comme une génération. Aucune
+  persistance : un rechargement repart de zéro.
+- **Éditable** : objet, préheader, textes du hero ou de l'offre, libellés de
+  boutons, textes des étapes, appuis, rubriques, conclusion, surtitres.
+  **Verrouillé** : valeur, code, date, périmètre, légal (R4) ; claims, formulations
+  et valeurs affichées (R3) ; destinations, liens, images, icônes, intention
+  visuelle, édition de newsletter, composition, footer, adresse (tu / vous).
+- **Protections.** Avant appel : refus motivé des demandes évidentes (« passe à
+  -30 % », « change le code », « supprime la mention légale », « remplace
+  59 000 », « ajoute un troisième chiffre », « passe au tutoiement » hors
+  alternants). Après appel : champs hors liste, HTML ou URL, copie de promotion
+  (chiffres, dates, code, financement), faits flous (« des centaines de… »),
+  voix, puis comparaison feuille à feuille des deux EmailConfig : seul un texte
+  éditorial peut avoir changé.
+- Une édition = un appel, jamais de relance ni de repli ; une erreur ne change
+  rien (aucune version ajoutée, la version affichée reste). Pas d'export HTML
+  dans cette version.
+
 ## Tests
 
 ```bash

@@ -25,6 +25,8 @@ type EmailPreviewProps = {
   /** « Email généré · N lames » : dérivée de l'email réellement généré ; `null` avant toute génération. */
   legend: string | null
   loading: boolean
+  /** Modification en cours : l'aperçu reste affiché, un indicateur discret remplace le voile de génération. */
+  editing?: boolean
   onLoad: () => void
 }
 
@@ -38,7 +40,7 @@ type EmailPreviewProps = {
  * interne, qui réduirait la largeur utile sous 600 px et déclencherait la
  * vue mobile. C'est la surface d'aperçu qui défile.
  */
-export function EmailPreview({ html, subject, preheader, legend, loading, onLoad }: EmailPreviewProps) {
+export function EmailPreview({ html, subject, preheader, legend, loading, editing = false, onLoad }: EmailPreviewProps) {
   const [viewport, setViewport] = useState<Viewport>("desktop")
   const surfaceRef = useRef<HTMLDivElement>(null)
   const [surface, setSurface] = useState<{ width: number; height: number }>()
@@ -155,6 +157,16 @@ export function EmailPreview({ html, subject, preheader, legend, loading, onLoad
               <p className="text-body text-muted-foreground">Décrivez votre email, puis lancez la génération.</p>
             </div>
           )
+        )}
+
+        {editing && (
+          <div
+            role="status"
+            className="absolute top-3 right-3 z-10 flex items-center gap-2 rounded-full border bg-background px-3 py-1 text-caption text-muted-foreground shadow-sm"
+          >
+            <Spinner aria-hidden />
+            Modification en cours…
+          </div>
         )}
 
         {loading && (

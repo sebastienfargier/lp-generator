@@ -103,7 +103,8 @@ const success = (result: EmailV2EngineResult) => {
   return result
 }
 
-const publicKeys = ["blockCount", "html", "preheader", "previewHtml", "status", "subject"]
+/** Réponse publique : l'email rendu, et le Draft éditable (textes éditoriaux seulement) qui sert à l'édition conversationnelle. */
+const publicKeys = ["blockCount", "draft", "html", "preheader", "previewHtml", "status", "subject"]
 const systemOf: Record<EmailRecipeId, string> = { "discovery-reassurance": discoverySystemPrompt, "editorial-newsletter": newsletterSystemPrompt, "brand-proof": brandProofSystemPrompt }
 const otherSchemaFields: Record<EmailRecipeId, string[]> = {
   "discovery-reassurance": ["edition", "rubriques", "claims", "support"],
@@ -156,7 +157,7 @@ describe("moteur V2 : bout en bout avec un fournisseur simulé", () => {
       for (const path of previews) assert.ok(existsSync(join(root, "public", path)), `${path} : dérivé local`)
       assert.ok(!/ressources|images-banq|hf_|\/images\/email\/v2\/[^"]*\.png/.test(json.previewHtml), "aucune source brute")
       const serialized = JSON.stringify(json)
-      for (const leak of [expected.system.slice(0, 40), "provenance", "documentId", "transportSchema", "inputTokens", "msg_test", DEFAULT_EMAIL_MODEL, recipe, '"draft"', "claims"]) assert.ok(!serialized.includes(leak), `fuite : ${leak}`)
+      for (const leak of [expected.system.slice(0, 40), "provenance", "documentId", "transportSchema", "inputTokens", "msg_test", DEFAULT_EMAIL_MODEL, recipe, "statement", "status\":\"approved"]) assert.ok(!serialized.includes(leak), `fuite : ${leak}`)
     })
   }
 

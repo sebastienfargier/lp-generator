@@ -24,6 +24,12 @@ export type EmailGenerationSuccess = {
   html: string
   /** Adaptation réservée à l'aperçu (assets locaux, liens inertes). */
   previewHtml: string
+  /**
+   * Draft éditable de l'email (textes éditoriaux seulement), renvoyé par le
+   * moteur V2 pour permettre l'édition : le client le rend tel quel à
+   * `/api/edit-email`, qui le revalide. Absent du mode démo.
+   */
+  draft?: unknown
 }
 
 export type EmailGenerationError = {

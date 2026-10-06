@@ -1,8 +1,9 @@
 import { createClient, EMAIL_MAX_TOKENS, failure, mapApiError, readStructuredOutput, resolveEmailModel, type CreateParams, type EmailClaudeDependencies, type EmailClaudeUsage, type EmailEngineError, type EmailEngineIssue } from "./anthropic"
 import { isEmailPromotionInput } from "./promotion-facts"
+import { safeParsePromotionDraft } from "./promotion-draft"
 import { buildPromotionPrompt } from "./promotion-prompt"
 import { resolvePromotionDraft } from "./promotion-resolver"
-import { resolveEmailRecipeDraft, type EmailRecipeDraftResolution } from "./recipe-drafts"
+import { resolveEmailRecipeDraft, safeParseEmailRecipeDraft, type EmailRecipeDraftResolution } from "./recipe-drafts"
 import { buildEmailRecipePrompt } from "./recipe-prompts"
 import type { PromotionDraftResolution } from "./promotion-resolver"
 import type { EmailRecipeDiagnostic } from "./recipe-validation"
@@ -44,6 +45,12 @@ export type EmailV2EngineResult =
   | {
       status: "success"
       config: EmailConfig
+      /**
+       * Draft validé dont `config` est la résolution, avec l'objet FINAL (celui
+       * imposé par la demande, sinon celui de Claude). Il alimente l'édition
+       * (`edit-engine.ts`) : texte éditorial seulement, aucune valeur protégée.
+       */
+      draft?: unknown
       /** Recette utilisée : serveur uniquement, jamais renvoyée au navigateur. */
       recipe: EmailRecipeId | "promotion"
       diagnostics: EmailRecipeDiagnostic[]
@@ -138,9 +145,13 @@ export async function generateEmailV2(request: unknown, dependencies: EmailClaud
   // Seule une erreur d'une règle approuvée bloque ; le reste est un diagnostic.
   const blocked = brandPolicyFailure(resolution.policy, read.meta, read.text)
   if (blocked) return blocked
+  // Le Draft a déjà été validé par le resolver : on relit sa forme typée, puis l'objet final remplace celui du modèle.
+  const parsed = prompt.recipe === "promotion" ? safeParsePromotionDraft(read.output) : safeParseEmailRecipeDraft(prompt.recipe, read.output)
+  const draft = parsed.success ? { ...(parsed.data as Record<string, unknown>), subject: resolution.config.subject } : undefined
   return {
     status: "success",
     config: resolution.config,
+    draft,
     recipe: prompt.recipe,
     diagnostics: resolution.diagnostics,
     model: response.model || model,

@@ -50,7 +50,7 @@ const maxBodyLength = 100_000
  */
 const required = (label: string) => z.string().trim().min(1, `${label} est requis.`)
 
-const EmailGenerateBodySchema = z
+export const EmailGenerateBodySchema = z
   .strictObject({
   campaignName: required("Le nom de campagne"),
   subject: z
@@ -261,6 +261,7 @@ export async function handleEmailGeneration(request: Request, options: EmailHand
       blockCount: result.config.blocks.length,
       html,
       previewHtml: toPreviewHtml(html),
+      ...(result.draft !== undefined ? { draft: result.draft } : {}),
     }
     return Response.json(success, { headers })
   } catch (error) {

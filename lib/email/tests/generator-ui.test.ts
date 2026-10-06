@@ -374,7 +374,7 @@ describe("états : loading honnête, succès, erreur", () => {
     assert.equal(describeGeneratedEmail(email(5)), "Email généré · 5 lames")
     assert.equal(describeGeneratedEmail(email(1)), "Email généré · 1 lame")
     assert.equal(describeGeneratedEmail(email(7)), "Email généré · 7 lames")
-    assert.match(code("components/email/email-workspace.tsx"), /legend=\{state\.email \? describeGeneratedEmail\(state\.email\) : null\}/)
+    assert.match(code("components/email/email-workspace.tsx"), /legend=\{shownEmail \? `\$\{describeGeneratedEmail\(shownEmail\)\}/, "la légende est dérivée de l'email affiché, jamais écrite en dur")
     assert.ok(!/Email généré · \d/.test(code("components/email/email-preview.tsx")))
   })
 

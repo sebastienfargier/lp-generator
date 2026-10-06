@@ -804,11 +804,12 @@ describe("R4 — route /api/generate-email et moteur, avec un fournisseur simul�
     assert.equal(params.model, DEFAULT_EMAIL_MODEL)
     assert.equal(params.max_tokens, EMAIL_MAX_TOKENS)
     for (const key of ["tools", "tool_choice", "stream", "temperature"]) assert.ok(!(key in params), key)
-    assert.deepEqual(Object.keys(json).sort(), ["blockCount", "html", "preheader", "previewHtml", "status", "subject"])
+    assert.deepEqual(Object.keys(json).sort(), ["blockCount", "draft", "html", "preheader", "previewHtml", "status", "subject"])
     assert.equal(json.subject, "-20 % sur votre formation")
     assert.ok(json.html.includes("-20&nbsp;%") || json.html.includes(`-20${nbsp}%`) || json.html.includes("-20 %"))
     assert.ok(json.html.includes("DEMO20") && json.html.includes("31 décembre 2099") && json.html.includes("31/12/2099"))
-    for (const hidden of ["recipe", "promotion", "draft", "context", "provenance", "usage", "requestId", "req_"]) assert.ok(!(hidden in json), hidden)
+    for (const hidden of ["recipe", "promotion", "context", "provenance", "usage", "requestId", "req_"]) assert.ok(!(hidden in json), hidden)
+    assert.ok(!/DEMO20|2099-12-31|endDate|promoCode/.test(JSON.stringify(json.draft)), "le Draft éditable ne porte aucune valeur de l'offre")
   })
 
   test("la requête du moteur porte les Promotion Facts exacts du formulaire ; aucune information libre", async () => {

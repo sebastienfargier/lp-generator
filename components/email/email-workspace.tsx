@@ -12,6 +12,14 @@ import {
   type EmailGeneratorIntent,
   type EmailGeneratorTarget,
 } from "@/lib/email/generator-form"
+import { postEmailEdit } from "@/lib/email/edit-client"
+import {
+  canEditEmail,
+  currentVersion,
+  emailEditorReducer,
+  initialEmailEditorState,
+} from "@/lib/email/editor-state"
+import { toEmailEditBody } from "@/lib/email/editor-state"
 import {
   describeGeneratedEmail,
   emailGeneratorReducer,
@@ -21,6 +29,7 @@ import {
 } from "@/lib/email/generator-state"
 
 import { EmailBriefPanel } from "./email-brief-panel"
+import { EmailEditPanel } from "./email-edit-panel"
 import { EmailPreview } from "./email-preview"
 
 type EmailWorkspaceProps = {
@@ -57,27 +66,54 @@ export function EmailWorkspace({ intents, targets, examples }: EmailWorkspacePro
   // Garde contre une double soumission avant que l'état « loading » ne soit rendu.
   const inFlight = useRef(false)
   const [awaitingPreview, setAwaitingPreview] = useState(false)
+  // Édition conversationnelle : historique local des versions (V1 = la génération), sans persistance.
+  const [editor, editorDispatch] = useReducer(emailEditorReducer, initialEmailEditorState)
   const pending = state.status === "loading"
+  const editing = editor.status === "editing"
+  // La version affichée : une modification ou un retour en arrière change l'aperçu, jamais le formulaire.
+  const shown = currentVersion(editor)
+  const shownEmail = shown?.email ?? state.email
 
   async function generate() {
     if (inFlight.current || !canGenerateEmail(form)) return
     inFlight.current = true
     dispatch({ type: "start" })
+    // Le corps de cette génération : il redonne au serveur les valeurs protégées à chaque modification.
+    const body = toEmailRequestBody(form)
     try {
       const response = await fetch("/api/generate-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(toEmailRequestBody(form)),
+        body: JSON.stringify(body),
       })
       const result = readResult(await response.json())
       if ("status" in result) {
-        if (result.previewHtml !== state.email?.previewHtml) setAwaitingPreview(true)
+        if (result.previewHtml !== shownEmail?.previewHtml) setAwaitingPreview(true)
         dispatch({ type: "success", email: result })
+        editorDispatch({ type: "generated", email: result, generation: body })
       } else {
         dispatch({ type: "failure", error: result })
       }
     } catch {
       dispatch({ type: "failure", error: networkError })
+    } finally {
+      inFlight.current = false
+    }
+  }
+
+  /** Une instruction d'édition : un appel, jamais de relance ; une erreur laisse la version affichée telle quelle. */
+  async function edit(instruction: string) {
+    if (inFlight.current || !canEditEmail(editor)) return false
+    inFlight.current = true
+    editorDispatch({ type: "edit-start" })
+    try {
+      const result = await postEmailEdit(toEmailEditBody(editor, instruction))
+      if ("email" in result) {
+        editorDispatch({ type: "edit-success", email: result.email, instruction: instruction.trim(), summary: result.summary })
+        return true
+      }
+      editorDispatch({ type: "edit-failure", error: result })
+      return false
     } finally {
       inFlight.current = false
     }
@@ -89,6 +125,17 @@ export function EmailWorkspace({ intents, targets, examples }: EmailWorkspacePro
         aria-label="Brief de l'email"
         className="border-b p-4 lg:w-90 lg:shrink-0 lg:overflow-y-auto lg:border-r lg:border-b-0"
       >
+        {canEditEmail(editor) && (
+          <div className="mb-4">
+            <EmailEditPanel
+              state={editor}
+              generating={pending}
+              onEdit={edit}
+              onUndo={() => editorDispatch({ type: "undo" })}
+              onRedo={() => editorDispatch({ type: "redo" })}
+            />
+          </div>
+        )}
         <EmailBriefPanel
           form={form}
           intents={intents}
@@ -96,7 +143,7 @@ export function EmailWorkspace({ intents, targets, examples }: EmailWorkspacePro
           examples={examples}
           error={state.error}
           pending={pending}
-          canGenerate={canGenerateEmail(form)}
+          canGenerate={canGenerateEmail(form) && !editing}
           submitLabel={emailSubmitLabel(state)}
           onFormChange={setForm}
           onGenerate={generate}
@@ -105,11 +152,12 @@ export function EmailWorkspace({ intents, targets, examples }: EmailWorkspacePro
 
       <div className="flex h-dvh min-w-0 flex-col bg-muted p-4 lg:h-auto lg:flex-1">
         <EmailPreview
-          html={state.email?.previewHtml ?? null}
-          subject={state.email?.subject ?? null}
-          preheader={state.email?.preheader ?? null}
-          legend={state.email ? describeGeneratedEmail(state.email) : null}
+          html={shownEmail?.previewHtml ?? null}
+          subject={shownEmail?.subject ?? null}
+          preheader={shownEmail?.preheader ?? null}
+          legend={shownEmail ? `${describeGeneratedEmail(shownEmail)}${shown && editor.versions.length > 1 ? ` · V${shown.number}` : ""}` : null}
           loading={pending || awaitingPreview}
+          editing={editing}
           onLoad={() => setAwaitingPreview(false)}
         />
       </div>
