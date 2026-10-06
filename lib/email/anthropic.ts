@@ -80,7 +80,8 @@ export type EmailGenerationErrorKind =
   | "brand-violation"
   | "unexpected"
 
-export type EmailEngineIssue = { path: string; message: string }
+/** `code` : identifiant de la règle qui a refusé (diagnostic serveur, jamais renvoyé au navigateur). */
+export type EmailEngineIssue = { path: string; message: string; code?: string }
 
 export type EmailEngineError = {
   kind: EmailGenerationErrorKind

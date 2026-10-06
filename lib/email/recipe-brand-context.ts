@@ -25,6 +25,7 @@ import { provenanceOf, type BrandDocumentId } from "../brand/provenance"
 import { brandTerminologyRules } from "../brand/terminology"
 import { emailDestinations } from "./destinations"
 import { buildEmailVisualIntentView } from "./image-bank"
+import { lintPromotionCopy } from "./promotion-copy"
 import { promotionVisualIntents } from "./promotion-draft"
 import { emailRecipes, type EmailRecipe, type EmailRecipeId } from "./recipes"
 
@@ -182,6 +183,19 @@ export function buildRecipeBrandContext(
  */
 export type PromotionBrandContext = Pick<RecipeBrandContext, "voice" | "rules" | "avoid"> & { visualIntents: readonly { intent: string; hint: string }[] }
 
+/**
+ * Une alternative du lexique ou un point clé de cible que la copie d'une promotion refuserait
+ * (« finançable », « jusqu'à 100 % », « accompagné à chaque étape », « Financement ») n'est pas
+ * proposé à Claude : le terme à éviter reste, l'alternative ou le point clé est retiré. Le
+ * contrôle de copie ne bouge pas.
+ */
+const promotionProbeFacts = { offer: { type: "percent", percent: 1 } } as const
+const promotionUsableCopy = (value: string) => lintPromotionCopy(value, "body", promotionProbeFacts, { hasCode: false }).length === 0
+function promotionUsableAvoidance(entry: { term: string; instead?: string }): { term: string; instead?: string } {
+  if (!entry.instead || promotionUsableCopy(entry.instead)) return entry
+  return { term: entry.term }
+}
+
 export function buildPromotionBrandContext(audience: string, target?: BrandAudienceId): { context: PromotionBrandContext; provenance: RecipeBrandProvenance } {
   const matched = target ?? matchBrandAudience(audience)
   const profile = matched ? brandAudiences[matched] : undefined
@@ -189,10 +203,10 @@ export function buildPromotionBrandContext(audience: string, target?: BrandAudie
     voice: {
       address: profile?.addressMode ?? "vouvoiement",
       tone: profile?.tone ?? defaultTone,
-      ...(profile ? { audience: { label: profile.label, keyPoints: profile.keyPoints } } : {}),
+      ...(profile ? { audience: { label: profile.label, keyPoints: profile.keyPoints.filter(promotionUsableCopy) } } : {}),
     },
     rules: emailWritingRules.map((rule) => rule.text),
-    avoid: riskyTerms(),
+    avoid: riskyTerms().map(promotionUsableAvoidance),
     visualIntents: buildEmailVisualIntentView().filter((entry) => (promotionVisualIntents as readonly string[]).includes(entry.intent)),
   }
   const documentIds = new Set<BrandDocumentId>(["identite-marque", "promesse-editoriale", "regles-editoriales", "lexique-marque"])

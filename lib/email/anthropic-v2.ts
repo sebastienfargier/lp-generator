@@ -63,7 +63,7 @@ export type EmailV2EngineResult =
 
 type Meta = { usage?: EmailClaudeUsage; requestId?: string }
 
-const toIssues = (issues: readonly { path: string; message: string }[]): EmailEngineIssue[] => issues.map(({ path, message }) => ({ path, message }))
+const toIssues = (issues: readonly { path: string; message: string; code?: string }[]): EmailEngineIssue[] => issues.map(({ path, message, code }) => ({ path, message, ...(code ? { code } : {}) }))
 
 /** Résolution hors ligne → erreur du moteur, sans contenu de remplacement. */
 function resolutionFailure(resolution: Exclude<EmailRecipeDraftResolution | PromotionDraftResolution, { status: "resolved" }>, meta: Meta, output: string): EmailV2EngineResult {

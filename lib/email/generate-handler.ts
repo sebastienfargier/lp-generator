@@ -1,6 +1,6 @@
 import { z } from "zod"
 
-import type { EmailGenerationErrorKind } from "./anthropic"
+import type { EmailEngineError, EmailGenerationErrorKind } from "./anthropic"
 import { generateEmailV2, type EmailV2EngineResult } from "./anthropic-v2"
 import type { EmailGenerationSuccess } from "./generation"
 import {
@@ -110,7 +110,28 @@ export type EmailHandlerOptions = {
   /** Moteur de génération ; par défaut Claude. Injecté par les tests. */
   engine?: EmailEngine
   /** Journal serveur des échecs : type, statut et identifiant de requête, jamais le contenu. */
-  log?: (entry: { kind: string; status?: number; requestId?: string }) => void
+  log?: (entry: { kind: string; status?: number; requestId?: string; issues?: EmailValidationLogIssue[] }) => void
+}
+
+/** Une règle qui a refusé l'email, pour le journal serveur : l'étape, la règle, le champ et l'extrait refusé (jamais l'email, le prompt ni la réponse brute). */
+export type EmailValidationLogIssue = { stage: string; rule?: string; path: string; match?: string }
+
+const validationStages: Partial<Record<EmailGenerationErrorKind, string>> = {
+  "invalid-draft": "draft",
+  "draft-resolution": "composition",
+  "invalid-config": "config",
+  "validation-failed": "recipe",
+  "brand-violation": "terminology",
+}
+
+/** Les raisons du refus d'une validation, bornées (12 règles, 60 caractères d'extrait). */
+export function toValidationLog(error: EmailEngineError): EmailValidationLogIssue[] | undefined {
+  const stage = validationStages[error.kind]
+  if (!stage || !error.issues || error.issues.length === 0) return undefined
+  return error.issues.slice(0, 12).map((issue) => {
+    const match = /«\s*([^»]{1,60})\s*»\)?$/.exec(issue.message)?.[1]?.trim()
+    return { stage, ...(issue.code ? { rule: issue.code } : {}), path: issue.path, ...(match ? { match } : {}) }
+  })
 }
 
 type PublicMapping = { status: number; code: EmailPublicErrorCode; title: string; message: string }
@@ -207,7 +228,11 @@ function fail(error: PublicMapping, issues: EmailPublicError["issues"] = []) {
   return Response.json(body, { status: error.status, headers })
 }
 
-const defaultLog: NonNullable<EmailHandlerOptions["log"]> = (entry) => console.error("[email-generation]", JSON.stringify(entry))
+const defaultLog: NonNullable<EmailHandlerOptions["log"]> = (entry) => {
+  console.error("[email-generation]", JSON.stringify({ ...entry, issues: undefined }))
+  // Une ligne par règle refusée : `stage=recipe rule=copy-date path=… match=…`.
+  for (const issue of entry.issues ?? []) console.error("[email-generation-validation]", Object.entries(issue).map(([key, value]) => `${key}=${value}`).join(" "))
+}
 
 export async function handleEmailGeneration(request: Request, options: EmailHandlerOptions = {}): Promise<Response> {
   const engine = options.engine ?? ((input: EmailRecipeRequest | EmailPromotionRequest) => generateEmailV2(input))
@@ -246,8 +271,9 @@ export async function handleEmailGeneration(request: Request, options: EmailHand
 
   if (result.status === "error") {
     const { kind, status, requestId } = result.error
-    log({ kind, ...(status ? { status } : {}), ...(requestId ? { requestId } : {}) })
-    // Aucun détail du moteur ne sort : ni issues, ni sortie brute, ni message du SDK.
+    const issues = toValidationLog(result.error)
+    log({ kind, ...(status ? { status } : {}), ...(requestId ? { requestId } : {}), ...(issues ? { issues } : {}) })
+    // Aucun détail du moteur ne sort vers le navigateur : ni issues, ni sortie brute, ni message du SDK (le journal serveur garde la règle et le champ).
     return fail(emailPublicErrors[kind] ?? internal)
   }
 

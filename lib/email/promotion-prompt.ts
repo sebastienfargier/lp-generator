@@ -88,6 +88,7 @@ Règles de l'offre :
 - n'écris ni le code, ni la date de fin, ni aucun délai ou calcul de jours (« jusqu'au », « plus que », « dernier jour ») ; aucune pression ni urgence ;
 - n'écris ni « jusqu'à », ni « à partir de », ni « économisez » : la valeur est exacte, tu ne la nuances pas ;
 - aucune mention de financement, de CPF, de gratuité, de garantie, de conseiller ou de service précis : aucun de ces faits n'est fourni ;
+- le contrôle refuse aussi, même employés autrement : « éligible », « prise en charge », « sans frais », « accompagné à chaque étape », « accompagnement personnalisé », « unique », « exclusif », « profitez-en », « demain », « ce mois », « cette semaine », tout mois ou jour de la semaine, un nombre en toutes lettres suivi d'une durée (« un mois », « deux ans ») et tout mot en capitales ; ne reprends pas les mots de request.promotion.scope ;
 - context.rules et context.avoid s'appliquent à tout le texte ; context.voice fixe l'adresse et le ton.
 
 Variété : évite de répéter « à votre rythme », « avancer », « repères », « sereinement » dans un même email.
