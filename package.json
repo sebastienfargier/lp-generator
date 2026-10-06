@@ -9,6 +9,7 @@
     "lint": "eslint",
     "test:brand": "node --import ./lib/brand/tests/resolve-ts.mjs --test \"lib/brand/tests/*.test.ts\"",
     "test:email": "node --import ./lib/email/tests/resolve-ts.mjs --test \"lib/email/tests/*.test.ts\"",
+    "test:email-builder": "node --import ./lib/email-builder/tests/resolve-ts.mjs --test \"lib/email-builder/tests/*.test.ts\"",
     "test:landing": "node --import ./lib/landing/tests/resolve-ts.mjs --test \"lib/landing/tests/*.test.ts\"",
     "smoke:landing": "node --env-file-if-exists=.env.local --import ./lib/landing/tests/resolve-ts.mjs lib/landing/smoke-test.ts"
   },

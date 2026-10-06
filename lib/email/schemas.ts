@@ -315,108 +315,143 @@ const disclaimerTypes: ReadonlySet<string> = new Set(
 /* -------------------------------------------------------------------------- */
 
 /**
+ * Règles entre lames, séparées en deux familles :
+ * - TECHNIQUES (`idIssues`) : un identifiant désigne une lame, sans quoi une
+ *   lame ne peut être ni adressée ni retrouvée ;
+ * - de PRODUIT (`shellIssues`, `colorIssues`) : footer unique en dernière
+ *   position, mentions légales juste avant lui, jamais deux zones colorées à la
+ *   suite. Le renderer et l'export savent produire un email HTML valide sans
+ *   elles ; elles viennent des guides du projet (`instructions-projet.md`,
+ *   `README-assets-projet.md`, `recettes-couleur.md`).
+ *
+ * Le contrat historique (`EmailConfigSchema`) les applique TOUTES, dans cet
+ * ordre : footer, mentions légales, identifiants, couleurs. Le contrat
+ * structurel (`EmailConfigStructureSchema`) n'applique que la technique ; les
+ * règles de produit restent lisibles par `emailConfigPolicyIssues`, pour être
+ * rapportées comme des recommandations plutôt que comme des refus.
+ */
+type RuleIssue = { rule: EmailConfigPolicyRule | "duplicate-id"; path: (string | number)[]; message: string }
+
+function shellIssues(config: { blocks: { type: string }[] }): RuleIssue[] {
+  const issues: RuleIssue[] = []
+  // Exactement un footer, en dernière position (instructions-projet §5-6).
+  const footers = config.blocks.flatMap((block, index) =>
+    footerTypes.has(block.type) ? [index] : []
+  )
+  const footerNames = [...footerTypes].join(", ")
+  if (footers.length === 0) {
+    issues.push({
+      rule: "footer-missing",
+      path: ["blocks"],
+      message: `Footer manquant : l'email doit se terminer par une lame footer (${footerNames}).`,
+    })
+  }
+  footers.slice(1).forEach((index) => {
+    issues.push({ rule: "footer-duplicate", path: ["blocks", index, "type"], message: "Footer en double : un email contient exactement un footer." })
+  })
+  const [firstFooter] = footers
+  if (firstFooter !== undefined && footers.length === 1 && firstFooter !== config.blocks.length - 1) {
+    issues.push({
+      rule: "footer-not-last",
+      path: ["blocks", firstFooter, "type"],
+      message: `Le footer doit être la dernière lame (position actuelle : ${firstFooter + 1} sur ${config.blocks.length}).`,
+    })
+  }
+
+  // Disclaimer optionnel : au plus un, immédiatement avant le footer.
+  const disclaimers = config.blocks.flatMap((block, index) =>
+    disclaimerTypes.has(block.type) ? [index] : []
+  )
+  disclaimers.slice(1).forEach((index) => {
+    issues.push({ rule: "disclaimer-duplicate", path: ["blocks", index, "type"], message: "Disclaimer en double : un email contient au plus une lame de mentions légales." })
+  })
+  const [disclaimer] = disclaimers
+  if (disclaimer !== undefined) {
+    const next = config.blocks[disclaimer + 1]
+    if (!next || !footerTypes.has(next.type)) {
+      issues.push({ rule: "disclaimer-not-before-footer", path: ["blocks", disclaimer, "type"], message: "La lame de mentions légales doit être placée immédiatement avant le footer." })
+    }
+  }
+  return issues
+}
+
+function idIssues(config: { blocks: { id: string }[] }): RuleIssue[] {
+  const issues: RuleIssue[] = []
+  const ids = new Set<string>()
+  config.blocks.forEach((block, index) => {
+    if (ids.has(block.id)) issues.push({ rule: "duplicate-id", path: ["blocks", index, "id"], message: `Identifiant de lame en double : "${block.id}".` })
+    ids.add(block.id)
+  })
+  return issues
+}
+
+function colorIssues(config: { blocks: { id: string }[] }): RuleIssue[] {
+  const issues: RuleIssue[] = []
+  // Surfaces configurées : jamais deux lames colorées à la suite. Les
+  // couleurs intrinsèques des templates ne comptent pas.
+  if (!emailSurfaceRules.allowConsecutiveColoredZones) {
+    // Seules les lames `configurable` portent une clé `surface`.
+    const colored = (block: object | undefined) =>
+      block !== undefined &&
+      "surface" in block &&
+      block.surface !== undefined &&
+      block.surface !== emailSurfaceRules.neutral
+    config.blocks.forEach((block, index) => {
+      const previous = config.blocks[index - 1]
+      if (previous && colored(previous) && colored(block)) {
+        issues.push({ rule: "consecutive-colored", path: ["blocks", index, "surface"], message: `Deux surfaces colorées consécutives ("${previous.id}" puis "${block.id}").` })
+      }
+    })
+  }
+  return issues
+}
+
+const addAll = (ctx: z.RefinementCtx, issues: readonly RuleIssue[]) =>
+  issues.forEach((issue) => ctx.addIssue({ code: "custom", path: issue.path, message: issue.message }))
+
+const emailConfigObject = z.strictObject({
+  version: z.literal(1),
+  id: EmailIdSchema,
+  name: visibleText,
+  subject: visibleText,
+  preheader: visibleText,
+  blocks: z.array(EmailBlockSchema).min(1, "Au moins une lame est requise."),
+})
+
+/**
  * Schéma bas niveau. Son `parse` direct ne garantit pas les messages en
  * français (locale globale de Zod) : passer par `parseEmailConfig` ou
  * `safeParseEmailConfig`.
  */
-export const EmailConfigSchema = z
-  .strictObject({
-    version: z.literal(1),
-    id: EmailIdSchema,
-    name: visibleText,
-    subject: visibleText,
-    preheader: visibleText,
-    blocks: z.array(EmailBlockSchema).min(1, "Au moins une lame est requise."),
-  })
-  .superRefine((config, ctx) => {
-    // Exactement un footer, en dernière position (instructions-projet §5-6).
-    const footers = config.blocks.flatMap((block, index) =>
-      footerTypes.has(block.type) ? [index] : []
-    )
-    const footerNames = [...footerTypes].join(", ")
-    if (footers.length === 0) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["blocks"],
-        message: `Footer manquant : l'email doit se terminer par une lame footer (${footerNames}).`,
-      })
-    }
-    footers.slice(1).forEach((index) => {
-      ctx.addIssue({
-        code: "custom",
-        path: ["blocks", index, "type"],
-        message: "Footer en double : un email contient exactement un footer.",
-      })
-    })
-    const [firstFooter] = footers
-    if (
-      firstFooter !== undefined &&
-      footers.length === 1 &&
-      firstFooter !== config.blocks.length - 1
-    ) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["blocks", firstFooter, "type"],
-        message: `Le footer doit être la dernière lame (position actuelle : ${firstFooter + 1} sur ${config.blocks.length}).`,
-      })
-    }
+export const EmailConfigSchema = emailConfigObject.superRefine((config, ctx) => {
+  addAll(ctx, [...shellIssues(config), ...idIssues(config), ...colorIssues(config)])
+})
 
-    // Disclaimer optionnel : au plus un, immédiatement avant le footer.
-    const disclaimers = config.blocks.flatMap((block, index) =>
-      disclaimerTypes.has(block.type) ? [index] : []
-    )
-    disclaimers.slice(1).forEach((index) => {
-      ctx.addIssue({
-        code: "custom",
-        path: ["blocks", index, "type"],
-        message: "Disclaimer en double : un email contient au plus une lame de mentions légales.",
-      })
-    })
-    const [disclaimer] = disclaimers
-    if (disclaimer !== undefined) {
-      const next = config.blocks[disclaimer + 1]
-      if (!next || !footerTypes.has(next.type)) {
-        ctx.addIssue({
-          code: "custom",
-          path: ["blocks", disclaimer, "type"],
-          message: "La lame de mentions légales doit être placée immédiatement avant le footer.",
-        })
-      }
-    }
+/**
+ * Contrat STRUCTUREL : lames et slots connus, valeurs des catalogues, texte
+ * brut, identifiants uniques, au moins une lame. Rien de plus : c'est ce dont
+ * le renderer a besoin pour produire un email HTML (il ne revalide pas les
+ * règles de produit). Utilisé par l'Email Builder ; le POC garde le contrat
+ * complet ci-dessus.
+ */
+export const EmailConfigStructureSchema = emailConfigObject.superRefine((config, ctx) => {
+  addAll(ctx, idIssues(config))
+})
 
-    const ids = new Set<string>()
-    config.blocks.forEach((block, index) => {
-      if (ids.has(block.id)) {
-        ctx.addIssue({
-          code: "custom",
-          path: ["blocks", index, "id"],
-          message: `Identifiant de lame en double : "${block.id}".`,
-        })
-      }
-      ids.add(block.id)
-    })
+/** Règles de produit que le contrat structurel n'impose pas (voir plus haut). */
+export const emailConfigPolicyRules = ["footer-missing", "footer-duplicate", "footer-not-last", "disclaimer-duplicate", "disclaimer-not-before-footer", "consecutive-colored"] as const
+export type EmailConfigPolicyRule = (typeof emailConfigPolicyRules)[number]
 
-    // Surfaces configurées : jamais deux lames colorées à la suite. Les
-    // couleurs intrinsèques des templates ne comptent pas.
-    if (!emailSurfaceRules.allowConsecutiveColoredZones) {
-      // Seules les lames `configurable` portent une clé `surface`.
-      const colored = (block: object | undefined) =>
-        block !== undefined &&
-        "surface" in block &&
-        block.surface !== undefined &&
-        block.surface !== emailSurfaceRules.neutral
-      config.blocks.forEach((block, index) => {
-        const previous = config.blocks[index - 1]
-        if (previous && colored(previous) && colored(block)) {
-          ctx.addIssue({
-            code: "custom",
-            path: ["blocks", index, "surface"],
-            message: `Deux surfaces colorées consécutives ("${previous.id}" puis "${block.id}").`,
-          })
-        }
-      })
-    }
-  })
+export type EmailConfigPolicyIssue = { rule: EmailConfigPolicyRule; path: (string | number)[]; message: string }
+
+/**
+ * Écarts d'un EmailConfig aux règles de produit : footer unique en dernière
+ * position, mentions légales avant le footer, pas de zones colorées
+ * consécutives. Informatif : ne bloque rien, ne modifie rien.
+ */
+export function emailConfigPolicyIssues(config: EmailConfig): EmailConfigPolicyIssue[] {
+  return [...shellIssues(config), ...colorIssues(config)] as EmailConfigPolicyIssue[]
+}
 
 /* -------------------------------------------------------------------------- */
 /* API de validation                                                          */
@@ -451,6 +486,14 @@ export function parseEmailConfig(input: unknown): EmailConfig {
  */
 export function safeParseEmailConfig(input: unknown) {
   const result = EmailConfigSchema.safeParse(input, frenchErrors)
+  return result.success
+    ? { success: true as const, data: toEmailConfig(result.data) }
+    : { success: false as const, error: result.error }
+}
+
+/** Comme `safeParseEmailConfig`, mais sur le contrat structurel (sans les règles de produit). */
+export function safeParseEmailConfigStructure(input: unknown) {
+  const result = EmailConfigStructureSchema.safeParse(input, frenchErrors)
   return result.success
     ? { success: true as const, data: toEmailConfig(result.data) }
     : { success: false as const, error: result.error }

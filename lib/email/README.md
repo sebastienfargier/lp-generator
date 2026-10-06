@@ -213,6 +213,12 @@ modèle) avant d'être un `EmailConfig`.
   `README-assets-projet.md` (« un footer avec son lien de désabonnement »).
   `instructions-projet.md` le place en fin de séquence, et le disclaimer
   « juste avant le footer ».
+- Ces règles entre lames sont de PRODUIT, pas techniques : le renderer et
+  l'export produisent un email HTML valide sans elles (un footer retiré ne fait
+  qu'ôter les liens de désabonnement et de préférences). `EmailConfigSchema`
+  les applique toutes (contrat du POC, inchangé) ; `EmailConfigStructureSchema`
+  ne garde que la technique (ids uniques, au moins une lame) pour l'Email
+  Builder, et `emailConfigPolicyIssues` les rapporte sans rien bloquer.
 - Aucune source n'impose le header : il n'apparaît que dans la séquence
   indicative de 5 à 8 lames. Il n'est donc pas obligatoire.
 
