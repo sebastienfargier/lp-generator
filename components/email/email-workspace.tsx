@@ -14,6 +14,16 @@ import {
 } from "@/lib/email/generator-form"
 import { postEmailEdit } from "@/lib/email/edit-client"
 import {
+  describeExportError,
+  describeExportNotice,
+  downloadHtmlFile,
+  exportButtonLabel,
+  postEmailExport,
+  toEmailExportBody,
+  type EmailExportClientError,
+  type EmailExportClientSuccess,
+} from "@/lib/email/export-client"
+import {
   canEditEmail,
   currentVersion,
   emailEditorReducer,
@@ -68,6 +78,8 @@ export function EmailWorkspace({ intents, targets, examples }: EmailWorkspacePro
   const [awaitingPreview, setAwaitingPreview] = useState(false)
   // Édition conversationnelle : historique local des versions (V1 = la génération), sans persistance.
   const [editor, editorDispatch] = useReducer(emailEditorReducer, initialEmailEditorState)
+  // Export HTML de la version affichée : le résultat n'est montré que pour la version qui l'a produit.
+  const [exportResult, setExportResult] = useState<{ version: number; exporting: boolean; success?: EmailExportClientSuccess; error?: EmailExportClientError } | null>(null)
   const pending = state.status === "loading"
   const editing = editor.status === "editing"
   // La version affichée : une modification ou un retour en arrière change l'aperçu, jamais le formulaire.
@@ -91,11 +103,31 @@ export function EmailWorkspace({ intents, targets, examples }: EmailWorkspacePro
         if (result.previewHtml !== shownEmail?.previewHtml) setAwaitingPreview(true)
         dispatch({ type: "success", email: result })
         editorDispatch({ type: "generated", email: result, generation: body })
+        setExportResult(null)
       } else {
         dispatch({ type: "failure", error: result })
       }
     } catch {
       dispatch({ type: "failure", error: networkError })
+    } finally {
+      inFlight.current = false
+    }
+  }
+
+  /** Export de la version affichée : un appel sans modèle, puis un téléchargement `.html`. */
+  async function exportHtml() {
+    if (inFlight.current || !shown?.email.draft) return
+    inFlight.current = true
+    const version = shown.number
+    setExportResult({ version, exporting: true })
+    try {
+      const result = await postEmailExport(toEmailExportBody(editor))
+      if ("html" in result) {
+        downloadHtmlFile(result.filename, result.html)
+        setExportResult({ version, exporting: false, success: result })
+      } else {
+        setExportResult({ version, exporting: false, error: result })
+      }
     } finally {
       inFlight.current = false
     }
@@ -129,7 +161,7 @@ export function EmailWorkspace({ intents, targets, examples }: EmailWorkspacePro
           <div className="mb-4">
             <EmailEditPanel
               state={editor}
-              generating={pending}
+              generating={pending || exportResult?.exporting === true}
               onEdit={edit}
               onUndo={() => editorDispatch({ type: "undo" })}
               onRedo={() => editorDispatch({ type: "redo" })}
@@ -158,6 +190,14 @@ export function EmailWorkspace({ intents, targets, examples }: EmailWorkspacePro
           legend={shownEmail ? `${describeGeneratedEmail(shownEmail)}${shown && editor.versions.length > 1 ? ` · V${shown.number}` : ""}` : null}
           loading={pending || awaitingPreview}
           editing={editing}
+          exportAction={shown?.email.draft ? { label: exportButtonLabel, onExport: exportHtml, disabled: pending || editing || exportResult?.exporting === true, exporting: exportResult?.exporting === true } : undefined}
+          exportNotice={
+            exportResult && shown && exportResult.version === shown.number && !exportResult.exporting
+              ? exportResult.success
+                ? { tone: "success", lines: describeExportNotice(exportResult.success) }
+                : { tone: "error", lines: [describeExportError(exportResult.error!)] }
+              : null
+          }
           onLoad={() => setAwaitingPreview(false)}
         />
       </div>

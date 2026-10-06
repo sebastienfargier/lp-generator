@@ -265,3 +265,10 @@ export async function editEmailV2(input: EmailEditInput, dependencies: EmailClau
     ...read.meta,
   }
 }
+
+/**
+ * Partage avec l'export HTML (`export-handler.ts`) : la même préparation de la
+ * demande (sans l'objet imposé : le Draft courant porte l'objet final) et la
+ * même recomposition d'un Draft par le resolver de sa famille.
+ */
+export { prepare as prepareEmailRequest, resolveFamily as resolveEmailFamilyDraft }

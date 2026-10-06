@@ -1,8 +1,9 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { MonitorIcon, SmartphoneIcon } from "lucide-react"
+import { DownloadIcon, MonitorIcon, SmartphoneIcon } from "lucide-react"
 
+import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 
@@ -27,6 +28,10 @@ type EmailPreviewProps = {
   loading: boolean
   /** Modification en cours : l'aperçu reste affiché, un indicateur discret remplace le voile de génération. */
   editing?: boolean
+  /** Export HTML de l'email affiché ; absent tant qu'aucun email n'est exportable. */
+  exportAction?: { label: string; onExport: () => void; disabled: boolean; exporting: boolean }
+  /** Résultat du dernier export de la version affichée : une ligne par note. */
+  exportNotice?: { tone: "success" | "error"; lines: string[] } | null
   onLoad: () => void
 }
 
@@ -40,7 +45,7 @@ type EmailPreviewProps = {
  * interne, qui réduirait la largeur utile sous 600 px et déclencherait la
  * vue mobile. C'est la surface d'aperçu qui défile.
  */
-export function EmailPreview({ html, subject, preheader, legend, loading, editing = false, onLoad }: EmailPreviewProps) {
+export function EmailPreview({ html, subject, preheader, legend, loading, editing = false, exportAction, exportNotice, onLoad }: EmailPreviewProps) {
   const [viewport, setViewport] = useState<Viewport>("desktop")
   const surfaceRef = useRef<HTMLDivElement>(null)
   const [surface, setSurface] = useState<{ width: number; height: number }>()
@@ -80,6 +85,13 @@ export function EmailPreview({ html, subject, preheader, legend, loading, editin
             </p>
           )}
         </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {exportAction && (
+            <Button type="button" size="sm" variant="outline" disabled={exportAction.disabled} aria-busy={exportAction.exporting} onClick={exportAction.onExport}>
+              {exportAction.exporting ? <Spinner data-icon="inline-start" aria-hidden /> : <DownloadIcon data-icon="inline-start" aria-hidden />}
+              {exportAction.exporting ? "Export…" : exportAction.label}
+            </Button>
+          )}
         <ToggleGroup
           variant="outline"
           size="sm"
@@ -101,7 +113,16 @@ export function EmailPreview({ html, subject, preheader, legend, loading, editin
             </ToggleGroupItem>
           ))}
         </ToggleGroup>
+        </div>
       </div>
+
+      {exportNotice && (
+        <div role={exportNotice.tone === "error" ? "alert" : "status"} className={`flex flex-col gap-0.5 rounded-lg border px-4 py-2 text-caption ${exportNotice.tone === "error" ? "text-destructive" : "text-muted-foreground"}`}>
+          {exportNotice.lines.map((line) => (
+            <p key={line}>{line}</p>
+          ))}
+        </div>
+      )}
 
       {subject && preheader && (
         <dl className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 rounded-lg border bg-background px-4 py-3 text-body">

@@ -764,6 +764,68 @@ instruction + demande d'origine + Draft courant
   rien (aucune version ajoutée, la version affichée reste). Pas d'export HTML
   dans cette version.
 
+### Export HTML (`/api/export-email`)
+
+Après une génération (et après chaque modification), « Télécharger le HTML »
+télécharge l'email ACTUELLEMENT AFFICHÉ : un document HTML complet, sans le
+builder. Ce n'est ni `html` ni `previewHtml` tels quels.
+
+- `html` (`renderEmail`) est le HTML canonique : tables, styles en ligne,
+  media query mobile, mais aussi des JETONS non résolus (logo, icônes, réseaux
+  sociaux, désabonnement), des visuels sur `demo-assets.invalid` et des liens
+  suffixés `?[UTM À DÉFINIR — CRM]`. Il n'est pas utilisable ailleurs.
+- `previewHtml` (`toPreviewHtml`) ne sert qu'à l'interface : chemins locaux
+  `/logos`, `/icones`, `/images`, liens inertes, réseaux sociaux en pixel
+  transparent. Il dépend de l'application.
+- L'export (`export-html.ts`) part du HTML canonique et résout, de façon
+  déterministe : assets en URLs ABSOLUES sous `EMAIL_ASSETS_BASE_URL`, liens à
+  leur destination propre (sans suffixe de suivi), commentaires de gabarit
+  retirés, rangée des réseaux sociaux retirée (réseaux non arbitrés, aucun
+  fichier). Il valide le résultat (document complet, aucun script, aucun jeton
+  non résolu, aucune URL locale hors mode local, aucune marque du builder ou
+  d'un Draft, liens limités à `www.studi.com` et `meet.studi.fr`).
+- **Serveur, sans modèle.** Le navigateur envoie la génération d'origine et le
+  Draft de la version affichée, JAMAIS du HTML ni une URL. Le serveur recompose
+  l'email avec les resolvers de sa famille (valeurs protégées recalculées), le
+  rend, le transforme avec SA base d'assets. Aucun appel Anthropic. Annuler et
+  rétablir exportent la version affichée : le fichier d'une version est
+  identique octet pour octet à chaque export.
+- **Configuration.** `EMAIL_ASSETS_BASE_URL` (variable serveur) : l'origine
+  publique (et son éventuel préfixe) qui sert `/logos`, `/icones` et
+  `/images/email/v2`. HTTPS obligatoire. Sans elle, l'export refuse. Mode POC :
+  une origine locale (`http://localhost:3000`) est admise hors production, avec
+  un avertissement (le fichier ne s'affiche complètement que sur la machine) ;
+  en production elle est refusée. Aucune valeur par défaut, aucune préversion
+  écrite en dur.
+- Nom de fichier : `studi-<campagne>.html` (slug ASCII, 60 caractères).
+
+**Ce que l'export V1 garantit** : un document HTML complet, autonome pour le
+balisage ; images et logo en URLs absolues sous la base configurée ; liens
+absolus sur les destinations contrôlées ; le contenu exact de la version
+affichée (valeurs de l'offre, chiffres, légal) ; la mise en page responsive du
+socle (media query à 599 px) ; aucun script.
+
+**Ce qu'il ne garantit PAS encore** :
+- *Envoi.* Les liens `[URL_DESABONNEMENT]` et `[URL_PREFERENCES]` restent des
+  jetons explicites : la plateforme d'envoi doit les remplacer. Le fichier est
+  prêt à être IMPORTÉ, pas à être envoyé tel quel.
+- *Suivi et personnalisation.* Aucun UTM, aucune balise CRM/ESP, aucune variable
+  de personnalisation. Le suivi sera décidé côté CRM.
+- *Hébergement des assets.* Les images vivent dans `public/` de l'application :
+  l'export n'est durable que si `EMAIL_ASSETS_BASE_URL` pointe un hébergement
+  stable. Les visuels de la banque sont des visuels « à confirmer »
+  (provenance non établie).
+- *Réseaux sociaux.* Retirés du pied de page (non arbitrés).
+- *Clients de messagerie.* Aucun client n'a été testé. Gmail web : acceptable
+  pour un POC (tables, styles en ligne, media query dans `<head>`). Apple Mail :
+  acceptable (rendu proche d'un navigateur). Outlook : à retravailler pour la
+  production (angles arrondis des boutons non rendus, `max-width`, polices
+  Inter absentes). Import ESP générique : acceptable après remplacement des
+  jetons. Étroitesse : les emails R1, R2 et R3 restent fluides jusqu'à 320 px ;
+  la promotion (R4) déborde sous 386 px, son en-tête de campagne (logo et date
+  de fin) ayant une largeur minimale ; à 390 px et au-dessus, aucun débordement.
+- Une promotion dont la date de fin est dépassée n'est pas exportable.
+
 ## Tests
 
 ```bash
