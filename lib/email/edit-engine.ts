@@ -39,11 +39,15 @@ import {
   type EmailEngineError,
   type EmailGenerationErrorKind,
 } from "./anthropic"
+import { applyEmailComposition, compositionCapabilities, compositionViolations, describeLayout, safeParseEmailComposition, type CompositionCapabilities, type CompositionOperation, type EmailComposition } from "./composition"
 import { addedFacts, checkEditInstruction, voiceViolations } from "./edit-guard"
+import { buildExportableEmailHtml, validateExportHtml } from "./export-html"
+import { buildEmailVisualIntentView, emailVisualIntents } from "./image-bank"
+import { renderEmail } from "./renderer"
 import { editableFields, getDraftText, setDraftTexts, type EmailEditFamily } from "./edit-fields"
 import { safeParseEditPatch } from "./edit-patch"
 import { buildEditPrompt } from "./edit-prompt"
-import { changedTexts, protectedChanges } from "./edit-protect"
+import { protectedChanges } from "./edit-protect"
 import { formatPromotionDate, isEmailPromotionInput, promotionOfferValue, promotionScopeSentence } from "./promotion-facts"
 import { checkPromotionRequest } from "./promotion-prompt"
 import { resolvePromotionDraft } from "./promotion-resolver"
@@ -64,6 +68,8 @@ export type EmailEditInput = {
   request: EmailRecipeRequest | EmailPromotionRequest
   /** Draft de la version courante (non fiable : il est revalidé et recomposé). */
   draft: unknown
+  /** Composition (V1.5) de la version courante : les opérations déjà appliquées. Absente : aucune. */
+  composition?: unknown
   instruction: string
 }
 
@@ -73,7 +79,9 @@ export type EmailEditResult =
       family: EmailEditFamily
       config: EmailConfig
       draft: unknown
-      /** Champs de texte modifiés (chemins du Draft). */
+      /** Composition de la nouvelle version : celle de la version courante, plus les opérations de cette édition. */
+      composition?: EmailComposition
+      /** Champs de texte modifiés (chemins du Draft) et opérations de composition appliquées. */
       changed: string[]
       summary: string
       diagnostics: EmailRecipeDiagnostic[]
@@ -143,6 +151,21 @@ function protectedTokens(family: EmailEditFamily, request: EmailRecipeRequest | 
 }
 
 /**
+ * Email VISIBLE d'une version : le resolver de la famille (pré-composition),
+ * puis les opérations de composition rejouées. Partagé avec l'export.
+ */
+function visibleEmail(family: EmailEditFamily, request: EmailRecipeRequest | EmailPromotionRequest, preComposition: EmailConfig, composition: EmailComposition) {
+  return applyEmailComposition(preComposition, composition, { family, ...(family === "promotion" ? { promotion: (request as EmailPromotionRequest).promotion } : {}) })
+}
+
+/** Les capacités de l'email courant, en entrée du garde-fou avant appel. */
+const guardCapabilities = (capabilities: CompositionCapabilities | undefined) => ({
+  image: capabilities?.operations.includes("change-image") === true,
+  surface: capabilities?.operations.includes("change-surface") === true,
+  sections: capabilities?.operations.includes("add-section") === true,
+})
+
+/**
  * Applique UNE instruction d'édition à l'email courant. Ne lève pas : renvoie un
  * résultat. Une instruction interdite ou une demande invalide n'appelle jamais
  * Anthropic.
@@ -153,31 +176,45 @@ export async function editEmailV2(input: EmailEditInput, dependencies: EmailClau
   if ("error" in prepared) return error(prepared.error)
   const { family, request } = prepared
 
-  /* 2. Email courant : le Draft doit se recomposer (il est client, donc non fiable) */
+  /* 2. Email courant : le Draft et la composition (clients, donc non fiables) doivent se recomposer */
+  const parsedComposition = safeParseEmailComposition(input.composition)
+  if (!parsedComposition.success) return error({ kind: "invalid-request", message: "La composition de l'email est invalide.", issues: parsedComposition.error.issues.map((issue) => ({ path: `composition.${issue.path.join(".")}`, message: issue.message })) })
+  const composition = parsedComposition.data
   const base = resolveFamily(family, request, input.draft)
   if (base.status !== "resolved") return resolutionFailure(base, {})
+  const current = visibleEmail(family, request, base.config, composition)
+  if (!current.ok) return error({ kind: "invalid-request", message: "La composition de l'email ne s'applique plus : régénérez-le.", issues: [{ path: `composition.operations.${current.index}`, message: current.message }] })
   const claimStatements = "claims" in base ? base.claims.map((claim) => claim.statement) : []
+  const capabilities = compositionCapabilities(family, current.config)
 
   /* 3. Contexte Brand de la famille : voix, règles, formulations à éviter */
   const { context } = family === "promotion" ? buildPromotionBrandContext(request.audience, request.target) : buildRecipeBrandContext(family, request.audience, request.target)
 
   /* 4. Garde-fous avant appel */
-  const refusal = checkEditInstruction(input.instruction, { address: context.voice.address, protectedTokens: protectedTokens(family, request, claimStatements) })
+  const refusal = checkEditInstruction(input.instruction, { address: context.voice.address, protectedTokens: protectedTokens(family, request, claimStatements), capabilities: guardCapabilities(capabilities) })
   if (refusal) return error({ kind: "edit-refused", message: refusal.message, reason: refusal.message })
 
   /* 5. Vue éditoriale compacte (champs de la liste fermée) et prompt */
-  const fields = editableFields(family, input.draft, base.config).flatMap((entry) => {
+  const fields = editableFields(family, input.draft, current.config).flatMap((entry) => {
     const text = getDraftText(input.draft, entry.path)
     return text === undefined ? [] : [{ ...entry, text }]
   })
   const protectedFacts: Record<string, unknown> =
     family === "promotion"
-      ? { offer: { value: promotionOfferValue((request as EmailPromotionRequest).promotion).replace(/ /g, " "), scope: (request as EmailPromotionRequest).promotion.scope } }
+      ? { offer: { value: promotionOfferValue((request as EmailPromotionRequest).promotion).replace(/\u00a0/g, " "), scope: (request as EmailPromotionRequest).promotion.scope } }
       : {
           ...(family === "brand-proof" ? { proofs: claimStatements } : {}),
           ...((request as EmailRecipeRequest).facts?.length ? { facts: (request as EmailRecipeRequest).facts!.map((fact) => fact.statement) } : {}),
         }
-  const prompt = buildEditPrompt({ family, instruction: input.instruction, fields, protectedFacts, context })
+  const allowedIntents = capabilities ? (capabilities.values as string[]).filter((value) => (emailVisualIntents as readonly string[]).includes(value)) : []
+  const prompt = buildEditPrompt({
+    family,
+    instruction: input.instruction,
+    fields,
+    protectedFacts,
+    context,
+    ...(capabilities ? { capabilities, layout: describeLayout(family, current.config), imageIntents: buildEmailVisualIntentView().filter((entry) => allowedIntents.includes(entry.intent)) } : {}),
+  })
 
   /* 6. Clé et client */
   const env = dependencies.env ?? process.env
@@ -211,53 +248,81 @@ export async function editEmailV2(input: EmailEditInput, dependencies: EmailClau
   const read = readStructuredOutput(response)
   if (!read.ok) return read.failure
 
-  /* 8. Patch : champs de la liste fermée, texte brut */
-  const patch = safeParseEditPatch(prompt.paths, read.output)
+  /* 8. Patch : champs de la liste fermée (texte brut) et opérations de la liste fermée */
+  const patch = safeParseEditPatch(prompt.paths, read.output, capabilities)
   if (!patch.success) {
     return error({ ...read.meta, kind: "invalid-draft", message: "La modification proposée ne respecte pas le contrat attendu.", issues: patch.error.issues.map((issue) => ({ path: issue.path.join(".") || "patch", message: issue.message })), output: read.text })
   }
   const edits = patch.data.edits.map((edit) => ({ path: edit.field, text: edit.text }))
+  const operations = ((patch.data as { operations?: CompositionOperation[] }).operations ?? []) as CompositionOperation[]
   // Un texte identique à l'actuel n'est pas une modification.
   const effective = edits.filter((edit) => getDraftText(input.draft, edit.path) !== edit.text)
-  if (effective.length === 0) return error({ ...read.meta, kind: "no-change", message: "Aucune modification n'a été proposée : l'email reste tel quel." })
+  if (effective.length === 0 && operations.length === 0) {
+    // Rien à faire : le résumé du modèle dit pourquoi (par exemple une couleur qui n'existe pas).
+    return error({ ...read.meta, kind: "no-change", message: "Aucune modification n'a été proposée : l'email reste tel quel.", reason: patch.data.summary.trim() })
+  }
 
   /* 9. Draft modifié → resolver de la famille (schéma, recette, valeurs contrôlées, terminologie) */
-  let next: unknown
-  try {
-    next = setDraftTexts(input.draft, effective)
-  } catch {
-    return error({ ...read.meta, kind: "invalid-draft", message: "La modification vise un champ inconnu.", output: read.text })
+  let next: unknown = input.draft
+  if (effective.length > 0) {
+    try {
+      next = setDraftTexts(input.draft, effective)
+    } catch {
+      return error({ ...read.meta, kind: "invalid-draft", message: "La modification vise un champ inconnu.", output: read.text })
+    }
   }
-  const resolution = resolveFamily(family, request, next)
+  const resolution = effective.length > 0 ? resolveFamily(family, request, next) : base
   if (resolution.status !== "resolved") return resolutionFailure(resolution, read.meta, read.text)
   const blocked = brandPolicyFailure(resolution.policy, read.meta, read.text)
   if (blocked) return blocked as { status: "error"; error: EmailEditError }
 
-  /* 10. Avant / après : seul un texte éditorial a changé */
+  /* 10. Composition : les opérations s'ajoutent à celles de la version courante, rejouées sur le nouvel email */
+  const nextComposition: EmailComposition = { operations: [...composition.operations, ...operations] }
+  const visible = visibleEmail(family, request, resolution.config, nextComposition)
+  if (!visible.ok) return error({ ...read.meta, kind: "edit-refused", message: visible.message, reason: visible.message })
+
+  /* 11. Avant / après : les textes seuls changent (même composition des deux côtés) */
   const protectedTexts = [...claimStatements, ...(family === "promotion" ? [promotionScopeSentence((request as EmailPromotionRequest).promotion)] : [])]
-  const violations = protectedChanges(base.config, resolution.config, { protectedTexts })
+  const sameComposition = visibleEmail(family, request, base.config, nextComposition)
+  if (!sameComposition.ok) return error({ ...read.meta, kind: "edit-refused", message: sameComposition.message, reason: sameComposition.message })
+  const violations: { path: string; message: string }[] = protectedChanges(sameComposition.config, visible.config, { protectedTexts })
+  /* ... puis la composition seule change (même Draft des deux côtés) : valeurs, légal, preuves, liens identiques */
+  const compositionContext = { family, ...(family === "promotion" ? { promotion: (request as EmailPromotionRequest).promotion } : {}) }
+  if (operations.length > 0) {
+    violations.push(...compositionViolations(current.config, sameComposition.config, operations, compositionContext, new Map(base.config.blocks.map((block) => [(block as unknown as { id: string }).id, block]))))
+  }
   if (violations.length > 0) {
     return error({ ...read.meta, kind: "protected-mutation", message: "La modification touche des éléments protégés : l'email reste tel quel.", issues: toIssues(violations), output: read.text })
   }
 
-  /* 11. Voix : tu / vous, selon la cible, sur les seuls textes modifiés */
+  /* 12. Voix : tu / vous, selon la cible, sur les seuls textes modifiés */
   const voice = voiceViolations(effective, context.voice.address)
   if (voice.length > 0) {
     return error({ ...read.meta, kind: "brand-violation", message: "Le texte modifié ne respecte pas l'adresse de la cible.", issues: voice.map((entry) => ({ path: entry.path, message: `« ${entry.match} » : adresse incompatible avec la cible.` })), output: read.text })
   }
-  /* 12. Aucun fait flou nouveau (« des centaines de… », conditions de l'offre) */
+  /* 13. Aucun fait flou nouveau (« des centaines de… », conditions de l'offre) */
   const added = addedFacts(family, effective.map((edit) => ({ path: edit.path, before: getDraftText(input.draft, edit.path) ?? "", after: edit.text })))
   if (added.length > 0) {
     return error({ ...read.meta, kind: "validation-failed", message: "Le texte modifié introduit un fait qui ne figure pas dans l'email.", issues: added.map((entry) => ({ path: entry.path, message: `« ${entry.match} » : fait non fourni.` })), output: read.text })
   }
-  if (changedTexts(base.config, resolution.config).length === 0) return error({ ...read.meta, kind: "no-change", message: "Aucune modification n'a été proposée : l'email reste tel quel." })
+  if (JSON.stringify(visible.config) === JSON.stringify(current.config)) return error({ ...read.meta, kind: "no-change", message: "Aucune modification n'a été proposée : l'email reste tel quel." })
+
+  /* 14. L'email obtenu doit rester exportable (assets et liens contrôlés) */
+  try {
+    const exported = buildExportableEmailHtml(renderEmail(visible.config), "https://assets.example.test")
+    const issues = validateExportHtml(exported.html, { assetsBase: "https://assets.example.test", local: false })
+    if (issues.length > 0) return error({ ...read.meta, kind: "validation-failed", message: "L'email modifié ne serait pas exportable.", issues: issues.map((entry) => ({ path: entry.code, message: entry.message })), output: read.text })
+  } catch {
+    return error({ ...read.meta, kind: "validation-failed", message: "L'email modifié ne serait pas exportable.", output: read.text })
+  }
 
   return {
     status: "success",
     family,
-    config: resolution.config,
+    config: visible.config,
     draft: next,
-    changed: effective.map((edit) => edit.path),
+    composition: nextComposition,
+    changed: [...effective.map((edit) => edit.path), ...operations.map((operation) => `${operation.op}:${operation.target}:${operation.value}`)],
     summary: patch.data.summary.trim(),
     diagnostics: resolution.diagnostics,
     model: response.model || model,
@@ -271,4 +336,4 @@ export async function editEmailV2(input: EmailEditInput, dependencies: EmailClau
  * demande (sans l'objet imposé : le Draft courant porte l'objet final) et la
  * même recomposition d'un Draft par le resolver de sa famille.
  */
-export { prepare as prepareEmailRequest, resolveFamily as resolveEmailFamilyDraft }
+export { prepare as prepareEmailRequest, resolveFamily as resolveEmailFamilyDraft, visibleEmail }

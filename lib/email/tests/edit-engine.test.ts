@@ -17,6 +17,7 @@ import Anthropic from "@anthropic-ai/sdk"
 import { DEFAULT_EMAIL_MODEL, EMAIL_MAX_TOKENS, type EmailClaudeClient } from "../anthropic"
 import { checkEditInstruction, voiceViolations } from "../edit-guard"
 import { editEmailV2, type EmailEditInput, type EmailEditResult } from "../edit-engine"
+import { compositionCapabilities } from "../composition"
 import { editableFields, getDraftText, setDraftTexts } from "../edit-fields"
 import { handleEmailEdit } from "../edit-handler"
 import { buildEditPatchSchema, buildEditTransportSchema } from "../edit-patch"
@@ -523,9 +524,9 @@ describe("édition — un appel, aucune relance, rien ne change en cas d'erreur"
     assert.equal(params.max_tokens, EMAIL_MAX_TOKENS)
     for (const key of ["tools", "tool_choice", "stream", "temperature"]) assert.ok(!(key in params), key)
     const fields = editableFields("promotion", start.draft, configOf(start.request, start.draft)).map((field) => field.path)
-    assert.deepEqual(params.output_config, { format: { type: "json_schema", schema: buildEditTransportSchema(fields) } })
+    assert.deepEqual(params.output_config, { format: { type: "json_schema", schema: buildEditTransportSchema(fields, compositionCapabilities("promotion", configOf(start.request, start.draft))) } })
     const user = JSON.parse(params.messages[0]!.content as string) as Json
-    assert.deepEqual(Object.keys(user).sort(), ["context", "email", "instruction", "protected"])
+    assert.deepEqual(Object.keys(user).sort(), ["context", "email", "instruction", "layout", "protected"])
     assert.deepEqual(user.email.fields.map((field: Json) => field.field), fields)
     assert.deepEqual(Object.keys(user.context).sort(), ["avoid", "rules", "voice"])
     assert.equal(user.context.voice.address, "tutoiement", "alternants : la voix de la marque")
@@ -575,7 +576,8 @@ describe("édition — un appel, aucune relance, rien ne change en cas d'erreur"
       ["tronqué", () => message("{", { stop_reason: "max_tokens" }), "truncated"],
       ["vide", () => message(null), "empty-output"],
       ["JSON invalide", () => message("{ pas du json"), "invalid-json"],
-      ["patch invalide", () => reply({ summary: "x", edits: [] }), "invalid-draft"],
+      ["patch vide (rien à faire)", () => reply({ summary: "x", edits: [] }), "no-change"],
+      ["opération hors liste", () => reply({ summary: "x", edits: [], operations: [{ op: "change-surface", target: "offer", value: "jaune" }] }), "invalid-draft"],
       ["champ en trop", () => reply({ ...patch("x", ["subject", "Un objet"]), html: "<b>x</b>" }), "invalid-draft"],
       ["HTML dans le texte", () => reply(patch("x", ["subject", "<b>Un objet</b>"])), "invalid-draft"],
       ["URL dans le texte", () => reply(patch("x", ["offer.text", "Voir https://example.com"])), "invalid-draft"],
@@ -724,7 +726,7 @@ describe("route /api/edit-email", () => {
     const { provider, response, json } = await viaRoute(body("Rends l'accroche plus dynamique."), () => reply(patch("Accroche plus dynamique", ["offer.text", "Cap sur la rentrée : vous développez vos compétences avec un coup de pouce."])))
     assert.equal(response.status, 200, JSON.stringify(json))
     assert.equal(provider.calls.length, 1)
-    assert.deepEqual(Object.keys(json).sort(), ["blockCount", "changed", "draft", "html", "preheader", "previewHtml", "status", "subject", "summary"])
+    assert.deepEqual(Object.keys(json).sort(), ["blockCount", "changed", "composition", "draft", "html", "preheader", "previewHtml", "status", "subject", "summary"])
     assert.equal(json.summary, "Accroche plus dynamique")
     assert.deepEqual(json.changed, ["offer.text"])
     assert.ok(json.html.includes("DEMO20") && json.html.includes("31 décembre 2099") && json.html.includes("31/12/2099"))

@@ -29,7 +29,8 @@ const networkError: EmailExportClientError = { code: "network", issues: [] }
 
 /** Corps de `POST /api/export-email` : la génération d'origine et le Draft de la version affichée. */
 export function toEmailExportBody(state: EmailEditorState) {
-  return { generation: state.generation, draft: currentVersion(state)?.email.draft }
+  const email = currentVersion(state)?.email
+  return { generation: state.generation, draft: email?.draft, ...(email?.composition !== undefined ? { composition: email.composition } : {}) }
 }
 
 /** Réponse de /api/export-email : un fichier, ou une erreur publique avec son code. */

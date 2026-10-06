@@ -619,7 +619,7 @@ describe("export — téléchargement navigateur et câblage", () => {
 
   test("l'éditeur et la génération ne sont pas modifiés par l'export : seuls des exports additifs ont été ajoutés", () => {
     const engine = code("lib/email/edit-engine.ts")
-    assert.match(engine, /export \{ prepare as prepareEmailRequest, resolveFamily as resolveEmailFamilyDraft \}/)
+    assert.match(engine, /export \{ prepare as prepareEmailRequest, resolveFamily as resolveEmailFamilyDraft, visibleEmail \}/)
     for (const name of ["edit-fields.ts", "edit-guard.ts", "edit-patch.ts", "edit-prompt.ts", "edit-protect.ts", "editor-state.ts", "recipes.ts", "recipe-drafts.ts", "recipe-prompts.ts", "recipe-resolver.ts", "promotion-resolver.ts", "anthropic-v2.ts", "generate-handler.ts"]) {
       assert.ok(!/export-html|export-handler|export-client|buildExportableEmailHtml/.test(code(`lib/email/${name}`)), name)
     }

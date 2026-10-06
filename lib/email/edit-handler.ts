@@ -37,6 +37,8 @@ const EmailEditBodySchema = z.strictObject({
   instruction: z.string({ error: "L'instruction est requise." }),
   generation: EmailGenerateBodySchema,
   draft: z.custom<Record<string, unknown>>((value) => typeof value === "object" && value !== null && !Array.isArray(value), "Le brouillon de l'email est requis."),
+  /** Composition (V1.5) de la version affichée : les opérations déjà appliquées. Revalidée par le moteur. Absente : aucune. */
+  composition: z.unknown().optional(),
 })
 
 export type EmailEditPublicErrorCode = EmailPublicErrorCode | "edit-refused" | "protected-mutation" | "no-change"
@@ -51,6 +53,8 @@ export type EmailEditPublicError = {
 export type EmailEditSuccess = EmailGenerationSuccess & {
   /** Draft éditable de la nouvelle version. */
   draft: unknown
+  /** Composition de la nouvelle version (opérations de structure et de visuel appliquées). */
+  composition: unknown
   /** Une phrase : ce qui a changé. */
   summary: string
   /** Champs de texte modifiés (chemins du Draft). */
@@ -107,7 +111,7 @@ export async function handleEmailEdit(request: Request, options: EmailEditHandle
   // 2. Un seul appel au moteur d'édition ; les refus évidents partent avant tout appel de modèle.
   let result: EmailEditResult
   try {
-    result = await engine({ request: toEmailEngineRequest(parsed.data.generation), draft: parsed.data.draft, instruction: parsed.data.instruction })
+    result = await engine({ request: toEmailEngineRequest(parsed.data.generation), draft: parsed.data.draft, composition: parsed.data.composition, instruction: parsed.data.instruction })
   } catch {
     log({ kind: "engine-threw" })
     return fail(internal)
@@ -119,7 +123,7 @@ export async function handleEmailEdit(request: Request, options: EmailEditHandle
     // Aucun détail du moteur ne sort : ni issues, ni sortie brute, ni message du SDK ; seul le motif d'un refus avant appel est pour l'utilisateur.
     if (kind === "edit-refused") return fail(mapping(422, "edit-refused", reason ?? "Cette modification n'est pas possible.", "Modification refusée"), [{ path: "instruction", message: reason ?? "Cette modification n'est pas possible." }])
     if (kind === "protected-mutation") return fail(protectedMutation)
-    if (kind === "no-change") return fail(noChange)
+    if (kind === "no-change") return fail(noChange, result.error.reason ? [{ path: "modification", message: result.error.reason.slice(0, 140) }] : [])
     const known = emailPublicErrors[kind as keyof typeof emailPublicErrors] ?? internal
     return fail({ ...known, title: known.title === "Génération impossible" ? "Modification impossible" : known.title })
   }
@@ -135,6 +139,7 @@ export async function handleEmailEdit(request: Request, options: EmailEditHandle
       html,
       previewHtml: toPreviewHtml(html),
       draft: result.draft,
+      composition: result.composition ?? { operations: [] },
       summary: result.summary,
       changed: result.changed,
     }

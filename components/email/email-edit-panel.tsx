@@ -57,7 +57,7 @@ export function EmailEditPanel({ state, generating, onEdit, onUndo, onRedo }: Em
           Modifier l&apos;email
         </h2>
         <p className="text-caption text-muted-foreground">
-          Demandez un changement de texte. L&apos;offre, les chiffres, les liens, les visuels et les mentions légales restent ceux de l&apos;email.
+          Demandez un changement de texte, d&apos;image, de couleur ou de bloc (fin d&apos;offre, appuis). L&apos;offre, les chiffres, les liens et les mentions légales restent ceux de l&apos;email.
         </p>
       </header>
 

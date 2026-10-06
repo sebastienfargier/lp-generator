@@ -122,7 +122,8 @@ export const emailEditInstructionMaxLength = 500
 
 /** Corps de `POST /api/edit-email` : l'instruction, la génération d'origine et le Draft de la version affichée. */
 export function toEmailEditBody(state: EmailEditorState, instruction: string) {
-  return { instruction: instruction.trim(), generation: state.generation, draft: currentVersion(state)?.email.draft }
+  const email = currentVersion(state)?.email
+  return { instruction: instruction.trim(), generation: state.generation, draft: email?.draft, ...(email?.composition !== undefined ? { composition: email.composition } : {}) }
 }
 
 /** Instruction prête à partir : non vide et dans la limite ; le serveur reste l'autorité. */

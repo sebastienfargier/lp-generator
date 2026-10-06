@@ -1,6 +1,7 @@
 import { z } from "zod"
 
-import { prepareEmailRequest, resolveEmailFamilyDraft } from "./edit-engine"
+import { safeParseEmailComposition } from "./composition"
+import { prepareEmailRequest, resolveEmailFamilyDraft, visibleEmail } from "./edit-engine"
 import { buildExportableEmailHtml, EmailExportError, exportFilename, resolveExportAssetsBase, validateExportHtml } from "./export-html"
 import { EmailGenerateBodySchema, toEmailEngineRequest } from "./generate-handler"
 import { EmailTemplateError, renderEmail } from "./renderer"
@@ -15,7 +16,9 @@ import { EmailTemplateError, renderEmail } from "./renderer"
  *   `/api/generate-email`) : il redonne au serveur la recette, la cible et les
  *   valeurs protégées (Promotion Facts, informations) ;
  * - `draft` : le Draft de la VERSION AFFICHÉE (génération, modification,
- *   annulation ou rétablissement : le navigateur envoie celui qu'il montre).
+ *   annulation ou rétablissement : le navigateur envoie celui qu'il montre) ;
+ * - `composition` : les opérations de structure et de visuel de cette version
+ *   (V1.5), rejouées par le serveur sur l'email recomposé.
  *
  * Le serveur NE REÇOIT PAS de HTML et n'accepte aucune URL : il recompose
  * l'email avec les resolvers de la famille (EmailConfig validée, valeurs
@@ -33,6 +36,8 @@ const maxBodyLength = 100_000
 const EmailExportBodySchema = z.strictObject({
   generation: EmailGenerateBodySchema,
   draft: z.custom<Record<string, unknown>>((value) => typeof value === "object" && value !== null && !Array.isArray(value), "Le brouillon de l'email est requis."),
+  /** Composition (V1.5) de la version affichée : revalidée et rejouée par le serveur. Absente : aucune. */
+  composition: z.unknown().optional(),
 })
 
 export type EmailExportPublicErrorCode = "invalid-request" | "configuration" | "unresolvable" | "rendering" | "export-invalid" | "internal"
@@ -117,9 +122,18 @@ export async function handleEmailExport(request: Request, options: EmailExportHa
     return fail(unresolvable)
   }
 
+  // 3 bis. La composition de la version affichée (blocs ajoutés ou retirés, surface, image), rejouée sur l'email recomposé.
+  const composition = safeParseEmailComposition(parsed.data.composition)
+  if (!composition.success) return fail(invalidRequest, composition.error.issues.map((issue) => ({ path: `composition.${issue.path.join(".")}`, message: issue.message })))
+  const visible = visibleEmail(prepared.family, prepared.request, resolution.config, composition.data)
+  if (!visible.ok) {
+    log({ kind: "composition" })
+    return fail(unresolvable)
+  }
+
   // 4. Rendu canonique → export → contrôles.
   try {
-    const exported = buildExportableEmailHtml(renderEmail(resolution.config), assets.base)
+    const exported = buildExportableEmailHtml(renderEmail(visible.config), assets.base)
     const issues = validateExportHtml(exported.html, { assetsBase: assets.base, local: assets.local })
     if (issues.length > 0) {
       log({ kind: "export-invalid" })
@@ -127,7 +141,7 @@ export async function handleEmailExport(request: Request, options: EmailExportHa
     }
     const success: EmailExportSuccess = {
       status: "success",
-      filename: exportFilename(resolution.config.name),
+      filename: exportFilename(visible.config.name),
       html: exported.html,
       placeholders: exported.placeholders,
       warnings: assets.local ? ["assets-local"] : [],

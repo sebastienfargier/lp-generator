@@ -23,7 +23,7 @@
  * Domaine Email uniquement : aucun import depuis `lib/landing`.
  */
 
-export type EditRefusalCode = "empty" | "too-long" | "value" | "code" | "date" | "legal" | "link" | "media" | "structure" | "voice" | "system"
+export type EditRefusalCode = "empty" | "too-long" | "value" | "code" | "date" | "legal" | "link" | "media" | "structure" | "voice" | "system" | "literal"
 
 export type EditRefusal = { code: EditRefusalCode; message: string }
 
@@ -32,17 +32,29 @@ export const editInstructionLimits = { min: 3, max: 500 } as const
 const fold = (value: string) => value.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[’]/g, "'")
 
 /** Verbes qui MODIFIENT quelque chose (« rends plus court » n'en est pas un : il vise le style). */
-const mutation = /\b(?:pass\w*|chang\w*|modifi\w*|remplac\w*|mets?|mettre|portes?|porter|baiss\w*|augment\w*|diminu\w*|reduis\w*|reduire|prolong\w*|rallong\w*|repouss\w*|decal\w*|supprim\w*|retir\w*|enlev\w*|efface\w*|masqu\w*|cach\w*|omet\w*|ajout\w*|rajout\w*|insere\w*|inserer|invent\w*|deplac\w*|inverse\w*|reorgan\w*|remets?)\b/
+const mutation = /\b(?:pass\w*|chang\w*|modifi\w*|remplac\w*|mets?|mettre|portes?|porter|baiss\w*|augment\w*|diminu\w*|reduis\w*|reduire|prolong\w*|rallong\w*|repouss\w*|decal\w*|supprim\w*|retir\w*|enlev\w*|efface\w*|masqu\w*|cach\w*|omet\w*|ajout\w*|rajout\w*|insere\w*|inserer|invent\w*|deplac\w*|inverse\w*|reorgan\w*|remets?|essa\w*)\b/
 const addOrRemove = /\b(?:ajout\w*|rajout\w*|insere\w*|inserer|supprim\w*|retir\w*|enlev\w*|efface\w*|omet\w*|deplac\w*|inverse\w*|reorgan\w*|duplique\w*)\b/
 
 const nouns: readonly { code: EditRefusalCode; pattern: RegExp; message: string }[] = [
   { code: "legal", pattern: /\b(?:mentions? legales?|legal|legale|legaux|conditions?|disclaimers?|cgv|cgu|astérisque|asterisque)\b/, message: "La mention légale est posée par le système : elle ne se modifie pas par instruction." },
   { code: "code", pattern: /\b(?:codes?|coupons?)\b/, message: "Le code promo vient des données de l'offre : modifiez-le dans le formulaire, puis régénérez l'email." },
-  { code: "date", pattern: /\b(?:dates?|echeances?|deadline|jusqu'au|fin de l'offre|delais?|janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre)\b/, message: "La date de fin vient des données de l'offre : modifiez-la dans le formulaire, puis régénérez l'email." },
+  { code: "date", pattern: /\b(?:dates?|echeances?|deadline|jusqu'au|fin de l'offre|fin d'offre|delais?|janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre)\b/, message: "La date de fin vient des données de l'offre : modifiez-la dans le formulaire, puis régénérez l'email." },
   { code: "value", pattern: /(?:\b(?:remises?|reductions?|rabais|pourcent\w*|pourcentages?|euros?|prix|tarifs?|montants?|valeurs?|chiffres?|statistiques?)\b|[%€])/, message: "La valeur de l'offre et les chiffres ne se modifient pas par instruction : les données de l'offre et les preuves de la marque font foi." },
   { code: "link", pattern: /\b(?:liens?|urls?|href|destinations?|adresses? web|redirig\w*)\b/, message: "Les liens et destinations sont contrôlés : ils ne se modifient pas par instruction." },
-  { code: "media", pattern: /\b(?:images?|visuels?|photos?|illustrations?|logos?|icones?|couleurs?|polices?|css|html|styles?|fonds?|surfaces?|mise en page|layout|footer|pieds? de page|en-tetes?|headers?|bannieres?)\b/, message: "Les visuels, les couleurs et la mise en page sont verrouillés dans cette version : seuls les textes se modifient." },
+  { code: "media", pattern: /\b(?:logos?|icones?|polices?|css|html|styles?|mise en page|layout|footer|pieds? de page|en-tetes?|headers?|bannieres?)\b/, message: "Le logo, les icônes, la typographie, l'en-tête, le pied de page et la mise en page sont verrouillés : seuls les textes, quelques blocs, des variantes de couleur et l'image principale se modifient." },
 ]
+
+/** Visuel et couleur : verrouillés, sauf si l'email en a la capacité (V1.5). */
+const imageNouns = /\b(?:images?|visuels?|photos?|illustrations?)\b/
+const colorNouns = /\b(?:couleurs?|fonds?|surfaces?|teintes?)\b/
+const colorNames = /\b(?:jaune|vert|verte|rouge|bleu|bleue|rose|orange|violet|violette|noir|noire|blanc|blanche|gris|grise|marron|dore|doree|turquoise|beige)\b/
+const allowedColorNames = /^(?:jaune|vert|verte)$/
+/** Ce qu'une instruction ne contient jamais : balisage, couleur libre, URL, chemin ou fichier d'image. */
+const literal = /<\/?[a-z][^>]*>|https?:\/\/|www\.|#[0-9a-f]{3,8}\b|\b(?:rgba?|hsla?|oklch)\s*\(|\bvar\(|\.(?:jpe?g|png|webp|gif|svg)\b|\b(?:html|css|tailwind|classname|style=|javascript)\b|(?:^|\s)\/(?:images|public|ressources)\//i
+/** Rôles que les opérations de composition savent ajouter, retirer ou recolorer. */
+const sectionRoles = /\b(?:countdown|compte a rebours|decompte|date de fin|fin de l'offre|fin d'offre|bloc date|avantages?|appuis?|raisons)\b/
+/** Le panneau d'offre (valeur, code, bouton) a des couleurs fixes. */
+const offerPanel = /\b(?:promo|promotion|offre|panneau|encart)\b/
 
 /** Éléments dont l'ajout ou le retrait change la structure de l'email. */
 const structureNouns = /\b(?:sections?|blocs?|lames?|rubriques?|etapes?|appuis?|chiffres?|preuves?|claims?|statistiques?|boutons?|ctas?|titres?|paragraphes?|temoignages?|partenaires?)\b/
@@ -51,7 +63,11 @@ const injection = /\b(?:ignore\w*\s+(?:toutes?\s+)?(?:les\s+)?(?:consignes|instr
 
 const sentences = (text: string) => text.split(/(?<=[.!?;\n])\s+/).map((part) => part.trim()).filter(Boolean)
 
+/** Capacités de composition de l'email courant (V1.5) ; absentes : texte seul. */
+export type EditGuardCapabilities = { image?: boolean; surface?: boolean; sections?: boolean }
+
 export type EditGuardContext = {
+  capabilities?: EditGuardCapabilities
   /** Adresse décidée par la cible : `tutoiement` (alternants) ou `vouvoiement`. */
   address: "tutoiement" | "vouvoiement"
   /** Valeurs protégées de l'email courant (code, valeur, date, chiffres des preuves…), recopiées telles qu'affichées. */
@@ -76,18 +92,40 @@ export function checkEditInstruction(instruction: string, context: EditGuardCont
     return { code: "voice", message: `L'adresse (${context.address === "tutoiement" ? "tutoiement" : "vouvoiement"}) est décidée par la cible de l'email : changez la cible dans le formulaire pour en changer.` }
   }
 
+  // Ni balisage, ni couleur libre, ni URL, ni fichier : jamais, quelles que soient les capacités.
+  if (literal.test(trimmed)) return { code: "literal", message: "Ni HTML, ni CSS, ni code couleur, ni URL, ni nom de fichier : décrivez ce que vous voulez en mots (« une version plus jaune », « une autre image »)." }
+
+  const capabilities = context.capabilities ?? {}
   const tokens = (context.protectedTokens ?? []).map(fold).filter((token) => token.length >= 2)
   for (const sentence of sentences(folded)) {
+    // Couleur : seules les variantes jaune et vert existent (et clair, sombre) ; jamais un nom de couleur libre.
+    for (const name of sentence.match(new RegExp(colorNames, "g")) ?? []) {
+      if (!capabilities.surface) return { code: "media", message: "Les couleurs sont verrouillées pour cet email : seuls les textes (et, selon l'email, l'image principale) se modifient." }
+      if (!allowedColorNames.test(name)) return { code: "media", message: "Seules les variantes de la marque existent : clair, jaune, vert et sombre. Une autre couleur n'est pas disponible." }
+    }
     const mutates = mutation.test(sentence)
     if (!mutates) continue
     const hasNumber = /\d/.test(sentence)
-    // Ajouter ou retirer un élément : la structure est celle de la recette.
-    if (addOrRemove.test(sentence) && structureNouns.test(sentence)) {
-      return { code: "structure", message: "La structure de l'email est celle de sa recette : on ne peut ni ajouter ni retirer de section, de chiffre ou de bouton. Les textes peuvent être réécrits." }
+    // Les rôles de composition (fin d'offre, appuis) : admis s'ils ne portent ni chiffre, ni date, ni durée.
+    const probe = addOrRemove.test(sentence) || /\bremets?\b/.test(sentence) ? sentence.replace(/\b(?:bloc date|date de fin|fin de l'offre|fin d'offre)\b/g, "") : sentence
+    const timeless = !hasNumber && !/\b(?:dates?|echeances?|delais?|deadline|jusqu'au|jours?|heures?|minutes?|semaines?|mois|janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre|prolong\w*|rallong\w*|repouss\w*)\b/.test(probe)
+    const compositionRole = capabilities.sections === true && sectionRoles.test(sentence) && timeless
+    // Le panneau d'offre : ses couleurs sont fixes.
+    if (capabilities.surface && offerPanel.test(sentence) && (colorNouns.test(sentence) || /\b(?:variante|sombre|clair)\b/.test(sentence)) && !compositionRole) {
+      return { code: "media", message: "Le panneau de l'offre garde ses couleurs (lame à couleurs fixes) : seuls le bloc de fin d'offre, les appuis et la conclusion ont des variantes de couleur." }
+    }
+    // Ajouter ou retirer un élément : la structure est celle de la recette, sauf les rôles de composition.
+    if (addOrRemove.test(sentence) && (structureNouns.test(sentence) || /\b(?:countdown|compte a rebours|decompte)\b/.test(sentence)) && !compositionRole && !(capabilities.sections && sectionRoles.test(sentence) && !timeless)) {
+      return { code: "structure", message: capabilities.sections ? "On peut ajouter ou retirer seulement le bloc de fin d'offre et le bloc d'appuis, sans date ni durée. Les autres éléments (chiffres, boutons, mentions) ne bougent pas." : "La structure de l'email est celle de sa recette : on ne peut ni ajouter ni retirer de section, de chiffre ou de bouton. Les textes peuvent être réécrits." }
     }
     for (const noun of nouns) {
+      // Un rôle de composition sans chiffre ni date n'est pas une modification de la date de fin ou de la valeur.
+      if (compositionRole && (noun.code === "date" || noun.code === "value")) continue
       if (noun.pattern.test(sentence)) return { code: noun.code, message: noun.message }
     }
+    // Visuel et couleur : verrouillés, sauf capacité.
+    if (imageNouns.test(sentence) && !capabilities.image) return { code: "media", message: "Les visuels sont verrouillés pour cet email : seuls les textes se modifient." }
+    if (colorNouns.test(sentence) && !capabilities.surface) return { code: "media", message: "Les couleurs sont verrouillées pour cet email : seuls les textes (et, selon l'email, l'image principale) se modifient." }
     // Une valeur protégée citée avec un verbe de modification.
     if (tokens.some((token) => sentence.includes(token))) return { code: "value", message: "Cette valeur est protégée : elle vient des données de l'offre ou des preuves de la marque, et ne se modifie pas par instruction." }
     // Un chiffre ou un code (un jeton qui mêle lettres et chiffres) avec un verbe de modification : on ne devine pas ce qui est protégé.

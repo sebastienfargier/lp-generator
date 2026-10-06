@@ -22,6 +22,7 @@
 import { z } from "zod"
 
 import { toAnthropicEmailJsonSchema } from "./anthropic-schema"
+import type { CompositionCapabilities, CompositionOperation } from "./composition"
 
 const markup = /<(?:\/?[a-z][a-z0-9-]*(?:\s[^<>]*)?\/?>|!--|!doctype)/i
 const looseLink = /https?:\/\/|www\.|\bmailto:|\bjavascript:|(?:^|\s)\/(?:images|public|ressources)\/|\.(?:jpe?g|png|webp|gif|svg)\b/i
@@ -34,30 +35,46 @@ const text = z
 
 export const editSummaryMaxLength = 140
 
-/** Schéma du patch pour une liste fermée de chemins. Au moins une modification, aucun chemin deux fois. */
-export function buildEditPatchSchema(paths: readonly string[]) {
+/**
+ * Schéma du patch pour une liste fermée de chemins. Sans `capabilities` (texte
+ * seul) : au moins une modification, aucun chemin deux fois. Avec des capacités de
+ * composition (V1.5) : trois énumérations COURTES et décidées avant l'appel
+ * (opération, cible, valeur), aucune union ; une liste vide d'opérations est
+ * acceptée ; le patch entièrement vide veut dire « rien à faire » et son résumé
+ * explique pourquoi.
+ */
+export function buildEditPatchSchema(paths: readonly string[], capabilities?: CompositionCapabilities) {
   if (paths.length === 0) throw new Error("Aucun champ éditable.")
-  return z
-    .strictObject({
-      summary: z.string().refine((value) => value.trim() !== "" && value.length <= editSummaryMaxLength, `Une phrase courte (${editSummaryMaxLength} caractères au maximum).`),
-      edits: z.array(z.strictObject({ field: z.enum(paths as [string, ...string[]], { error: "Champ non modifiable." }), text })).min(1, "Au moins une modification."),
+  const edits = z.array(z.strictObject({ field: z.enum(paths as [string, ...string[]], { error: "Champ non modifiable." }), text }))
+  const shape = {
+    summary: z.string().refine((value) => value.trim() !== "" && value.length <= editSummaryMaxLength, `Une phrase courte (${editSummaryMaxLength} caractères au maximum).`),
+    edits: capabilities ? edits : edits.min(1, "Au moins une modification."),
+  }
+  const duplicates = (patch: { edits: { field: string }[] }, ctx: z.RefinementCtx) => {
+    const seen = new Set<string>()
+    patch.edits.forEach((edit, index) => {
+      if (seen.has(edit.field)) ctx.addIssue({ code: "custom", path: ["edits", index, "field"], message: "Un champ ne se modifie qu'une fois." })
+      seen.add(edit.field)
     })
-    .superRefine((patch, ctx) => {
-      const seen = new Set<string>()
-      patch.edits.forEach((edit, index) => {
-        if (seen.has(edit.field)) ctx.addIssue({ code: "custom", path: ["edits", index, "field"], message: "Un champ ne se modifie qu'une fois." })
-        seen.add(edit.field)
-      })
+  }
+  if (!capabilities) return z.strictObject(shape).superRefine(duplicates)
+  const operations = z.array(
+    z.strictObject({
+      op: z.enum(capabilities.operations as [string, ...string[]], { error: "Opération non disponible." }),
+      target: z.enum(capabilities.targets as [string, ...string[]], { error: "Cible non disponible." }),
+      value: z.enum(capabilities.values as [string, ...string[]], { error: "Valeur non disponible." }),
     })
+  )
+  return z.strictObject({ ...shape, operations: operations.default([]) }).superRefine(duplicates)
 }
 
-export type EditPatch = { summary: string; edits: { field: string; text: string }[] }
+export type EditPatch = { summary: string; edits: { field: string; text: string }[]; operations?: CompositionOperation[] }
 
 /** JSON Schema du patch, adapté au transport Anthropic (voir `anthropic-schema.ts`). */
-export function buildEditTransportSchema(paths: readonly string[]) {
-  return toAnthropicEmailJsonSchema(z.toJSONSchema(buildEditPatchSchema(paths), { reused: "ref" }))
+export function buildEditTransportSchema(paths: readonly string[], capabilities?: CompositionCapabilities) {
+  return toAnthropicEmailJsonSchema(z.toJSONSchema(buildEditPatchSchema(paths, capabilities), { reused: "ref" }))
 }
 
-export function safeParseEditPatch(paths: readonly string[], input: unknown) {
-  return buildEditPatchSchema(paths).safeParse(input, { error: z.locales.fr().localeError })
+export function safeParseEditPatch(paths: readonly string[], input: unknown, capabilities?: CompositionCapabilities) {
+  return buildEditPatchSchema(paths, capabilities).safeParse(input, { error: z.locales.fr().localeError })
 }

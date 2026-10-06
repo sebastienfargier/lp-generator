@@ -30,6 +30,11 @@ export type EmailGenerationSuccess = {
    * `/api/edit-email`, qui le revalide. Absent du mode démo.
    */
   draft?: unknown
+  /**
+   * Composition (opérations de structure et de visuel) de cette version :
+   * présente après une modification de composition ; absente sinon.
+   */
+  composition?: unknown
 }
 
 export type EmailGenerationError = {
