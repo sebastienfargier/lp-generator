@@ -3,8 +3,11 @@
 import { useEffect, useReducer, useState } from "react"
 import { XIcon } from "lucide-react"
 
+import { Button } from "@/components/ui/button"
+
 import type { BuilderLame } from "@/lib/email-builder/catalog"
-import { builderCanRedo, builderCanUndo, builderDocument, builderReducer, createBuilderState } from "@/lib/email-builder/builder-state"
+import { builderCanRedo, builderCanUndo, builderDocument, builderReadOnly, builderReducer, builderViewing, createBuilderState, hasChangesSinceVersion, shownDocument } from "@/lib/email-builder/builder-state"
+import { statusLabels, versionLabel } from "@/lib/email-builder/versions"
 import type { EmailDocument } from "@/lib/email-builder/document"
 import type { BuilderRenderResponse } from "@/lib/email-builder/render-handler"
 
@@ -35,8 +38,12 @@ export function BuilderWorkspace({ initialDocument, initialHtml, lames }: Builde
   const [state, dispatch] = useReducer(builderReducer, initialDocument, createBuilderState)
   const [viewport, setViewport] = useState<CanvasViewport>("desktop")
   const [assistantOpen, setAssistantOpen] = useState(true)
+  // `document` : le TRAVAIL (opérations, bibliothèque, banque d'images). `shown` : ce que le canvas affiche, le même en travail, le snapshot d'une version en consultation.
   const document = builderDocument(state)
-  const key = JSON.stringify(document)
+  const shown = shownDocument(state)
+  const viewing = builderViewing(state)
+  const readOnly = builderReadOnly(state)
+  const key = JSON.stringify(shown)
 
   // HTML déjà rendu, par document. `shownKey` : le dernier rendu reçu pour le document courant (affiché en attendant le suivant).
   const [renders, setRenders] = useState<Record<string, string>>({ [JSON.stringify(initialDocument)]: initialHtml })
@@ -92,9 +99,19 @@ export function BuilderWorkspace({ initialDocument, initialHtml, lames }: Builde
   return (
     <div className="flex h-dvh min-h-0 flex-col bg-background" onKeyDown={onKeyDown}>
       <BuilderTopbar
-        name={document.config.name}
-        canUndo={builderCanUndo(state)}
-        canRedo={builderCanRedo(state)}
+        name={shown.config.name}
+        status={viewing ? viewing.status : state.status}
+        readOnly={readOnly}
+        versions={state.versions}
+        baseId={state.baseId}
+        viewingId={state.viewingId}
+        changedSinceVersion={hasChangesSinceVersion(state)}
+        onStatus={(status) => dispatch({ type: "set-status", status })}
+        onViewVersion={(id) => dispatch({ type: "view-version", id })}
+        onExitView={() => dispatch({ type: "exit-view" })}
+        onSaveVersion={(name) => dispatch({ type: "save-version", name, at: new Date().toISOString() })}
+        canUndo={!readOnly && builderCanUndo(state)}
+        canRedo={!readOnly && builderCanRedo(state)}
         viewport={viewport}
         assistantOpen={assistantOpen}
         onUndo={() => dispatch({ type: "undo" })}
@@ -123,14 +140,31 @@ export function BuilderWorkspace({ initialDocument, initialHtml, lames }: Builde
         )}
 
         <main aria-label="Canvas de l'email" className="relative flex min-w-0 flex-1 flex-col bg-muted">
+          {viewing && (
+            <div role="status" className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b bg-accent-1 px-4 py-2 text-body text-neutral-900">
+              <p className="min-w-0">
+                <span className="font-semibold">Vous consultez {versionLabel(viewing)}</span>
+                <span className="text-caption"> · enregistrée en {statusLabels[viewing.status]} · lecture seule</span>
+              </p>
+              <div className="flex shrink-0 items-center gap-2">
+                <Button type="button" size="sm" variant="outline" onClick={() => dispatch({ type: "exit-view" })}>
+                  Travail actuel
+                </Button>
+                <Button type="button" size="sm" onClick={() => dispatch({ type: "restart-from", id: viewing.id })}>
+                  Repartir de cette version
+                </Button>
+              </div>
+            </div>
+          )}
           <div className="min-h-0 flex-1 overflow-x-auto overflow-y-auto px-4 pt-8 pb-28">
             <BuilderCanvas
               html={html}
-              document={document}
+              document={shown}
               lames={lamesByType}
               selection={state.selection}
               viewport={viewport}
               interactive={!renderError}
+              readOnly={readOnly}
               onSelectBlock={(blockId) => dispatch({ type: "select-block", blockId })}
               onSelectElement={(blockId, slot) => dispatch({ type: "select-element", blockId, slot })}
               onStartEdit={(blockId, slot) => dispatch({ type: "start-edit", blockId, slot })}

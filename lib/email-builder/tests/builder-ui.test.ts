@@ -15,7 +15,7 @@ const root = process.cwd()
 const read = (path: string) => readFileSync(join(root, path), "utf8")
 const code = (path: string) => read(path).replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|\s)\/\/.*$/gm, "")
 
-const components = ["builder-workspace", "builder-topbar", "builder-canvas", "block-toolbar", "lame-library-panel", "image-picker-panel", "inline-editor", "assistant-panel"]
+const components = ["builder-workspace", "builder-topbar", "builder-canvas", "block-toolbar", "lame-library-panel", "image-picker-panel", "inline-editor", "versions-menu", "status-menu", "assistant-panel"]
 const files = [...components.map((name) => `components/email-builder/${name}.tsx`), "app/email-builder/page.tsx"]
 
 describe("Builder — structure et frontières", () => {
@@ -67,8 +67,8 @@ describe("Builder — le document reste la source de vérité", () => {
   })
 
   test("Annuler / Rétablir : boutons nommés reflétant canUndo / canRedo, et raccourcis Ctrl/Cmd+Z", () => {
-    assert.match(workspace, /canUndo=\{builderCanUndo\(state\)\}/)
-    assert.match(workspace, /canRedo=\{builderCanRedo\(state\)\}/)
+    assert.match(workspace, /canUndo=\{!readOnly && builderCanUndo\(state\)\}/)
+    assert.match(workspace, /canRedo=\{!readOnly && builderCanRedo\(state\)\}/)
     assert.match(workspace, /metaKey \|\| event\.ctrlKey/)
     const topbar = code("components/email-builder/builder-topbar.tsx")
     assert.match(topbar, /aria-label="Annuler"[^>]*disabled=\{!canUndo\}/)
@@ -124,7 +124,8 @@ describe("Builder — accessibilité et interactions", () => {
   })
 
   test("la suppression n'a pas de modale : un seul geste, annulable", () => {
-    for (const path of files) assert.ok(!/<Dialog|<AlertDialog|window\.confirm|confirm\(/.test(code(path)), path)
+    // Seul l'enregistrement d'une version ouvre une petite fenêtre (un nom à saisir) ; aucune action sur une lame ne demande de confirmation.
+    for (const path of files.filter((entry) => !entry.endsWith("versions-menu.tsx"))) assert.ok(!/<Dialog|<AlertDialog|window\.confirm|confirm\(/.test(code(path)), path)
   })
 
   test("retours : régions annoncées (status / alert), fermables", () => {
@@ -228,5 +229,74 @@ describe("Builder — édition directe du contenu (V2.3)", () => {
     const pkg = JSON.parse(read("package.json")) as { dependencies: Record<string, string> }
     assert.ok(!Object.keys(pkg.dependencies).some((name) => /dnd|slate|tiptap|prosemirror|lexical|draft-js|quill|ckeditor|prisma|drizzle/i.test(name)))
     for (const path of files) assert.ok(!/anthropic|localStorage|FileReader|type="file"/i.test(code(path)), path)
+  })
+})
+
+describe("Builder — versions nommées et statut (V2.4)", () => {
+  const workspace = code("components/email-builder/builder-workspace.tsx")
+  const topbar = code("components/email-builder/builder-topbar.tsx")
+  const menu = code("components/email-builder/versions-menu.tsx")
+  const status = code("components/email-builder/status-menu.tsx")
+  const canvas = code("components/email-builder/builder-canvas.tsx")
+  const state = code("lib/email-builder/builder-state.ts")
+
+  test("rien n'est persisté : ni stockage navigateur, ni cookie, ni réseau, ni base, ni auteur en dur", () => {
+    for (const path of [...files, "lib/email-builder/versions.ts", "lib/email-builder/builder-state.ts"]) {
+      assert.ok(!/localStorage|sessionStorage|indexedDB|document\.cookie|prisma|drizzle|Auteur/i.test(code(path)), path)
+    }
+    assert.deepEqual([...code("lib/email-builder/versions.ts").matchAll(/Date\.now|new Date|fetch\(/g)], [], "le modèle est pur : ni horloge, ni réseau")
+  })
+
+  test("la date vient du geste de l'utilisateur, jamais du reducer ; le reducer reste pur", () => {
+    assert.match(workspace, /type: "save-version", name, at: new Date\(\)\.toISOString\(\)/)
+    assert.ok(!/Date\.now|new Date|Math\.random/.test(state))
+  })
+
+  test("le statut est un menu libre : trois valeurs, immédiat, sans confirmation ni blocage ; en consultation, il est figé", () => {
+    assert.match(status, /documentStatuses\.map/)
+    assert.match(status, /onValueChange=\{\(value\) => onChange\(value as DocumentStatus\)\}/)
+    assert.ok(!/Dialog|confirm\(|disabled=\{[^}]*recommend/i.test(status))
+    assert.match(status, /if \(readOnly\)/)
+    assert.match(topbar, /<StatusMenu status=\{status\} readOnly=\{readOnly\}/)
+  })
+
+  test("les versions : liste de la plus récente à la plus ancienne, numéro, nom, statut, durée ; enregistrement par une petite fenêtre dont le numéro est attribué par le système", () => {
+    assert.match(menu, /\[\.\.\.versions\]\.reverse\(\)/)
+    assert.match(menu, /versionLabel\(version\)/)
+    assert.match(menu, /statusLabels\[version\.status\]/)
+    assert.match(menu, /relativeTime\(version\.createdAt, now\)/)
+    assert.match(menu, /Enregistrer une nouvelle version/)
+    assert.match(menu, /nextVersionPrefix\(versions\)/)
+    assert.match(menu, /Facultatif/)
+    assert.match(menu, /disabled=\{viewing\}/)
+  })
+
+  test("le wording de l'indicateur n'évoque pas une sauvegarde serveur", () => {
+    assert.match(menu, /Modifications non enregistrées dans une version/)
+    for (const path of files) assert.ok(!/non sauvegardé|pas sauvegardé|unsaved/i.test(read(path)), path)
+  })
+
+  test("consultation : le MÊME canvas en lecture seule (aucune couche de contrôles), historique et ajout désactivés, bandeau avec les deux sorties", () => {
+    assert.match(canvas, /\{!readOnly && \(/)
+    assert.match(workspace, /readOnly=\{readOnly\}/)
+    assert.match(workspace, /canUndo=\{!readOnly && builderCanUndo\(state\)\}/)
+    assert.match(workspace, /Vous consultez \{versionLabel\(viewing\)\}/)
+    assert.match(workspace, /type: "exit-view"/)
+    assert.match(workspace, /type: "restart-from"/)
+    assert.match(topbar, /disabled=\{readOnly\}/)
+    assert.match(workspace, /document=\{shown\}/)
+  })
+
+  test("le reducer ferme la porte : tout geste d'édition est ignoré pendant la consultation (une seule garde)", () => {
+    assert.match(state, /if \(state\.viewingId !== null && !whileViewing\.has\(action\.type\)\) return state/)
+  })
+
+  test("aucun renderer spécial pour les versions : le rendu et son cache sont ceux du document affiché", () => {
+    assert.match(workspace, /const key = JSON\.stringify\(shown\)/)
+    assert.ok(!/version[A-Za-z]*Render|renderVersion|\/api\/email-builder\/versions/i.test(workspace))
+  })
+
+  test("aucune nouvelle dépendance ni hors périmètre (diff, branches, export)", () => {
+    for (const path of [...files, "lib/email-builder/versions.ts"]) assert.ok(!/diff\(|branch|merge|exportHtml|anthropic/i.test(code(path).replace(/lib\/email\/export/g, "")), path)
   })
 })

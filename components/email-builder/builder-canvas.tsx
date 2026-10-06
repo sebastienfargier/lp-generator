@@ -30,6 +30,8 @@ type BuilderCanvasProps = {
   viewport: CanvasViewport
   /** Faux si le rendu a échoué : les contrôles ne visent pas un HTML invalide. */
   interactive: boolean
+  /** Consultation d'une version : l'email se regarde, rien ne s'édite (aucune couche de contrôles). */
+  readOnly?: boolean
   onSelectBlock: (blockId: string | null) => void
   onSelectElement: (blockId: string, slot: string) => void
   onStartEdit: (blockId: string, slot: string) => void
@@ -97,7 +99,7 @@ type EditSession = { key: string; style: FieldStyle }
  * modifié : la couche ne contient que des contrôles et le champ d'édition, qui vit
  * AU-DESSUS de l'iframe.
  */
-export function BuilderCanvas({ html, document: emailDocument, lames, selection, viewport, interactive, onSelectBlock, onSelectElement, onStartEdit, onCommitEdit, onCancelEdit, onReplaceImage, onInsert, onMove, onSurface, onRemove }: BuilderCanvasProps) {
+export function BuilderCanvas({ html, document: emailDocument, lames, selection, viewport, interactive, readOnly = false, onSelectBlock, onSelectElement, onStartEdit, onCommitEdit, onCancelEdit, onReplaceImage, onInsert, onMove, onSurface, onRemove }: BuilderCanvasProps) {
   const frameRef = useRef<HTMLIFrameElement>(null)
   const observerRef = useRef<ResizeObserver | null>(null)
   const elementsRef = useRef<Map<string, Element>>(new Map())
@@ -166,6 +168,7 @@ export function BuilderCanvas({ html, document: emailDocument, lames, selection,
         style={{ width, height: layout.height }}
       />
 
+      {!readOnly && (
       <div className={interactive ? "absolute inset-0" : "pointer-events-none absolute inset-0"} onClick={(event) => event.target === event.currentTarget && onSelectBlock(null)}>
         {/* Niveau LAME : fond de lame, nom au survol, actions de structure. */}
         {zones.map((zone, order) => {
@@ -279,6 +282,7 @@ export function BuilderCanvas({ html, document: emailDocument, lames, selection,
             </div>
           ))}
       </div>
+      )}
     </div>
   )
 }

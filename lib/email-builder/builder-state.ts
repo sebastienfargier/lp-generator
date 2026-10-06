@@ -20,6 +20,7 @@ import { applyToHistory, canRedo, canUndo, createHistory, redo, undo, type Histo
 import { sameSlotValue, slotEditor, slotValueFromDraft, type SlotDraft } from "./inline-edit"
 import { newRecommendationNotice, describeOperationError, type BuilderNotice } from "./notices"
 import { applyDocumentOperation, type DocumentOperation } from "./operations"
+import { createVersion, sameDocumentContent, type DocumentStatus, type EmailVersion } from "./versions"
 
 export type Selection =
   | { kind: "none" }
@@ -31,7 +32,16 @@ export type Selection =
 export type Panel = { kind: "library"; index?: number } | { kind: "images"; blockId: string; slot: string }
 
 export type BuilderState = {
+  /** Le TRAVAIL courant et son historique immédiat (annuler / rétablir). */
   history: History<EmailDocument>
+  /** Statut du travail courant : libre, indépendant de l'historique et des versions. */
+  status: DocumentStatus
+  /** Versions enregistrées, de la plus ancienne à la plus récente : des snapshots complets et immuables. */
+  versions: EmailVersion[]
+  /** La version dont part le travail (dernière enregistrée, ou « repartie de ») : sert à savoir si le travail en diffère. */
+  baseId: string | null
+  /** Version CONSULTÉE (lecture seule) ; `null` : on travaille. */
+  viewingId: string | null
   selection: Selection
   panel: Panel | null
   notice: BuilderNotice | null
@@ -52,14 +62,38 @@ export type BuilderAction =
   | { type: "open-images"; blockId: string; slot: string }
   | { type: "close-panel" }
   | { type: "dismiss-notice" }
+  | { type: "set-status"; status: DocumentStatus }
+  | { type: "save-version"; name: string; at: string }
+  | { type: "view-version"; id: string }
+  | { type: "exit-view" }
+  | { type: "restart-from"; id: string }
 
 const none: Selection = { kind: "none" }
 
-export const createBuilderState = (document: EmailDocument): BuilderState => ({ history: createHistory(document), selection: none, panel: null, notice: null, noticeKey: 0 })
+export const createBuilderState = (document: EmailDocument): BuilderState => ({ history: createHistory(document), status: "draft", versions: [], baseId: null, viewingId: null, selection: none, panel: null, notice: null, noticeKey: 0 })
 
 export const builderDocument = (state: BuilderState) => state.history.present
 export const builderCanUndo = (state: BuilderState) => canUndo(state.history)
 export const builderCanRedo = (state: BuilderState) => canRedo(state.history)
+/** La version consultée, ou `null`. */
+export const builderViewing = (state: BuilderState) => state.versions.find((version) => version.id === state.viewingId) ?? null
+/** Ce que le canvas affiche : le snapshot consulté, sinon le travail courant. */
+export const shownDocument = (state: BuilderState) => builderViewing(state)?.document ?? state.history.present
+/** Consultation : tout geste d'édition est refusé (lecture seule). */
+export const builderReadOnly = (state: BuilderState) => state.viewingId !== null
+/**
+ * Le travail diffère-t-il de la version dont il part ? Comparaison du contenu
+ * sérialisable des deux documents (ni dates, ni historique, ni interface) ;
+ * `false` s'il n'a encore aucune version de référence. Ce n'est PAS un état de
+ * sauvegarde serveur : rien n'est persisté.
+ */
+export function hasChangesSinceVersion(state: BuilderState): boolean {
+  const base = state.versions.find((version) => version.id === state.baseId)
+  return base ? !sameDocumentContent(state.history.present, base.document) : false
+}
+/** La version dont part le travail, ou `null`. */
+export const builderBase = (state: BuilderState) => state.versions.find((version) => version.id === state.baseId) ?? null
+
 /** La lame concernée par la sélection, à n'importe quel niveau. */
 export const selectedBlockId = (state: BuilderState) => (state.selection.kind === "none" ? null : state.selection.blockId)
 
@@ -86,7 +120,11 @@ function operate(state: BuilderState, operation: DocumentOperation, after: (docu
   return { ...withNotice(state, newRecommendationNotice(before, result.value)), history: applyToHistory(state.history, result.value), ...after(result.value, before) }
 }
 
+/** Actions permises pendant la consultation d'une version : elle est en lecture seule. */
+const whileViewing: ReadonlySet<BuilderAction["type"]> = new Set(["view-version", "exit-view", "restart-from", "close-panel", "dismiss-notice"])
+
 export function builderReducer(state: BuilderState, action: BuilderAction): BuilderState {
+  if (state.viewingId !== null && !whileViewing.has(action.type)) return state
   const document = state.history.present
   switch (action.type) {
     case "select-block": {
@@ -158,5 +196,27 @@ export function builderReducer(state: BuilderState, action: BuilderAction): Buil
       return state.panel ? { ...state, panel: null } : state
     case "dismiss-notice":
       return state.notice ? { ...state, notice: null } : state
+
+    case "set-status":
+      // Libre : aucune transition imposée, aucune recommandation ne bloque. Ni opération, ni historique.
+      return state.status === action.status ? state : { ...state, status: action.status }
+
+    case "save-version": {
+      // Un snapshot du travail : le document, l'historique et la sélection ne bougent pas (l'objet `history` reste le même).
+      const version = createVersion(state.versions, { name: action.name, document, status: state.status, createdAt: action.at })
+      return { ...state, versions: [...state.versions, version], baseId: version.id }
+    }
+
+    case "view-version":
+      return state.versions.some((version) => version.id === action.id) ? { ...state, viewingId: action.id, selection: none, panel: null } : state
+    case "exit-view":
+      return state.viewingId === null ? state : { ...state, viewingId: null }
+
+    case "restart-from": {
+      const version = state.versions.find((candidate) => candidate.id === action.id)
+      if (!version) return state
+      // Nouveau point de départ : copie du snapshot, historique vierge, statut Brouillon ; les versions restent toutes.
+      return { ...withNotice(state, null), history: createHistory(structuredClone(version.document)), status: "draft", baseId: version.id, viewingId: null, selection: none, panel: null }
+    }
   }
 }
