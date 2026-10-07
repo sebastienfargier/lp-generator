@@ -28,8 +28,8 @@
  * Domaine Email Builder uniquement : aucun import depuis `lib/landing`.
  */
 import { toPreviewHtml } from "../email/preview"
-import { renderEmailParts } from "../email/renderer"
 import type { EmailDocument } from "./document"
+import { renderDocumentParts } from "./render"
 
 export const canvasBlockStart = (id: string) => `<!--builder-block:${id}-->`
 export const canvasBlockEnd = "<!--/builder-block-->"
@@ -40,7 +40,7 @@ export const canvasBlockEnd = "<!--/builder-block-->"
  * `renderEmail` (même jointure : `renderEmailParts`).
  */
 export function renderMarkedHtml(document: EmailDocument): string {
-  const { head, blocks, tail } = renderEmailParts(document.config, { slotMarkers: true })
+  const { head, blocks, tail } = renderDocumentParts(document, { slotMarkers: true })
   const marked = blocks.map((html, index) => `${canvasBlockStart(document.config.blocks[index]!.id)}${html}${canvasBlockEnd}`)
   return [head, ...marked, tail].join("\n")
 }

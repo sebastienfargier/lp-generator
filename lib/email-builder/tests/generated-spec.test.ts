@@ -227,7 +227,9 @@ describe("V2.9.1 — noms de slots", () => {
     for (const key of Object.keys(emailSystemElements)) assert.equal(slotNameProblem(key)?.problem, "reserved", key)
     // la source unique : les racines et la règle exacte restent cohérentes
     for (const stem of controlledSlotStems) assert.ok(isControlledSlotName(stem === "code-promo" ? "code-promo-1" : stem), stem)
-    assert.ok(code("lib/email-builder/assistant-proposal.ts").includes("isControlledSlotName(slot)") && !/valeur-cle\|code-promo/.test(code("lib/email-builder/assistant-proposal.ts")))
+    // V2.9.3 : la protection par rôle vit à côté de la règle de nom (`slot-roles.ts`) ; l'assistant la ré-exporte, sans la recopier.
+    assert.ok(code("lib/email-builder/slot-roles.ts").includes("isControlledSlotName(slot)") && !/valeur-cle\|code-promo/.test(code("lib/email-builder/assistant-proposal.ts")))
+    assert.ok(/export \{ slotProtection/.test(code("lib/email-builder/assistant-proposal.ts")))
     assert.ok(!/valeur-cle|code-promo/.test(code("lib/email-builder/generated/slots.ts")), "aucune liste recopiée")
   })
 
@@ -351,7 +353,7 @@ describe("V2.9.1 — frontières du module", () => {
     assert.ok(!("generated" in emailBlockManifest))
     const config = { version: 1, id: "x", name: "X", subject: "S", preheader: "P", blocks: [{ id: "g", type: "generated", spec: textSection, slots: {} }] }
     assert.equal(safeParseEmailConfig(config).success, false)
-    assert.ok(!/generated/.test(code("lib/email-builder/document.ts") + code("lib/email/schemas.ts") + code("lib/email/renderer.ts")))
+    assert.ok(!/type:\s*"generated"|generated-block|GeneratedEmailBlock/.test(code("lib/email/schemas.ts") + code("lib/email/types.ts") + code("lib/email/manifest.ts")))
   })
 
   test("le vocabulaire vient du repo : écarts, espaceurs et rayons observés dans les templates", () => {

@@ -345,11 +345,15 @@ export type EmailRecipeDiagnostic = {
  * modifie rien et ne lève jamais.
  */
 export function lintEmailRecipeContent(config: EmailConfig): EmailRecipeDiagnostic[] {
-  const entries = [
+  return lintEmailTexts([
     { path: "subject", text: config.subject },
     { path: "preheader", text: config.preheader },
     ...config.blocks.flatMap((block) => emailRecipeTexts(block).map(({ path, text }) => ({ path, text }))),
-  ]
+  ])
+}
+
+/** `lintBrandText` sur des textes déjà relevés, avec leur chemin : le même diagnostic pour tout texte d'email, quelle que soit sa lame. */
+export function lintEmailTexts(entries: readonly { path: string; text: string }[]): EmailRecipeDiagnostic[] {
   return entries.flatMap(({ path, text }) =>
     lintBrandText(text).map((finding): EmailRecipeDiagnostic => ({
       level: finding.conflictId ? "known-conflict" : finding.severity,

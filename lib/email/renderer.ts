@@ -117,11 +117,19 @@ export function renderEmail(
  * Sert à repérer les lames dans l'HTML (canvas du Builder) sans les chercher
  * après coup dans le texte rendu.
  */
-export function renderEmailParts(
-  config: EmailConfig,
-  { source = emailFileTemplateSource, slotMarkers = false }: RenderOptions = {}
+export function renderEmailParts<Extra extends { id: string; type: string } = never>(
+  config: Omit<EmailConfig, "blocks"> & { blocks: readonly (EmailBlock | Extra)[] },
+  { source = emailFileTemplateSource, slotMarkers = false, renderExtra }: RenderOptions & {
+    /**
+     * Rend une lame qui n'est PAS une lame du manifeste (le Builder y branche ses lames générées). Sans cette
+     * fonction, une lame hors manifeste reste une erreur, comme avant ; une lame du manifeste ne passe jamais ici.
+     */
+    renderExtra?: (block: Extra, slotMarkers: boolean) => string
+  } = {}
 ): { head: string; blocks: string[]; tail: string } {
-  const blocks = config.blocks.map((block) => renderBlock(block, source, slotMarkers))
+  const blocks = config.blocks.map((block) =>
+    renderExtra && !Object.hasOwn(emailBlockManifest, block.type) ? renderExtra(block as Extra, slotMarkers) : renderBlock(block as EmailBlock, source, slotMarkers)
+  )
   return renderDocument(source.socle(), config, blocks)
 }
 
@@ -160,7 +168,7 @@ export function escapeAttribute(value: string) {
 const lamesStart = "<!-- ===== LAMES : coller ici les corps de lames, dans l'ordre ===== -->"
 const lamesEnd = "<!-- ===== FIN DES LAMES ===== -->"
 
-function renderDocument(socle: string, config: EmailConfig, blocks: string[]) {
+function renderDocument(socle: string, config: Pick<EmailConfig, "subject" | "preheader">, blocks: string[]) {
   const start = expectOnce(socle, lamesStart, "marqueur de début des lames")
   const end = expectOnce(socle, lamesEnd, "marqueur de fin des lames")
   if (end < start) throw new EmailTemplateError("Socle : marqueurs LAMES inversés.")

@@ -3,6 +3,7 @@
  * Le renderer reste LA source du rendu : le canvas n'est que son HTML, aux
  * repères près, et l'export n'est jamais touché.
  */
+import { officialConfigOf } from "../generated-block"
 import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
@@ -24,7 +25,7 @@ describe("renderEmailParts — le renderer en morceaux, sans changer son rendu",
     const { config } = buildDemoDocument()
     const { head, blocks, tail } = renderEmailParts(config)
     assert.equal(blocks.length, config.blocks.length)
-    assert.equal([head, ...blocks, tail].join("\n"), renderEmail(config))
+    assert.equal([head, ...blocks, tail].join("\n"), renderEmail(officialConfigOf(config)))
   })
 
   test("le rendu des lames ne dépend pas de leurs voisines", () => {
@@ -51,23 +52,23 @@ describe("canvas — repères lame ↔ blockId", () => {
 
   test("les repères sont des COMMENTAIRES : les retirer redonne exactement le rendu du renderer", () => {
     const document = buildDemoDocument()
-    assert.equal(strip(renderMarkedHtml(document)), renderEmail(document.config))
+    assert.equal(strip(renderMarkedHtml(document)), renderEmail(officialConfigOf(document.config)))
   })
 
   test("l'adaptation d'aperçu conserve les repères et n'ajoute que ce que l'aperçu ajoute déjà", () => {
     const document = buildDemoDocument()
     const canvas = renderCanvasHtml(document)
     assert.deepEqual(markerIds(canvas), document.config.blocks.map((block) => block.id))
-    assert.equal(strip(canvas), toPreviewHtml(renderEmail(document.config)))
+    assert.equal(strip(canvas), toPreviewHtml(renderEmail(officialConfigOf(document.config))))
     assert.ok(!/<script|data-builder|data-block|contenteditable/i.test(canvas), "aucun script ni attribut d'interface injecté")
   })
 
   test("l'HTML exporté n'est pas concerné : aucun repère, export valide", () => {
     const document = buildDemoDocument()
-    const exported = buildExportableEmailHtml(renderEmail(document.config), "https://assets.example.test")
+    const exported = buildExportableEmailHtml(renderEmail(officialConfigOf(document.config)), "https://assets.example.test")
     assert.ok(!exported.html.includes("builder-block"))
     assert.deepEqual(validateExportHtml(exported.html, { assetsBase: "https://assets.example.test", local: false }), [])
-    assert.ok(!renderEmail(document.config).includes("builder-block"))
+    assert.ok(!renderEmail(officialConfigOf(document.config)).includes("builder-block"))
   })
 
   test("chaque lame ajoutable est repérée par le canvas : les 31 types ajoutables, ajoutés un à un", () => {
@@ -79,7 +80,7 @@ describe("canvas — repères lame ↔ blockId", () => {
       if (!added.ok) continue
       const html = renderMarkedHtml(added.value)
       assert.deepEqual(markerIds(html), added.value.config.blocks.map((block) => block.id), lame.type)
-      assert.equal(strip(html), renderEmail(added.value.config), lame.type)
+      assert.equal(strip(html), renderEmail(officialConfigOf(added.value.config)), lame.type)
       checked += 1
     }
     assert.ok(checked >= 30)
@@ -102,7 +103,11 @@ describe("canvas — repères lame ↔ blockId", () => {
 describe("canvas — frontières", () => {
   test("module serveur : il passe par le renderer existant et n'écrit aucun HTML de lame", () => {
     const source = readFileSync(join(process.cwd(), "lib/email-builder/canvas.ts"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|\s)\/\/.*$/gm, "")
-    assert.match(source, /renderEmailParts/)
+    // Le chemin de rendu du document (`render.ts`) appelle le renderer existant et y branche les lames générées.
+    const render = readFileSync(join(process.cwd(), "lib/email-builder/render.ts"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|\s)\/\/.*$/gm, "")
+    assert.match(render, /renderEmailParts/)
+    assert.ok(!/<table|<td|<tr|node:fs/.test(render))
+    assert.match(source, /renderDocumentParts/)
     assert.match(source, /toPreviewHtml/)
     assert.ok(!/<table|<td|<tr|node:fs/.test(source))
     assert.match(source, /slotMarkers: true/)

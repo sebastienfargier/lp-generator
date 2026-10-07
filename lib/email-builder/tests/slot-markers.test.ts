@@ -5,6 +5,7 @@
  * les repères l'encadrent. Rien n'est deviné d'après un texte. L'export, lui,
  * n'en contient jamais.
  */
+import { officialConfigOf } from "../generated-block"
 import assert from "node:assert/strict"
 import { describe, test } from "node:test"
 
@@ -56,7 +57,7 @@ const plain = (value: string) => value.replace(nbsp, " ").replace(/\s+/g, " ").t
 /** Chaque slot du document est retrouvé par son nom, sur la bonne balise, avec le contenu du document. */
 function assertSlotsIdentified(document: EmailDocument, label: string) {
   const canvas = renderCanvasHtml(document)
-  for (const block of document.config.blocks) {
+  for (const block of officialConfigOf(document.config).blocks) {
     const found = slotsOfBlock(canvas, block.id)
     const kinds = emailBlockManifest[block.type].slots as Record<string, string>
     const given = (block as unknown as { slots: Record<string, Record<string, string>> }).slots
@@ -147,13 +148,13 @@ describe("canvas — slots identifiés par attribut, jamais par heuristique de t
 describe("canvas — l'instrumentation reste dans l'aperçu du Builder", () => {
   test("le renderer, par défaut, ne laisse aucun data-slot ; avec l'option, il les garde sans rien changer d'autre", () => {
     const { config } = buildDemoDocument()
-    assert.ok(!renderEmail(config).includes("data-slot"))
+    assert.ok(!renderEmail(officialConfigOf(config)).includes("data-slot"))
     const plainParts = renderEmailParts(config)
     assert.ok(![plainParts.head, ...plainParts.blocks, plainParts.tail].join("").includes("data-slot"))
     const marked = renderEmailParts(config, { slotMarkers: true })
     const html = [marked.head, ...marked.blocks, marked.tail].join("\n")
     assert.ok(html.includes('data-slot="titre-section"') || html.includes('data-slot="sous-titre"'))
-    assert.equal(html.replace(/\sdata-slot="[^"]*"/g, ""), renderEmail(config), "l'attribut est le SEUL écart")
+    assert.equal(html.replace(/\sdata-slot="[^"]*"/g, ""), renderEmail(officialConfigOf(config)), "l'attribut est le SEUL écart")
   })
 
   test("le canvas, privé de ses repères, est exactement l'aperçu du HTML du renderer", () => {
@@ -168,7 +169,7 @@ describe("canvas — l'instrumentation reste dans l'aperçu du Builder", () => {
     assert.equal(edited.ok, true)
     if (edited.ok) document = edited.value
     for (const doc of [buildDemoDocument(), document]) {
-      const exported = buildExportableEmailHtml(renderEmail(doc.config), "https://assets.example.test")
+      const exported = buildExportableEmailHtml(renderEmail(officialConfigOf(doc.config)), "https://assets.example.test")
       assert.ok(!/data-slot|data-system|builder-block/.test(exported.html))
       assert.deepEqual(validateExportHtml(exported.html, { assetsBase: "https://assets.example.test", local: false }), [])
     }

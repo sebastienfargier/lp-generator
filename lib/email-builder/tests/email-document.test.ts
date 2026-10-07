@@ -12,6 +12,7 @@
  * - l'historique de travail est indépendant de toute notion de version ;
  * - les faits de référence ne bougent pas avec le contenu.
  */
+import { officialConfigOf } from "../generated-block"
 import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
@@ -329,7 +330,7 @@ describe("opération add-block", () => {
     assert.equal(ids(twice).filter((id) => id.startsWith("email-module-footer")).length, 1)
     const found = getDocumentRecommendations(twice)
     assert.ok(found.some((entry) => entry.code === "layout-footer-duplicate" && entry.level === "warning"))
-    renderEmail(twice.config)
+    renderEmail(officialConfigOf(twice.config))
   })
 })
 
@@ -359,9 +360,9 @@ describe("opération remove-block", () => {
     assert.match(alert!.message, /désabonnement/)
     assert.equal(getDocumentRecommendations(next)[0]!.level, "alert", "l'alerte passe en premier")
     // Renderer et export : un HTML valide, sans le lien de désabonnement que le footer portait.
-    const html = renderEmail(next.config)
+    const html = renderEmail(officialConfigOf(next.config))
     assert.match(html, /^<!DOCTYPE html>/i)
-    assert.ok(!html.includes("[URL_DESABONNEMENT]") && renderEmail(document.config).includes("[URL_DESABONNEMENT]"))
+    assert.ok(!html.includes("[URL_DESABONNEMENT]") && renderEmail(officialConfigOf(document.config)).includes("[URL_DESABONNEMENT]"))
     const exported = buildExportableEmailHtml(html, "https://assets.example.test")
     assert.deepEqual(validateExportHtml(exported.html, { assetsBase: "https://assets.example.test", local: false }), [])
     assert.equal(exported.placeholders.length, 0)
@@ -406,12 +407,12 @@ describe("opération move-block", () => {
     const advice = getDocumentRecommendations(footerFirst).find((entry) => entry.code === "layout-footer-not-last")
     assert.equal(advice?.level, "warning")
     assert.equal(advice?.target?.blockId, "footer")
-    const html = renderEmail(footerFirst.config)
+    const html = renderEmail(officialConfigOf(footerFirst.config))
     assert.ok(html.indexOf("[URL_DESABONNEMENT]") < html.indexOf("À toi de jouer"), "le footer est rendu à la place choisie")
     const legalAway = ok(document, { type: "move-block", blockId: "mentions-legales", toIndex: 1 })
     assert.ok(getDocumentRecommendations(legalAway).some((entry) => entry.code === "layout-disclaimer-not-before-footer" && entry.level === "warning" && entry.target?.blockId === "mentions-legales"))
     for (const moved of [footerFirst, legalAway]) {
-      const exported = buildExportableEmailHtml(renderEmail(moved.config), "https://assets.example.test")
+      const exported = buildExportableEmailHtml(renderEmail(officialConfigOf(moved.config)), "https://assets.example.test")
       assert.deepEqual(validateExportHtml(exported.html, { assetsBase: "https://assets.example.test", local: false }), [])
     }
   })
@@ -447,7 +448,7 @@ describe("opération set-surface", () => {
     assert.equal(advice[0]!.target?.blockId, "closing")
     assert.match(advice[0]!.message, /consécutives/)
     assert.equal(getDocumentRecommendations(both).filter((entry) => entry.level === "alert").length, 0)
-    const html = renderEmail(both.config)
+    const html = renderEmail(officialConfigOf(both.config))
     assert.ok(/#EDF878/i.test(html), "la surface jaune est rendue")
     const exported = buildExportableEmailHtml(html, "https://assets.example.test")
     assert.deepEqual(validateExportHtml(exported.html, { assetsBase: "https://assets.example.test", local: false }), [])
@@ -567,10 +568,10 @@ describe("recommandations — conseils non bloquants", () => {
 
   test("les avertissements de lien sont exacts : l'export refuse bien ces liens (contrôle du fichier, ou refus à la construction), le Builder non", () => {
     const external = ok(promoDocument(), { type: "set-slot", blockId: "closing", slot: "cta-1", value: { label: "Voir", href: "https://example.com/offre" } })
-    const exported = buildExportableEmailHtml(renderEmail(external.config), "https://assets.example.test")
+    const exported = buildExportableEmailHtml(renderEmail(officialConfigOf(external.config)), "https://assets.example.test")
     assert.ok(validateExportHtml(exported.html, { assetsBase: "https://assets.example.test", local: false }).some((issue) => issue.code === "link"))
     const toConfirm = ok(promoDocument(), { type: "set-slot", blockId: "closing", slot: "cta-1", value: { label: "Voir", href: "[URL À CONFIRMER]" } })
-    assert.throws(() => buildExportableEmailHtml(renderEmail(toConfirm.config), "https://assets.example.test"), (error) => error instanceof EmailExportError && error.code === "url-to-confirm")
+    assert.throws(() => buildExportableEmailHtml(renderEmail(officialConfigOf(toConfirm.config)), "https://assets.example.test"), (error) => error instanceof EmailExportError && error.code === "url-to-confirm")
   })
 
   test("claims : une claim présente mais absente des faits, ou l'inverse, est signalée ; sans faits de claims, rien", () => {
@@ -748,9 +749,9 @@ describe("compatibilité avec le renderer et l'export existants", () => {
 
   test("document.config → renderer existant → le même HTML que l'EmailConfig d'origine, octet pour octet", () => {
     const { config } = promoFixture()
-    assert.equal(renderEmail(promoDocument().config), renderEmail(config))
+    assert.equal(renderEmail(officialConfigOf(promoDocument().config)), renderEmail(config))
     const proof = recipeFixture("D-R3-B")
-    assert.equal(renderEmail(createEmailDocument(proof).config), renderEmail(proof))
+    assert.equal(renderEmail(officialConfigOf(createEmailDocument(proof).config)), renderEmail(proof))
   })
 
   test("après des opérations, le config se rend : nouvelle lame, surface, texte, image et ordre apparaissent", () => {
@@ -758,16 +759,16 @@ describe("compatibilité avec le renderer et l'export existants", () => {
     document = ok(document, { type: "add-block", blockType: "email-module-text-only", slots: { "titre-section": { text: "Une lame ajoutée" }, "texte-descriptif": { text: "Un texte ajouté dans le Builder." } }, index: 3 })
     document = ok(document, { type: "set-surface", blockId: "closing", surface: "accent-1" })
     document = ok(document, { type: "set-slot", blockId: "support", slot: "titre-section", value: { text: "Un autre titre d'appuis" } })
-    const html = renderEmail(document.config)
+    const html = renderEmail(officialConfigOf(document.config))
     assert.ok(html.includes("Une lame ajoutée") && html.includes("Un texte ajouté dans le Builder.") && html.includes("Un autre titre d'appuis"))
     assert.ok(html.indexOf("Un autre titre d'appuis") < html.indexOf("Une lame ajoutée"), "l'ordre du document est celui du rendu")
-    assert.ok(/#EDF878/i.test(html) && !/#EDF878/i.test(renderEmail(promoDocument().config)), "la surface jaune est rendue")
+    assert.ok(/#EDF878/i.test(html) && !/#EDF878/i.test(renderEmail(officialConfigOf(promoDocument().config))), "la surface jaune est rendue")
     assert.match(html, /^<!DOCTYPE html>/i)
   })
 
   test("l'export existant accepte le config d'un document valide, avant et après opérations ; le fichier passe ses contrôles", () => {
     const check = (document: EmailDocument) => {
-      const exported = buildExportableEmailHtml(renderEmail(document.config), assetsBase)
+      const exported = buildExportableEmailHtml(renderEmail(officialConfigOf(document.config)), assetsBase)
       assert.deepEqual(validateExportHtml(exported.html, { assetsBase, local: false }), [])
       assert.ok(!/demo-assets\.invalid|localhost/.test(exported.html))
       return exported.html
@@ -784,7 +785,7 @@ describe("compatibilité avec le renderer et l'export existants", () => {
   test("le document sérialisé, relu puis rendu donne le même HTML : le JSON suffit à reconstruire l'email", () => {
     const document = ok(promoDocument(), { type: "set-surface", blockId: "closing", surface: "accent-1" })
     const reread = (parseEmailDocument(JSON.parse(serializeEmailDocument(document))) as { data: EmailDocument }).data
-    assert.equal(renderEmail(reread.config), renderEmail(document.config))
+    assert.equal(renderEmail(officialConfigOf(reread.config)), renderEmail(officialConfigOf(document.config)))
   })
 
   test("EmailConfig reste le contrat du renderer : le document n'ajoute aucune clé à `config`", () => {

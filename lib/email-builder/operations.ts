@@ -17,11 +17,12 @@
  */
 import { z } from "zod"
 
-import { EmailImageBankError, resolveEmailBankImage, isEmailBankImageId } from "../email/image-bank"
+import { emailBankDerivative, EmailImageBankError, resolveEmailBankImage, isEmailBankImageId } from "../email/image-bank"
 import { emailBlockManifest, type EmailSurfaceMode } from "../email/manifest"
 import { emailSurfaceRules, emailSurfaces, type EmailSurface } from "../email/surfaces"
-import type { EmailBlock, EmailBlockType, EmailConfig } from "../email/types"
+import type { EmailBlock, EmailBlockType } from "../email/types"
 import type { EmailDocument } from "./document"
+import { generatedBlockSlots, isGeneratedBlock, validateGeneratedBlock, validateGeneratedLimit, type DocumentBlock, type DocumentConfig, type GeneratedEmailBlock } from "./generated-block"
 import { applyToHistory, type History } from "./history"
 import { validateDocumentIntegrity, type DocumentIssue } from "./integrity"
 
@@ -29,7 +30,7 @@ import { validateDocumentIntegrity, type DocumentIssue } from "./integrity"
 /* Opérations                                                                 */
 /* -------------------------------------------------------------------------- */
 
-export const documentOperationTypes = ["set-slot", "add-block", "remove-block", "move-block", "set-surface", "set-image"] as const
+export const documentOperationTypes = ["set-slot", "add-block", "add-generated-block", "remove-block", "move-block", "set-surface", "set-image"] as const
 
 const blockType = z.string().refine((value) => Object.hasOwn(emailBlockManifest, value), "Lame inconnue du manifeste.")
 const slots = z.record(z.string(), z.unknown())
@@ -39,6 +40,12 @@ export const DocumentOperationSchema = z.discriminatedUnion("type", [
   z.strictObject({ type: z.literal("set-slot"), blockId: z.string().min(1), slot: z.string().min(1), value: z.unknown() }),
   /** Une lame OFFICIELLE du manifeste, avec tous ses slots requis. `index` : position finale ; absent, juste avant les mentions légales et le footer. */
   z.strictObject({ type: z.literal("add-block"), blockType, slots, id: z.string().min(1).optional(), index: z.number().int().min(0).optional(), surface: z.enum(emailSurfaces).optional() }),
+  /**
+   * Une lame GÉNÉRÉE : sa spec (V2.9.1) et son contenu (V2.9.2), validés ensemble. Opération dédiée et non extension d'`add-block` :
+   * `add-block` désigne une lame du manifeste, ce qui reste vrai ; une lame générée n'en est pas une. Aucune IA ici, et la bibliothèque
+   * ne l'appelle pas : c'est la porte d'un plan écrit (futur Reference).
+   */
+  z.strictObject({ type: z.literal("add-generated-block"), spec: z.unknown(), slots, id: z.string().min(1).optional(), index: z.number().int().min(0).optional(), surface: z.enum(emailSurfaces).optional() }),
   z.strictObject({ type: z.literal("remove-block"), blockId: z.string().min(1) }),
   /** `toIndex` : position finale de la lame dans la liste. */
   z.strictObject({ type: z.literal("move-block"), blockId: z.string().min(1), toIndex: z.number().int().min(0) }),
@@ -56,6 +63,7 @@ export type OperationErrorCode =
   | "slot-not-editable"
   | "surface-unsupported"
   | "image"
+  | "limit"
   | "position"
   | "integrity"
 
@@ -96,7 +104,7 @@ export function freeId(base: string, taken: ReadonlySet<string>): string {
 }
 
 /** Remplace la config ; les métadonnées suivent les lames. */
-function withConfig(document: EmailDocument, config: EmailConfig, blockMeta = document.blockMeta): EmailDocument {
+function withConfig(document: EmailDocument, config: DocumentConfig, blockMeta = document.blockMeta): EmailDocument {
   return { ...document, config, blockMeta }
 }
 
@@ -104,6 +112,38 @@ function withConfig(document: EmailDocument, config: EmailConfig, blockMeta = do
 function validated(candidate: EmailDocument): OperationResult {
   const issues = validateDocumentIntegrity(candidate)
   return issues.length === 0 ? { ok: true, value: candidate } : fail("integrity", issues[0]!.message, issues)
+}
+
+/**
+ * Contenu d'un slot d'une lame GÉNÉRÉE. La spec ne bouge jamais : seul un slot que la spec
+ * dérive se modifie, un texte ou un libellé de bouton. La DESTINATION d'un bouton est
+ * contrôlée (spec + destinations Studi) : elle ne se change pas par cette opération ; une
+ * image passe par `set-image`. Le contenu est revalidé en entier (`validated`).
+ */
+function setGeneratedSlot(document: EmailDocument, block: GeneratedEmailBlock, index: number, slotName: string, value: unknown, replaceAt: (index: number, block: DocumentBlock) => DocumentBlock[]): OperationResult {
+  const slot = generatedBlockSlots(block).find((entry) => entry.name === slotName)
+  if (!slot) return fail("unknown-slot", `Cette lame générée n'a pas de slot « ${slotName} ».`)
+  if (slot.kind === "asset:visuel") return fail("slot-not-editable", "Une image se change par l'opération set-image : seules les images de la banque contrôlée sont publiables.")
+  if ((slot.kind === "cta" || slot.kind === "cta:fleche") && (value as { destination?: unknown } | null)?.destination !== (block.slots[slotName] as { destination?: unknown } | undefined)?.destination) {
+    return fail("slot-not-editable", "La destination d'un bouton d'une lame générée ne se modifie pas : seul son libellé.")
+  }
+  const next: GeneratedEmailBlock = { ...block, slots: { ...block.slots, [slotName]: value as GeneratedEmailBlock["slots"][string] } }
+  return validated(withConfig(document, { ...document.config, blocks: replaceAt(index, next) }))
+}
+
+/** Image d'une lame GÉNÉRÉE : une image de la banque qui existe au format du slot (jamais une URL). */
+function setGeneratedImage(document: EmailDocument, block: GeneratedEmailBlock, index: number, slotName: string, imageId: string, replaceAt: (index: number, block: DocumentBlock) => DocumentBlock[]): OperationResult {
+  const slot = generatedBlockSlots(block).find((entry) => entry.name === slotName)
+  if (slot?.kind !== "asset:visuel") return fail("unknown-slot", `Cette lame générée n'a pas de slot image « ${slotName} ».`)
+  if (!isEmailBankImageId(imageId)) return fail("image", `Image inconnue de la banque : « ${imageId} ».`)
+  try {
+    emailBankDerivative(imageId, slot.format ?? "")
+  } catch (error) {
+    if (error instanceof EmailImageBankError) return fail("image", `L'image « ${imageId} » n'existe pas au format de cette lame.`)
+    throw error
+  }
+  const next: GeneratedEmailBlock = { ...block, slots: { ...block.slots, [slotName]: { imageId } } }
+  return validated(withConfig(document, { ...document.config, blocks: replaceAt(index, next) }))
 }
 
 /* -------------------------------------------------------------------------- */
@@ -121,13 +161,15 @@ export function applyDocumentOperation(document: EmailDocument, input: DocumentO
   const operation = parsed.data
   const blocks = document.config.blocks
   const find = (id: string) => blocks.findIndex((block) => block.id === id)
-  const replaceAt = (index: number, block: EmailBlock) => blocks.map((candidate, position) => (position === index ? block : candidate))
+  const replaceAt = (index: number, block: DocumentBlock) => blocks.map((candidate, position) => (position === index ? block : candidate))
 
   switch (operation.type) {
     case "set-slot": {
       const index = find(operation.blockId)
       if (index < 0) return fail("unknown-block", `Aucune lame « ${operation.blockId} » dans cet email.`)
-      const block = raw(blocks[index]!)
+      const found = blocks[index]!
+      if (isGeneratedBlock(found)) return setGeneratedSlot(document, found, index, operation.slot, operation.value, replaceAt)
+      const block = raw(found)
       const kind = entryOf(block.type)?.slots[operation.slot]
       if (!kind) return fail("unknown-slot", `La lame « ${block.type} » n'a pas de slot « ${operation.slot} ».`)
       if (kind === "asset:visuel") return fail("slot-not-editable", "Une image se change par l'opération set-image : seules les images de la banque contrôlée sont publiables.")
@@ -145,6 +187,22 @@ export function applyDocumentOperation(document: EmailDocument, input: DocumentO
       const id = operation.id ?? freeId(operation.blockType, taken)
       const block = { id, type: operation.blockType, slots: operation.slots, ...(operation.surface ? { surface: operation.surface } : {}) } as unknown as EmailBlock
       const next = [...blocks.slice(0, index), block, ...blocks.slice(index)]
+      return validated(withConfig(document, { ...document.config, blocks: next }, { ...document.blockMeta, [id]: { origin: "builder" } }))
+    }
+
+    case "add-generated-block": {
+      const taken = new Set(blocks.map((block) => block.id))
+      if (operation.id && taken.has(operation.id)) return fail("integrity", `Identifiant de lame déjà utilisé : « ${operation.id} ».`)
+      const id = operation.id ?? freeId("generated", taken)
+      const index = operation.index ?? defaultIndex(blocks, "generated")
+      if (index > blocks.length) return fail("position", `Position ${index} impossible : l'email compte ${blocks.length} lames.`)
+      const limit = validateGeneratedLimit([...blocks, { type: "generated" }])
+      if (limit) return fail("limit", limit.message)
+      // La surface neutre est l'absence de clé, comme pour une lame officielle.
+      const candidate = { id, type: "generated", spec: operation.spec, slots: operation.slots, ...(operation.surface && operation.surface !== emailSurfaceRules.neutral ? { surface: operation.surface } : {}) }
+      const checked = validateGeneratedBlock(candidate)
+      if (!checked.ok) return fail("invalid-operation", `Lame générée refusée : ${checked.issues[0]!.message}`, checked.issues.map((issue) => ({ code: "config-contract" as const, path: issue.path, message: issue.message })))
+      const next = [...blocks.slice(0, index), checked.block, ...blocks.slice(index)]
       return validated(withConfig(document, { ...document.config, blocks: next }, { ...document.blockMeta, [id]: { origin: "builder" } }))
     }
 
@@ -168,19 +226,22 @@ export function applyDocumentOperation(document: EmailDocument, input: DocumentO
     case "set-surface": {
       const index = find(operation.blockId)
       if (index < 0) return fail("unknown-block", `Aucune lame « ${operation.blockId} » dans cet email.`)
-      const block = raw(blocks[index]!)
-      if (entryOf(block.type)?.surfaceMode !== "configurable") return fail("surface-unsupported", `La lame « ${block.type} » garde ses couleurs : elle n'accepte pas de surface.`)
+      const found = blocks[index]!
+      const block = raw(found as EmailBlock)
+      if (!isGeneratedBlock(found) && entryOf(block.type)?.surfaceMode !== "configurable") return fail("surface-unsupported", `La lame « ${block.type} » garde ses couleurs : elle n'accepte pas de surface.`)
       const { surface: _previous, ...withoutSurface } = block
       void _previous
       // La surface neutre est l'absence de clé : une seule écriture canonique.
-      const next = (operation.surface === emailSurfaceRules.neutral ? withoutSurface : { ...withoutSurface, surface: operation.surface }) as unknown as EmailBlock
+      const next = (operation.surface === emailSurfaceRules.neutral ? withoutSurface : { ...withoutSurface, surface: operation.surface }) as unknown as DocumentBlock
       return validated(withConfig(document, { ...document.config, blocks: replaceAt(index, next) }))
     }
 
     case "set-image": {
       const index = find(operation.blockId)
       if (index < 0) return fail("unknown-block", `Aucune lame « ${operation.blockId} » dans cet email.`)
-      const block = raw(blocks[index]!)
+      const found = blocks[index]!
+      if (isGeneratedBlock(found)) return setGeneratedImage(document, found, index, operation.slot, operation.imageId, replaceAt)
+      const block = raw(found)
       if (entryOf(block.type)?.slots[operation.slot] !== "asset:visuel") return fail("unknown-slot", `La lame « ${block.type} » n'a pas de slot image « ${operation.slot} ».`)
       if (!isEmailBankImageId(operation.imageId)) return fail("image", `Image inconnue de la banque : « ${operation.imageId} ».`)
       let resolved

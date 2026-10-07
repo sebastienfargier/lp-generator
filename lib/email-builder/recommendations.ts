@@ -26,11 +26,12 @@
  */
 import { exportLinkHosts } from "../email/export-html"
 import { validatePromotionConfig } from "../email/promotion-resolver"
-import { classifyEmailRecipeDiagnostics, describeEmailRecipeConfig, lintEmailRecipeContent, validateEmailRecipeConfig } from "../email/recipe-validation"
+import { classifyEmailRecipeDiagnostics, describeEmailRecipeConfig, lintEmailRecipeContent, lintEmailTexts, validateEmailRecipeConfig } from "../email/recipe-validation"
 import { emailConfigPolicyIssues, type EmailConfigPolicyRule } from "../email/schemas"
 import { emailHrefPlaceholders } from "../email/system"
 import type { EmailBlock } from "../email/types"
 import { currentEmailRegistry, type EmailDocument } from "./document"
+import { isGeneratedBlock, officialConfigOf } from "./generated-block"
 
 export type RecommendationLevel = "info" | "warning" | "alert"
 
@@ -79,9 +80,18 @@ type RawSlots = Record<string, Record<string, unknown>>
 export function getDocumentRecommendations(document: EmailDocument): DocumentRecommendation[] {
   const found: DocumentRecommendation[] = []
   const { config, facts, provenance } = document
+  // Les validateurs de recette, de promotion et de claims sont ceux du contrat officiel : ils lisent les lames du manifeste. Les règles de produit
+  // (footer, zones colorées) et la terminologie lisent TOUTES les lames, générées comprises.
+  const official = officialConfigOf(config)
 
   // 1. Terminologie de marque : aucune règle ne bloque ici, même approuvée.
-  const policy = classifyEmailRecipeDiagnostics(lintEmailRecipeContent(config))
+  const generatedTexts = config.blocks.filter(isGeneratedBlock).flatMap((block) =>
+    Object.entries(block.slots).flatMap(([slot, value]) => {
+      const path = `blocks.${block.id}.slots.${slot}`
+      return "text" in value ? [{ path, text: value.text }] : "label" in value ? [{ path: `${path}.label`, text: value.label }] : []
+    })
+  )
+  const policy = classifyEmailRecipeDiagnostics([...lintEmailRecipeContent(official), ...lintEmailTexts(generatedTexts)])
   const brand = (level: RecommendationLevel) => (diagnostic: (typeof policy)["advisory"][number]) =>
     found.push({
       code: `brand-${diagnostic.ruleId}`,
@@ -103,19 +113,19 @@ export function getDocumentRecommendations(document: EmailDocument): DocumentRec
 
   // 3. Conformité à la recette d'origine : des conseils, jamais des refus.
   if (provenance.recipe === "promotion" && facts.promotion) {
-    for (const issue of validatePromotionConfig(config, { campaignName: config.name, subject: config.subject, promotion: facts.promotion })) {
+    for (const issue of validatePromotionConfig(official, { campaignName: config.name, subject: config.subject, promotion: facts.promotion })) {
       const level: RecommendationLevel = promotionFactCodes.has(issue.code) ? "alert" : issue.code.startsWith("copy-") ? "warning" : "info"
       found.push({ code: `promotion-${issue.code}`, level, message: issue.message, target: target(document, issue.path) })
     }
   } else if (provenance.recipe && provenance.recipe !== "promotion") {
-    for (const issue of validateEmailRecipeConfig(provenance.recipe, config)) {
+    for (const issue of validateEmailRecipeConfig(provenance.recipe, official)) {
       found.push({ code: `recipe-${issue.code}`, level: recipeFactCodes.has(issue.code) ? "alert" : "info", message: issue.message, target: target(document, issue.path) })
     }
   }
 
   // 4. Claims : ce que l'email affirme face aux claims de référence du document.
   if (facts.claimIds) {
-    const present = describeEmailRecipeConfig(config).claimIds as string[]
+    const present = describeEmailRecipeConfig(official).claimIds as string[]
     for (const id of present.filter((claim) => !facts.claimIds!.includes(claim))) {
       found.push({ code: "claim-not-in-facts", level: "warning", message: `La claim « ${id} » figure dans l'email mais pas dans les faits de référence du document.`, target: { path: "facts.claimIds" } })
     }
@@ -125,7 +135,7 @@ export function getDocumentRecommendations(document: EmailDocument): DocumentRec
   }
 
   // 5. Liens : ce que l'export refuserait ou laisserait à confirmer.
-  for (const block of config.blocks as EmailBlock[]) {
+  for (const block of official.blocks as EmailBlock[]) {
     for (const [name, slot] of Object.entries((block as unknown as { slots: RawSlots }).slots)) {
       const href = slot.href
       if (typeof href !== "string") continue

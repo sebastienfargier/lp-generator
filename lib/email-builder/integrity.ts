@@ -29,8 +29,9 @@ import { z } from "zod"
 import { emailBankImageIdFromSrc } from "../email/image-bank"
 import { safeParseEmailConfigBuilder } from "../email/schemas"
 import { EmailDocumentSchema, type EmailDocument } from "./document"
+import { isGeneratedBlock, validateGeneratedBlock, validateGeneratedLimit } from "./generated-block"
 
-export type DocumentIssueCode = "document-structure" | "config-contract" | "block-meta" | "missing-facts" | "unknown-asset"
+export type DocumentIssueCode = "document-structure" | "config-contract" | "block-meta" | "missing-facts" | "unknown-asset" | "generated-block" | "generated-limit"
 
 export type DocumentIssue = { code: DocumentIssueCode; path: string; message: string }
 
@@ -45,14 +46,47 @@ export function validateDocumentIntegrity(input: unknown): DocumentIssue[] {
     return structure.error.issues.map((issue) => ({ code: "document-structure", path: issue.path.join(".") || "document", message: issue.message }))
   }
   const document = structure.data
-  const config = safeParseEmailConfigBuilder(document.config)
+  const rawBlocks = (document.config as { blocks?: unknown }).blocks
+  const isGenerated = (block: unknown) => typeof block === "object" && block !== null && isGeneratedBlock(block as { type: string })
+  // Les lames générées se valident par leur propre contrat (spec + contenu) ; les officielles, par le contrat EmailConfig, inchangé.
+  // Les positions d'erreur sont celles du document complet.
+  const all: unknown[] = Array.isArray(rawBlocks) ? rawBlocks : []
+  const positions = all.flatMap((block, position) => (isGenerated(block) ? [] : [position]))
+  const official = Array.isArray(rawBlocks) ? { ...(document.config as object), blocks: positions.map((position) => all[position]) } : document.config
+  const config = safeParseEmailConfigBuilder(official)
   if (!config.success) {
-    return config.error.issues.map((issue) => ({ code: "config-contract", path: ["config", ...issue.path].join("."), message: issue.message }))
+    return config.error.issues.map((issue) => {
+      const path = issue.path.map((part, at) => (at === 1 && typeof part === "number" ? (positions[part] ?? part) : part))
+      return { code: "config-contract" as const, path: ["config", ...path].join("."), message: issue.message }
+    })
   }
+
+  const generated: DocumentIssue[] = []
+  const generatedIds: string[] = []
+  all.forEach((block, position) => {
+    if (!isGenerated(block)) return
+    const checked = validateGeneratedBlock(block)
+    if (!checked.ok) {
+      for (const issue of checked.issues) generated.push({ code: "generated-block", path: `config.blocks.${position}.${issue.path}`, message: issue.message })
+      return
+    }
+    generatedIds.push(checked.block.id)
+  })
+  const limit = validateGeneratedLimit(all.filter(isGenerated) as { type: string }[])
+  if (limit) generated.push({ code: "generated-limit", path: limit.path, message: limit.message })
+  // Une seule identité par lame, officielles et générées confondues (les doublons entre officielles sont déjà refusés par leur contrat).
+  const seen = new Map<string, boolean>()
+  for (const block of all as { id?: unknown }[]) {
+    if (typeof block?.id !== "string") continue
+    const generatedBlock = isGenerated(block)
+    if (seen.has(block.id) && (generatedBlock || seen.get(block.id))) generated.push({ code: "config-contract", path: "config.blocks", message: `Identifiant de lame en double : "${block.id}".` })
+    seen.set(block.id, generatedBlock)
+  }
+  if (generated.length > 0) return generated
 
   const issues: DocumentIssue[] = []
   const blocks = config.data.blocks as unknown as RawBlock[]
-  const ids = new Set(blocks.map((block) => block.id))
+  const ids = new Set([...blocks.map((block) => block.id), ...generatedIds])
   for (const id of ids) {
     if (!document.blockMeta[id]) issues.push({ code: "block-meta", path: `blockMeta.${id}`, message: `Aucune métadonnée pour la lame « ${id} ».` })
   }

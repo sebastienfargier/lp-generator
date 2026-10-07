@@ -204,14 +204,16 @@ describe("Builder — édition directe du contenu (V2.3)", () => {
   test("l'élément a priorité sur la lame : ses contrôles sont au-dessus ; la barre de lame n'apparaît que pour une LAME sélectionnée", () => {
     assert.match(canvas, /selection\.kind === "block" && selection\.blockId === zone\.id/)
     assert.match(canvas, /absolute z-10 outline-offset-2/)
-    assert.match(canvas, /selected && \(\s*<div className="absolute top-2 right-2 z-30">/)
+    assert.match(canvas, /selected && \(\s*<div className="absolute top-2 right-2 z-30[^"]*">/)
     assert.match(canvas, /tabIndex=\{blockSelected \? 0 : -1\}/)
   })
 
   test("images : « Remplacer » ouvre la banque Studi existante ; ni upload, ni URL libre, ni seconde banque", () => {
     assert.match(canvas, /Remplacer/)
-    assert.match(picker, /emailBankImageBlocks/)
-    assert.match(picker, /resolveEmailBankImage/)
+    // Le panneau ne connaît ni la lame ni son type : il reçoit les images compatibles (`blockImageChoices`, par lame ou par format).
+    assert.match(picker, /choices/)
+    assert.ok(!/emailBankImageBlocks|EmailBlockType/.test(picker))
+    assert.match(readFileSync(join(process.cwd(), "lib/email-builder/block-entry.ts"), "utf8"), /emailBankImageBlocks[\s\S]*resolveEmailBankImage/)
     assert.ok(!/type="file"|FileReader|drop|upload|new Image|https?:\/\//i.test(picker.replace(/\/\/.*$/gm, "")))
     assert.match(workspace, /type: "set-image"/)
     assert.match(workspace, /type: "open-images"/)
@@ -220,7 +222,7 @@ describe("Builder — édition directe du contenu (V2.3)", () => {
   test("accessibilité : chaque contenu éditable est un bouton nommé, avec focus visible ; actions image au clavier", () => {
     assert.match(canvas, /aria-label=\{`\$\{editor === "image" \? "Image"/)
     assert.match(canvas, /focus-visible:outline-2/)
-    assert.match(code("components/email-builder/image-picker-panel.tsx"), /aria-label=\{`\$\{emailBank\[id\]\.alt\}/)
+    assert.match(code("components/email-builder/image-picker-panel.tsx"), /aria-label=\{`\$\{alt\}/)
     assert.match(editor, /aria-label=\{label\}/)
   })
 

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import type { BuilderLame } from "@/lib/email-builder/catalog"
 import type { BuilderState } from "@/lib/email-builder/builder-state"
 import { builderCanRedo, builderCanUndo, builderDocument, builderHasWork, builderIsEmpty, builderReadOnly, builderReducer, builderViewing, createBuilderState, hasChangesSinceVersion, shownDocument } from "@/lib/email-builder/builder-state"
+import { blockImageChoices, blockImageId } from "@/lib/email-builder/block-entry"
 import { statusLabels, versionLabel } from "@/lib/email-builder/versions"
 import { isEmptyDocument, type EmailDocument } from "@/lib/email-builder/document"
 import { toApiHistory } from "@/lib/email-builder/assistant-chat"
@@ -173,8 +174,8 @@ export function BuilderWorkspace({ initialDocument, initialMessage, lames, onRes
         )}
         {panel?.kind === "images" && imageBlock && (
           <ImagePickerPanel
-            blockType={imageBlock.type}
-            currentSrc={(imageBlock as unknown as { slots: Record<string, { src?: string }> }).slots[panel.slot]?.src}
+            choices={blockImageChoices(imageBlock, panel.slot)}
+            currentId={blockImageId(imageBlock, panel.slot)}
             onPick={(imageId) => dispatch({ type: "operation", operation: { type: "set-image", blockId: panel.blockId, slot: panel.slot, imageId } })}
             onClose={() => dispatch({ type: "close-panel" })}
           />

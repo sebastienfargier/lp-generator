@@ -21,13 +21,14 @@
  *
  * Domaine Email Builder uniquement : aucun import depuis `lib/landing`.
  */
-import { emailBank, emailBankImageBlocks, emailBankImageIdFromSrc, emailBankImageIds } from "../email/image-bank"
-import { emailBlockManifest } from "../email/manifest"
+import { emailBank, emailBankImageBlocks, emailBankImageIds } from "../email/image-bank"
 import { formatPromotionDate, promotionDeadlineLabel, promotionScopeSentence, promotionValueSlot } from "../email/promotion-facts"
 import type { EmailBlockType } from "../email/types"
+import { blockImageId, blockSlotEditor, blockSlotNames, blockSlotProtection } from "./block-entry"
 import type { EmailDocument } from "./document"
-import { normalizeTextDraft, slotEditor } from "./inline-edit"
-import { isControlledSlotName } from "./slot-roles"
+import { generatedBlockLabel } from "./block-entry"
+import { isGeneratedBlock, type DocumentBlock } from "./generated-block"
+import { normalizeTextDraft } from "./inline-edit"
 import { applyDocumentOperations, type DocumentOperation } from "./operations"
 import { getDocumentRecommendations } from "./recommendations"
 import type { CompositionStructure } from "./composition"
@@ -40,7 +41,8 @@ export type AssistantField = {
   target: string
   blockId: string
   slot: string
-  blockType: EmailBlockType
+  /** Le type d'une lame officielle, ou `generated`. */
+  blockType: EmailBlockType | "generated"
   kind: AssistantFieldKind
   /** Texte actuel (libellé pour un bouton, description pour une image). */
   current: string
@@ -72,47 +74,31 @@ export function protectedFragments(document: EmailDocument): string[] {
   return [promotionValueSlot(facts), promotionScopeSentence(facts), promotionDeadlineLabel(facts), formatPromotionDate(facts.endDate), ...(facts.code ? [facts.code] : [])].map(plain)
 }
 
-export type SlotProtection = "valeur de référence" | "mention légale" | "système"
+export { slotProtection, type SlotProtection } from "./slot-roles"
 
-/**
- * Le RÔLE d'un slot décide s'il est contrôlé, jamais sa valeur actuelle : une
- * valeur modifiée à la main reste contrôlée, un texte libre égal par hasard à un
- * fait reste éditable. Source : le manifest (famille de la lame, type du slot) et
- * le vocabulaire de slots du domaine pour les valeurs de référence (`valeur-cle`,
- * `code-promo-N`, que le resolver et la validation des promotions nomment ainsi).
- * `undefined` : slot éditorial, que l'assistant peut viser s'il porte du texte ou
- * une image.
- */
-export function slotProtection(blockType: EmailBlockType, slot: string): SlotProtection | undefined {
-  const { family, slots } = emailBlockManifest[blockType] as { family: string; slots: Record<string, string> }
-  if (slots[slot] === "disclaimer") return "mention légale"
-  if (isControlledSlotName(slot)) return "valeur de référence"
-  // Les en-têtes et pieds de page (date de fin, liens de navigation, désabonnement) appartiennent au système.
-  if (family === "Header" || family === "Footer") return "système"
-  // Un lien texte (« Voir le Parcours Découverte ») est un lien système, pas du contenu à réécrire : seuls les boutons.
-  if (slots[slot] === "lien") return "système"
-  return undefined
-}
-
-/** Les champs que l'assistant peut viser, dans l'ordre du document. */
+/** Les champs que l'assistant peut viser, dans l'ordre du document. Une lame générée expose ses textes, libellés de bouton et images ; jamais sa structure. */
 export function assistantFields(document: EmailDocument): AssistantField[] {
   const fragments = protectedFragments(document)
   const fields: AssistantField[] = []
-  for (const block of blocksOf(document)) {
-    for (const [slot, value] of Object.entries(block.slots)) {
-      if (slotProtection(block.type, slot)) continue
-      const editor = slotEditor(block.type, slot)
+  for (const block of document.config.blocks as DocumentBlock[]) {
+    const values = block.slots as unknown as Record<string, Record<string, string>>
+    for (const slot of isGeneratedBlock(block) ? blockSlotNames(block) : Object.keys(values)) {
+      if (blockSlotProtection(block, slot)) continue
+      const editor = blockSlotEditor(block, slot)
       if (!editor) continue
+      const value = values[slot] ?? {}
       const base = { blockId: block.id, slot, blockType: block.type }
       if (editor === "image") {
-        fields.push({ ...base, target: `${block.id}:${slot}`, kind: "image", current: value.alt ?? "", mustKeep: [] })
+        const id = blockImageId(block, slot)
+        fields.push({ ...base, target: `${block.id}:${slot}`, kind: "image", current: isGeneratedBlock(block) ? (id ? emailBank[id].alt : "") : (value.alt ?? ""), mustKeep: [] })
         continue
       }
-      const current = (editor === "cta" ? value.label : value.text) ?? ""
+      const isButton = editor === "cta" || editor === "label"
+      const current = (isButton ? value.label : value.text) ?? ""
       fields.push({
         ...base,
-        target: editor === "cta" ? `${block.id}:${slot}:label` : `${block.id}:${slot}`,
-        kind: editor === "cta" ? "bouton" : editor === "short" ? "titre" : "paragraphe",
+        target: isButton ? `${block.id}:${slot}:label` : `${block.id}:${slot}`,
+        kind: isButton ? "bouton" : editor === "short" ? "titre" : "paragraphe",
         current,
         // Une valeur de référence DANS un texte éditorial s'y garde telle quelle (mustKeep) ; elle ne le rend pas intouchable.
         mustKeep: fragments.filter((fragment) => plain(current).includes(fragment)),
@@ -125,7 +111,10 @@ export function assistantFields(document: EmailDocument): AssistantField[] {
 /** Images de la banque qui existent au format de cette lame. */
 export const compatibleImages = (blockType: EmailBlockType) => emailBankImageIds.filter((id) => (emailBankImageBlocks(id) as readonly string[]).includes(blockType)).map((id) => ({ id, alt: emailBank[id].alt }))
 
-export const currentImageId = (document: EmailDocument, blockId: string, slot: string) => emailBankImageIdFromSrc(blocksOf(document).find((block) => block.id === blockId)?.slots[slot]?.src ?? "")
+export const currentImageId = (document: EmailDocument, blockId: string, slot: string) => {
+  const block = (document.config.blocks as DocumentBlock[]).find((candidate) => candidate.id === blockId)
+  return block ? blockImageId(block, slot) : undefined
+}
 
 export type ProposalOperations = { ok: true; operations: DocumentOperation[] } | { ok: false; message: string }
 
@@ -151,8 +140,11 @@ export function proposalToOperations(document: EmailDocument, changes: readonly 
     const value = normalizeTextDraft(change.value)
     if (value === "") return { ok: false, message: "Un texte proposé est vide." }
     if (field.kind === "bouton") {
-      const href = blocksOf(document).find((block) => block.id === field.blockId)!.slots[field.slot]!.href
-      operations.push({ type: "set-slot", blockId: field.blockId, slot: field.slot, value: { label: value, href } })
+      const block = (document.config.blocks as DocumentBlock[]).find((candidate) => candidate.id === field.blockId)!
+      const current = (block.slots as unknown as Record<string, Record<string, string>>)[field.slot]!
+      // Le libellé change, la destination reste celle de la lame (son `href` pour une lame officielle, sa destination contrôlée pour une générée).
+      const keep = isGeneratedBlock(block) ? { destination: current.destination } : { href: current.href }
+      operations.push({ type: "set-slot", blockId: field.blockId, slot: field.slot, value: { label: value, ...keep } })
     } else {
       operations.push({ type: "set-slot", blockId: field.blockId, slot: field.slot, value: { text: value } })
     }
@@ -242,6 +234,8 @@ export function describeProposal(document: EmailDocument, changes: readonly Prop
     const field = fields.get(change.target)
     if (!field) return []
     const after = field.kind === "image" ? (emailBank[change.value as keyof typeof emailBank]?.alt ?? change.value) : normalizeTextDraft(change.value)
-    return [{ target: change.target, blockName: blockName(field.blockType), label: kindLabels[field.kind], before: field.current, after }]
+    const block = (document.config.blocks as DocumentBlock[]).find((candidate) => candidate.id === field.blockId)
+    const name = block && isGeneratedBlock(block) ? generatedBlockLabel(block).name : blockName(field.blockType as EmailBlockType)
+    return [{ target: change.target, blockName: name, label: kindLabels[field.kind], before: field.current, after }]
   })
 }

@@ -332,7 +332,7 @@ const disclaimerTypes: ReadonlySet<string> = new Set(
  */
 type RuleIssue = { rule: EmailConfigPolicyRule | "duplicate-id"; path: (string | number)[]; message: string }
 
-function shellIssues(config: { blocks: { type: string }[] }): RuleIssue[] {
+function shellIssues(config: { blocks: readonly { type: string }[] }): RuleIssue[] {
   const issues: RuleIssue[] = []
   // Exactement un footer, en dernière position (instructions-projet §5-6).
   const footers = config.blocks.flatMap((block, index) =>
@@ -385,7 +385,7 @@ function idIssues(config: { blocks: { id: string }[] }): RuleIssue[] {
   return issues
 }
 
-function colorIssues(config: { blocks: { id: string }[] }): RuleIssue[] {
+function colorIssues(config: { blocks: readonly { id: string }[] }): RuleIssue[] {
   const issues: RuleIssue[] = []
   // Surfaces configurées : jamais deux lames colorées à la suite. Les
   // couleurs intrinsèques des templates ne comptent pas.
@@ -459,7 +459,7 @@ export type EmailConfigPolicyIssue = { rule: EmailConfigPolicyRule; path: (strin
  * position, mentions légales avant le footer, pas de zones colorées
  * consécutives. Informatif : ne bloque rien, ne modifie rien.
  */
-export function emailConfigPolicyIssues(config: EmailConfig): EmailConfigPolicyIssue[] {
+export function emailConfigPolicyIssues(config: { blocks: readonly { id: string; type: string }[] }): EmailConfigPolicyIssue[] {
   return [...shellIssues(config), ...colorIssues(config)] as EmailConfigPolicyIssue[]
 }
 

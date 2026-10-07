@@ -35,6 +35,10 @@ import { isEmailBankImageId } from "../email/image-bank"
 import { emailBlockManifest } from "../email/manifest"
 import type { EmailBlockType } from "../email/types"
 import type { EmailDocument } from "./document"
+import { generatedBlockLabel } from "./block-entry"
+import { countGeneratedBlocks, isGeneratedBlock, validateGeneratedBlock, type DocumentBlock } from "./generated-block"
+import { maxGeneratedBlocksPerEmail } from "./generated/tokens"
+import type { EmailSurface } from "../email/surfaces"
 import {
   assistantFields,
   blocksOf,
@@ -73,6 +77,14 @@ export type RemoveAction = { blockId: string }
 
 export type CompositionStructure = { add: AddAction[]; move: MoveAction[]; remove: RemoveAction[] }
 export type CompositionPlan = CompositionStructure & { content: ProposalChange[] }
+
+/**
+ * Ajout d'une lame GÉNÉRÉE : un chemin du DOMAINE, écrit à la main ou produit plus tard par la création depuis une référence.
+ * Il n'est PAS dans `CompositionPlan` : ce type est le contrat de l'assistant (son schéma de sortie structuré) et reste officiel-only ;
+ * le modèle ne peut ni créer ni décrire une lame générée. `validateCompositionPlan` accepte ce complément à part.
+ */
+export type GeneratedAddAction = { ref: string; spec: unknown; slots: Record<string, unknown>; surface?: EmailSurface; placement: Placement }
+export type DomainCompositionPlan = CompositionPlan & { addGenerated?: readonly GeneratedAddAction[] }
 
 export const emptyStructure = (): CompositionStructure => ({ add: [], move: [], remove: [] })
 
@@ -158,10 +170,11 @@ function indexFor(order: readonly string[], types: ReadonlyMap<string, string>, 
  * document résultat : toutes les actions s'appliquent, ou aucune (un échec ne
  * laisse rien). Le catalogue dit quelles lames sont ajoutables.
  */
-export function validateCompositionPlan(document: EmailDocument, plan: CompositionPlan, catalog: CompositionCatalog, options: { limits?: Partial<CompositionLimits> } = {}): CompositionCheck {
+export function validateCompositionPlan(document: EmailDocument, plan: DomainCompositionPlan, catalog: CompositionCatalog, options: { limits?: Partial<CompositionLimits> } = {}): CompositionCheck {
   const limits = { ...compositionLimits, ...options.limits }
   const { add, move, remove, content } = plan
-  const total = add.length + move.length + remove.length + content.length
+  const addGenerated = plan.addGenerated ?? []
+  const total = add.length + addGenerated.length + move.length + remove.length + content.length
   if (total === 0) return invalid("La proposition ne contient aucun changement.")
   if (add.length > limits.add) return invalid(`Une proposition ajoute ${limits.add} lames au plus.`)
   if (move.length > limits.move) return invalid(`Une proposition déplace ${limits.move} lames au plus.`)
@@ -191,7 +204,7 @@ export function validateCompositionPlan(document: EmailDocument, plan: Compositi
 
   // Ajouts : des types officiels ajoutables, des refs neuves, des champs éditoriaux.
   const refs = new Map<string, string>()
-  const declared = new Set(add.map((action) => action.ref))
+  const declared = new Set([...add.map((action) => action.ref), ...addGenerated.map((action) => action.ref)])
   for (const action of add) {
     if (!refPattern.test(action.ref)) return invalid(`Référence « ${action.ref} » invalide : un mot court en minuscules (ex. new-1).`)
     if (existing.has(action.ref)) return invalid(`La référence « ${action.ref} » est déjà un identifiant de lame.`)
@@ -217,10 +230,21 @@ export function validateCompositionPlan(document: EmailDocument, plan: Compositi
     }
     refs.set(action.ref, action.blockType)
   }
+  // Ajouts de lames GÉNÉRÉES : spec et contenu validés, refs neuves, plafond par email.
+  const generatedRefs = new Set<string>()
+  for (const action of addGenerated) {
+    if (!refPattern.test(action.ref)) return invalid(`Référence « ${action.ref} » invalide : un mot court en minuscules (ex. new-1).`)
+    if (existing.has(action.ref) || refs.has(action.ref) || generatedRefs.has(action.ref)) return invalid(`La référence « ${action.ref} » est déjà utilisée.`)
+    generatedRefs.add(action.ref)
+    const checked = validateGeneratedBlock({ id: "generated", type: "generated", spec: action.spec, slots: action.slots, ...(action.surface ? { surface: action.surface } : {}) })
+    if (!checked.ok) return invalid(`Lame générée « ${action.ref} » refusée : ${checked.issues[0]!.message}`)
+  }
+  if (countGeneratedBlocks(blocks) + addGenerated.length > maxGeneratedBlocksPerEmail) return invalid(`Un email contient ${maxGeneratedBlocksPerEmail} lames générées au plus.`)
   for (const [ref, type] of refs) types.set(ref, type)
+  for (const ref of generatedRefs) types.set(ref, "generated")
 
   // Les places ne visent jamais une lame supprimée ni une référence inconnue.
-  for (const placement of [...add.map((action) => action.placement), ...move.map((action) => action.placement)]) {
+  for (const placement of [...add.map((action) => action.placement), ...addGenerated.map((action) => action.placement), ...move.map((action) => action.placement)]) {
     if (removed.has(placement.anchor)) return invalid(`La lame « ${placement.anchor} » est supprimée : on ne peut pas s'y référer.`)
     if (placement.anchor !== "" && !existing.has(placement.anchor) && !declared.has(placement.anchor)) return invalid(`La lame « ${placement.anchor} » n'existe pas dans cet email.`)
   }
@@ -259,6 +283,16 @@ export function validateCompositionPlan(document: EmailDocument, plan: Compositi
     types.set(id, action.blockType)
     order.splice(resolved.index, 0, id)
     operations.push({ type: "add-block", blockType: action.blockType, slots: structuredClone(catalog[action.blockType]!.starter) as Record<string, unknown>, id, index: resolved.index })
+  }
+  for (const action of addGenerated) {
+    const placement = { ...action.placement, anchor: ids.get(action.placement.anchor) ?? action.placement.anchor }
+    const resolved = indexFor(order, types, placement, "generated")
+    if (!resolved.ok) return invalid(resolved.message)
+    const id = freeId("generated", taken)
+    taken.add(id)
+    ids.set(action.ref, id)
+    order.splice(resolved.index, 0, id)
+    operations.push({ type: "add-generated-block", spec: action.spec, slots: structuredClone(action.slots), id, index: resolved.index, ...(action.surface ? { surface: action.surface } : {}) })
   }
   for (const action of move) {
     const rest = order.filter((id) => id !== action.blockId)
@@ -305,10 +339,12 @@ export type StructureItem = { kind: "add" | "move" | "remove"; /** « Hero offre
 
 /** La structure d'une proposition, lisible sans JSON : quelle lame, quelle action, où. */
 export function describeStructure(document: EmailDocument, structure: Partial<CompositionStructure> | undefined, catalog: CompositionCatalog, blockName: (type: EmailBlockType) => string): StructureItem[] {
-  const blocks = blocksOf(document)
+  const blocks = document.config.blocks as DocumentBlock[]
   const label = (id: string) => {
     const at = blocks.findIndex((block) => block.id === id)
-    return at < 0 ? id : `« ${blockName(blocks[at]!.type)} » (lame ${at + 1})`
+    if (at < 0) return id
+    const block = blocks[at]!
+    return `« ${isGeneratedBlock(block) ? generatedBlockLabel(block).name : blockName(block.type)} » (lame ${at + 1})`
   }
   const added = new Map((structure?.add ?? []).map((action) => [action.ref, `« ${catalog[action.blockType]?.name ?? action.blockType} » (nouvelle lame)`]))
   const named = (id: string) => added.get(id) ?? label(id)

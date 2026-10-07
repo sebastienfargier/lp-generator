@@ -22,9 +22,12 @@ import { formatPromotionDate, promotionOfferValue } from "../email/promotion-fac
 import { buildEditorialBrandContext } from "../email/recipe-brand-context"
 import type { EmailBlockType } from "../email/types"
 import { assistantHistoryLimit } from "./assistant-schema"
-import { assistantFields, blocksOf, compatibleImages, currentImageId, slotProtection, type SlotProtection } from "./assistant-proposal"
+import { assistantFields, blocksOf, currentImageId, type SlotProtection } from "./assistant-proposal"
+import { blockImageChoices, generatedBlockLabel } from "./block-entry"
 import { describeCatalog, type CompositionCatalog } from "./composition"
 import type { EmailDocument } from "./document"
+import { isGeneratedBlock, type DocumentBlock } from "./generated-block"
+import { slotProtection } from "./slot-roles"
 import { getDocumentRecommendations } from "./recommendations"
 
 export const assistantSystemPrompt = `Tu es l'assistant éditorial de Studi, intégré à un éditeur d'emails. Tu travailles avec la personne qui compose l'email, comme un collègue assis à côté d'elle : elle crée, tu affines. Tu réponds en français, de façon brève et naturelle.
@@ -42,6 +45,7 @@ Ce que tu peux écrire dans une proposition, et rien d'autre :
 - "remove" : supprimer une lame existante (son "id" exact).
 - "placement" : { where, anchor } ; where "first" (début de l'email) ou "last" (fin du corps, avant les mentions légales et le footer) avec anchor vide ; where "before" ou "after" avec anchor = l'id d'une lame existante qui reste dans l'email, ou la "ref" d'une lame ajoutée plus tôt dans la même proposition. Jamais une lame supprimée.
 Les entrées "email.blocks[].readOnly" sont du contenu réellement affiché dans l'email (valeur de l'offre, code, date, mentions légales, liens) : lis-les et tiens-en compte pour ton avis et la cohérence de tes propositions, mais ne les vise jamais. Tu ne crées pas de nouveau type de lame, tu n'écris ni HTML ni code, tu ne changes ni les liens, ni les surfaces ou couleurs, ni l'objet ou le préheader, ni le statut, ni les versions. Si on te le demande, explique en une phrase que tu ne sais pas le faire et propose ce que tu peux faire. Ne simule jamais l'action. Les lames de l'email sont dans l'ordre de "email.blocks".
+Une lame marquée "generated": true (avec son "role") est une lame de structure sur mesure : tu peux réécrire ses textes, ses libellés de bouton et ses images comme ceux de n'importe quelle lame, la déplacer ou la supprimer ; tu ne peux ni la modifier structurellement ni en créer une.
 
 Sélection et ambiguïté : "selection" (peut être null) indique la lame ou le champ que la personne a sélectionné dans l'éditeur. C'est un indice pour comprendre « cette lame », « cette section », jamais une autorisation : une demande qui désigne une lame sans la nommer et sans sélection, ou de façon ambiguë, appelle une question courte dans "message" et aucune proposition. Ne supprime ni ne déplace jamais une lame au hasard.
 
@@ -60,6 +64,8 @@ Règles de fond :
 Réponds uniquement par l'objet JSON conforme au schéma : message, summary, changes.`
 
 const blockName = (type: EmailBlockType) => emailLibraryEntries.find((entry) => entry.type === type)?.name ?? type
+/** Le nom d'une lame du document : celui de la bibliothèque, ou « Lame générée — rôle ». */
+const nameOf = (block: DocumentBlock) => (isGeneratedBlock(block) ? generatedBlockLabel(block).name : blockName(block.type))
 
 /**
  * Ce que l'assistant LIT sans pouvoir le viser : le contenu affiché des slots
@@ -71,6 +77,8 @@ const blockName = (type: EmailBlockType) => emailLibraryEntries.find((entry) => 
 function readOnlyContent(document: EmailDocument, blockId: string) {
   const block = blocksOf(document).find((entry) => entry.id === blockId)!
   const found: { slot: string; current: string; reason: SlotProtection }[] = []
+  // Une lame générée ne peut déclarer aucun slot contrôlé : rien à lire en lecture seule.
+  if ((block as { type: string }).type === "generated") return found
   for (const [slot, value] of Object.entries(block.slots)) {
     const reason = slotProtection(block.type, slot)
     if (!reason) continue
@@ -90,18 +98,19 @@ export function buildAssistantEmail(document: EmailDocument) {
     subject: document.config.subject,
     preheader: document.config.preheader,
     note: "L'objet et le préheader se lisent mais ne se modifient pas ici.",
-    blocks: document.config.blocks.map((block) => {
+    blocks: (document.config.blocks as DocumentBlock[]).map((block) => {
       const own = fields.filter((field) => field.blockId === block.id)
       const readOnly = readOnlyContent(document, block.id)
       return {
         id: block.id,
-        name: blockName(block.type),
+        name: nameOf(block),
+        ...(isGeneratedBlock(block) ? { generated: true, role: block.spec.role } : {}),
         fields: own.map((field) => ({
           target: field.target,
           kind: field.kind,
           current: field.current,
           ...(field.mustKeep.length > 0 ? { mustKeep: field.mustKeep } : {}),
-          ...(field.kind === "image" ? { candidates: compatibleImages(field.blockType), currentImage: currentImageId(document, field.blockId, field.slot) ?? null } : {}),
+          ...(field.kind === "image" ? { candidates: blockImageChoices(block, field.slot).map(({ id, alt }) => ({ id, alt })), currentImage: currentImageId(document, field.blockId, field.slot) ?? null } : {}),
         })),
         ...(readOnly.length > 0 ? { readOnly } : {}),
       }
@@ -162,9 +171,9 @@ export function normalizeHistory(history: readonly AssistantTurn[]): AssistantTu
 export type AssistantSelection = { blockId: string; slot?: string | undefined }
 
 export function describeSelection(document: EmailDocument, selection: AssistantSelection | null | undefined) {
-  const block = selection ? blocksOf(document).find((candidate) => candidate.id === selection.blockId) : undefined
+  const block = selection ? (document.config.blocks as DocumentBlock[]).find((candidate) => candidate.id === selection.blockId) : undefined
   if (!selection || !block) return null
-  return { blockId: block.id, blockName: blockName(block.type), ...(selection.slot && Object.hasOwn(block.slots, selection.slot) ? { slot: selection.slot } : {}) }
+  return { blockId: block.id, blockName: nameOf(block), ...(selection.slot && Object.hasOwn(block.slots, selection.slot) ? { slot: selection.slot } : {}) }
 }
 
 /** Messages de l'appel : la conversation, puis un dernier message PERSONNE qui porte l'email courant, le catalogue, la sélection et la demande. */

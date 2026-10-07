@@ -22,7 +22,7 @@ import { z } from "zod"
 import { emailManifestSource } from "../email/manifest"
 import { PromotionFactsSchema, type PromotionFacts } from "../email/promotion-facts"
 import { emailRecipeIds } from "../email/recipes"
-import type { EmailConfig } from "../email/types"
+import type { DocumentConfig } from "./generated-block"
 
 export const emailDocumentSchemaVersion = 1
 
@@ -82,7 +82,8 @@ export type EmailDocumentFacts = { promotion?: PromotionFacts; claimIds?: string
 
 export type EmailDocument = {
   schemaVersion: typeof emailDocumentSchemaVersion
-  config: EmailConfig
+  /** Un EmailConfig dont les lames peuvent être générées (`generated-block.ts`) ; une EmailConfig historique en est un cas particulier. */
+  config: DocumentConfig
   facts: EmailDocumentFacts
   provenance: { origin: EmailDocumentOrigin; recipe?: EmailDocumentRecipe; reference?: ReferenceProvenance }
   /** Une entrée par lame, clé = `id` de la lame. */
@@ -100,7 +101,7 @@ export type CreateEmailDocumentOptions = {
  * le résultat est exploitable. Les lames sont marquées « recipe » quand le
  * document vient d'une recette, « builder » sinon.
  */
-export function createEmailDocument(config: EmailConfig, options: CreateEmailDocumentOptions = {}): EmailDocument {
+export function createEmailDocument(config: DocumentConfig, options: CreateEmailDocumentOptions = {}): EmailDocument {
   const provenance = options.provenance ?? { origin: "manual" as const }
   const origin: EmailBlockOrigin = provenance.origin === "recipe" ? "recipe" : "builder"
   return {

@@ -27,6 +27,8 @@ export const surfaceLabels: Record<EmailSurface, string> = {
 type BlockToolbarProps = {
   /** Nom de la lame, pour les libellés accessibles. */
   name: string
+  /** Mention discrète de l'origine de la lame (« Générée »). */
+  badge?: string | undefined
   canMoveUp: boolean
   canMoveDown: boolean
   /** Surface actuelle ; `null` : la lame garde ses couleurs (aucun choix de surface). */
@@ -41,9 +43,10 @@ type BlockToolbarProps = {
  * supprimer. Chaque action est un bouton nommé, utilisable au clavier ; rien
  * n'est réservé au survol. Aucune confirmation : annuler est le filet de sécurité.
  */
-export function BlockToolbar({ name, canMoveUp, canMoveDown, surface, onMove, onSurface, onRemove }: BlockToolbarProps) {
+export function BlockToolbar({ name, badge, canMoveUp, canMoveDown, surface, onMove, onSurface, onRemove }: BlockToolbarProps) {
   return (
     <div role="toolbar" aria-label={`Actions de la lame ${name}`} className="flex items-center gap-1 rounded-full border bg-background p-1 shadow-md">
+      {badge && <span className="rounded-full bg-muted px-2 py-0.5 text-caption text-muted-foreground">{badge}</span>}
       <Button type="button" variant="ghost" size="icon-xs" aria-label="Monter la lame" title="Monter la lame" disabled={!canMoveUp} onClick={() => onMove(-1)}>
         <ChevronUpIcon aria-hidden />
       </Button>

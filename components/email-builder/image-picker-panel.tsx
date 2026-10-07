@@ -3,28 +3,16 @@
 import { XIcon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
-import { emailBank, emailBankImageBlocks, emailBankImageIdFromSrc, emailBankImageIds, emailBankPreviews, resolveEmailBankImage, type EmailBankImageId } from "@/lib/email/image-bank"
-import type { EmailBlockType } from "@/lib/email/types"
+import { emailBankPreviews, type EmailBankImageId } from "@/lib/email/image-bank"
+import type { ImageChoice } from "@/lib/email-builder/block-entry"
 
 type ImagePickerPanelProps = {
-  blockType: EmailBlockType
-  /** `src` du visuel actuel, pour marquer l'image en place. */
-  currentSrc: string | undefined
+  /** Les images de la banque qui existent au format du visuel (`blockImageChoices`) : le panneau ne connaît ni la lame ni son type. */
+  choices: readonly ImageChoice[]
+  /** Identifiant de l'image en place, pour la marquer. */
+  currentId: EmailBankImageId | undefined
   onPick: (imageId: EmailBankImageId) => void
   onClose: () => void
-}
-
-/** Images de la banque Studi qui existent au format de cette lame, avec leur aperçu local. */
-function candidates(blockType: EmailBlockType) {
-  return emailBankImageIds
-    .filter((id) => (emailBankImageBlocks(id) as readonly string[]).includes(blockType))
-    .map((id) => {
-      try {
-        return { id, preview: emailBankPreviews.get(resolveEmailBankImage(id, blockType).src) }
-      } catch {
-        return { id, preview: undefined }
-      }
-    })
 }
 
 /**
@@ -32,9 +20,8 @@ function candidates(blockType: EmailBlockType) {
  * compatibles avec la lame sont proposées. Choisir une image remplace le visuel
  * (opération `set-image`) et ferme la banque. Ni upload, ni URL, ni recadrage.
  */
-export function ImagePickerPanel({ blockType, currentSrc, onPick, onClose }: ImagePickerPanelProps) {
-  const current = currentSrc ? emailBankImageIdFromSrc(currentSrc) : undefined
-  const options = candidates(blockType)
+export function ImagePickerPanel({ choices, currentId: current, onPick, onClose }: ImagePickerPanelProps) {
+  const options = choices.map(({ id, alt, src }) => ({ id, alt, preview: emailBankPreviews.get(src) }))
 
   return (
     <aside aria-label="Banque d'images" className="absolute inset-y-0 left-0 z-30 flex w-[min(20rem,100%)] shrink-0 flex-col border-r bg-background shadow-xl lg:static lg:z-auto lg:shadow-none">
@@ -51,11 +38,11 @@ export function ImagePickerPanel({ blockType, currentSrc, onPick, onClose }: Ima
         <p className="p-4 text-body text-muted-foreground">Aucune image de la banque n&apos;est disponible pour cette lame.</p>
       ) : (
         <ul role="list" className="grid min-h-0 flex-1 grid-cols-2 content-start gap-3 overflow-y-auto p-4">
-          {options.map(({ id, preview }) => (
+          {options.map(({ id, alt, preview }) => (
             <li key={id}>
               <button
                 type="button"
-                aria-label={`${emailBank[id].alt}${id === current ? " (image actuelle)" : ""}`}
+                aria-label={`${alt}${id === current ? " (image actuelle)" : ""}`}
                 aria-pressed={id === current}
                 onClick={() => onPick(id)}
                 className={`flex w-full flex-col gap-1.5 rounded-lg border bg-card p-1.5 text-left outline-none transition-colors hover:bg-muted/60 focus-visible:ring-3 focus-visible:ring-ring/50 ${id === current ? "border-brand-green ring-2 ring-brand-green" : ""}`}
@@ -67,7 +54,7 @@ export function ImagePickerPanel({ blockType, currentSrc, onPick, onClose }: Ima
                 ) : (
                   <span className="aspect-[4/3] w-full rounded-md bg-muted" />
                 )}
-                <span className="line-clamp-2 px-1 pb-1 text-caption text-muted-foreground">{id === current ? "Image actuelle" : emailBank[id].alt}</span>
+                <span className="line-clamp-2 px-1 pb-1 text-caption text-muted-foreground">{id === current ? "Image actuelle" : alt}</span>
               </button>
             </li>
           ))}

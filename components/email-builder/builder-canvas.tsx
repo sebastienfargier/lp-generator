@@ -5,7 +5,10 @@ import { PlusIcon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import type { EmailDocument } from "@/lib/email-builder/document"
-import { initialDraft, slotEditor, type SlotDraft, type SlotEditor } from "@/lib/email-builder/inline-edit"
+import { emailBank } from "@/lib/email/image-bank"
+import { blockCompatibility, blockImageId, blockSlotEditor, blockSurfaceMode, generatedBlockLabel, type BlockSlotEditor } from "@/lib/email-builder/block-entry"
+import { isGeneratedBlock } from "@/lib/email-builder/generated-block"
+import { initialDraft, type SlotDraft } from "@/lib/email-builder/inline-edit"
 import type { Selection } from "@/lib/email-builder/builder-state"
 import type { EmailSurface } from "@/lib/email/surfaces"
 
@@ -138,7 +141,7 @@ export function BuilderCanvas({ html, document: emailDocument, lames, selection,
   const slotValue = (blockId: string, slot: string) => (byId.get(blockId)?.block as unknown as { slots: Record<string, unknown> } | undefined)?.slots[slot]
 
   /** Un clic sur un contenu : l'éditeur de son slot, relevé dans la lame du document (jamais lu dans le HTML). */
-  function activate(zone: BlockZone, slot: SlotZone, editor: SlotEditor) {
+  function activate(zone: BlockZone, slot: SlotZone, editor: BlockSlotEditor) {
     if (editor === "image") return onSelectElement(zone.id, slot.name)
     const element = elementsRef.current.get(slotKey(zone.id, slot.name))
     if (element) setSession({ key: slotKey(zone.id, slot.name), style: captureFieldStyle(element) })
@@ -149,7 +152,7 @@ export function BuilderCanvas({ html, document: emailDocument, lames, selection,
   const editingZone = editing ? zones.find((zone) => zone.id === editing.blockId) : undefined
   const editingSlot = editingZone?.slots.find((slot) => slot.name === editing?.slot)
   const editingBlock = editing ? byId.get(editing.blockId)?.block : undefined
-  const editingEditor = editing && editingBlock ? slotEditor(editingBlock.type, editing.slot) : null
+  const editingEditor = editing && editingBlock ? blockSlotEditor(editingBlock, editing.slot) : null
 
   return (
     <div className="relative mx-auto shrink-0" style={{ width, height: layout.height }}>
@@ -173,11 +176,13 @@ export function BuilderCanvas({ html, document: emailDocument, lames, selection,
         {/* Niveau LAME : fond de lame, nom au survol, actions de structure. */}
         {zones.map((zone, order) => {
           const { block, index } = byId.get(zone.id)!
-          const info = lames[block.type]
-          const name = info?.name ?? block.type
+          const generated = isGeneratedBlock(block)
+          const name = generated ? generatedBlockLabel(block).name : (lames[block.type]?.name ?? block.type)
           const selected = selection.kind === "block" && selection.blockId === zone.id
-          const provisional = emailDocument.blockMeta[block.id]?.origin === "builder"
-          const surface = info?.surfaceMode === "configurable" ? (((block as unknown as { surface?: EmailSurface }).surface ?? "page") as EmailSurface) : null
+          // « Contenu provisoire » : le contenu d'exemple d'une lame ajoutée depuis la bibliothèque. Le contenu d'une lame générée n'est pas un exemple.
+          const provisional = !generated && emailDocument.blockMeta[block.id]?.origin === "builder"
+          const surface = blockSurfaceMode(block) === "configurable" ? (((block as unknown as { surface?: EmailSurface }).surface ?? "page") as EmailSurface) : null
+          const degraded = generated && blockCompatibility(block) === "degraded"
           return (
             <div key={zone.id} className="group/block absolute inset-x-0" style={{ top: zone.top, height: zone.height }}>
               <button
@@ -198,9 +203,10 @@ export function BuilderCanvas({ html, document: emailDocument, lames, selection,
                 {provisional ? " · contenu provisoire" : ""}
               </span>
               {selected && (
-                <div className="absolute top-2 right-2 z-30">
+                <div className="absolute top-2 right-2 z-30 flex flex-col items-end gap-1.5">
                   <BlockToolbar
                     name={name}
+                    badge={generated ? "Générée" : undefined}
                     canMoveUp={index > 0}
                     canMoveDown={index < count - 1}
                     surface={surface}
@@ -208,6 +214,11 @@ export function BuilderCanvas({ html, document: emailDocument, lames, selection,
                     onSurface={(next) => onSurface(zone.id, next)}
                     onRemove={() => onRemove(zone.id)}
                   />
+                  {degraded && (
+                    <p role="note" className="max-w-64 rounded-md border bg-background px-2.5 py-1.5 text-caption text-muted-foreground shadow-sm">
+                      Certains effets visuels peuvent être simplifiés selon le client email.
+                    </p>
+                  )}
                 </div>
               )}
             </div>
@@ -219,17 +230,18 @@ export function BuilderCanvas({ html, document: emailDocument, lames, selection,
           const { block } = byId.get(zone.id)!
           const blockSelected = selection.kind !== "none" && selection.blockId === zone.id
           return zone.slots.flatMap((slot) => {
-            const editor = slotEditor(block.type, slot.name)
+            const editor = blockSlotEditor(block, slot.name)
             if (!editor) return []
             const value = slotValue(zone.id, slot.name) as { text?: string; label?: string; alt?: string } | undefined
-            const content = value?.text ?? value?.label ?? value?.alt ?? slot.name
+            const generatedImage = editor === "image" && isGeneratedBlock(block) ? blockImageId(block, slot.name) : undefined
+            const content = value?.text ?? value?.label ?? value?.alt ?? (generatedImage ? emailBank[generatedImage].alt : slot.name)
             const active = selection.kind !== "none" && selection.kind !== "block" && selection.blockId === zone.id && selection.slot === slot.name
             const isEditing = selection.kind === "editing" && active
             return [
               <button
                 key={slotKey(zone.id, slot.name)}
                 type="button"
-                aria-label={`${editor === "image" ? "Image" : editor === "cta" ? "Bouton" : "Texte"} : ${content.slice(0, 60)}`}
+                aria-label={`${editor === "image" ? "Image" : editor === "cta" || editor === "label" ? "Bouton" : "Texte"} : ${content.slice(0, 60)}`}
                 aria-pressed={active}
                 tabIndex={blockSelected ? 0 : -1}
                 onClick={() => activate(zone, slot, editor)}
@@ -251,11 +263,11 @@ export function BuilderCanvas({ html, document: emailDocument, lames, selection,
         {editing && editingSlot && editingEditor && editingEditor !== "image" && session?.key === slotKey(editing.blockId, editing.slot) && (
           <InlineEditor
             key={session.key}
-            editor={editingEditor}
+            editor={editingEditor === "label" ? "short" : editingEditor}
             rect={editingSlot}
             style={session.style}
-            initial={initialDraft(editingEditor, slotValue(editing.blockId, editing.slot))}
-            label={editingEditor === "cta" ? "Libellé du bouton" : "Texte de l'email"}
+            initial={editingEditor === "label" ? { text: (slotValue(editing.blockId, editing.slot) as { label?: string } | undefined)?.label ?? "" } : initialDraft(editingEditor, slotValue(editing.blockId, editing.slot))}
+            label={editingEditor === "cta" || editingEditor === "label" ? "Libellé du bouton" : "Texte de l'email"}
             canvasWidth={width}
             onCommit={(draft) => onCommitEdit(editing.blockId, editing.slot, draft)}
             onCancel={onCancelEdit}

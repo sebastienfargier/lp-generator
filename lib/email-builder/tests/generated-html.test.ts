@@ -427,12 +427,12 @@ describe("V2.9.2 — overlap et compatibilité dérivée", () => {
 })
 
 describe("V2.9.2 — frontières", () => {
-  test("rien n'est branché : pas de `generated` dans le contrat des lames, le document, le renderer ni les opérations", () => {
+  test("frontière (V2.9.3) : le contrat OFFICIEL des lames, le manifest et le renderer historique ne connaissent pas « generated » ; l'intégration est côté Builder", () => {
     assert.equal(Object.keys(emailBlockManifest).length, 36)
-    for (const file of ["lib/email/schemas.ts", "lib/email/types.ts", "lib/email/manifest.ts", "lib/email-builder/document.ts", "lib/email-builder/operations.ts", "lib/email-builder/composition.ts", "lib/email-builder/assistant-proposal.ts"]) {
-      assert.ok(!/generated-html|renderGeneratedBlock|type:\s*"generated"/.test(code(file)), file)
+    for (const file of ["lib/email/schemas.ts", "lib/email/types.ts", "lib/email/manifest.ts", "lib/email/renderer.ts"]) {
+      assert.ok(!/generated-html|renderGeneratedBlock|type:\s*"generated"|generated-block/i.test(code(file)), file)
     }
-    assert.ok(!/generated/i.test(code("lib/email/renderer.ts")))
+    // Les composants n'appellent jamais le compilateur : ils reçoivent le HTML rendu par le serveur.
     for (const file of readdirSync(join(root, "components/email-builder"))) assert.ok(!/generated-html|renderGeneratedBlock/.test(code(`components/email-builder/${file}`)), file)
   })
 

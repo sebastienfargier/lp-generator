@@ -25,7 +25,9 @@ import { documentFingerprint, type AssistantProposal } from "./assistant-proposa
 import { planOf, validateCompositionPlan, type CompositionCatalog } from "./composition"
 import { isEmptyDocument, type EmailDocument } from "./document"
 import { applyToHistory, canRedo, canUndo, createHistory, redo, undo, type History } from "./history"
-import { sameSlotValue, slotEditor, slotValueFromDraft, type SlotDraft } from "./inline-edit"
+import { blockSlotEditor } from "./block-entry"
+import { isGeneratedBlock } from "./generated-block"
+import { normalizeTextDraft, sameSlotValue, slotValueFromDraft, type SlotDraft } from "./inline-edit"
 import { newRecommendationNotice, describeOperationError, type BuilderNotice } from "./notices"
 import { applyDocumentOperation, type DocumentOperation } from "./operations"
 import { createVersion, sameDocumentContent, type DocumentStatus, type EmailVersion } from "./versions"
@@ -164,19 +166,24 @@ export function builderReducer(state: BuilderState, action: BuilderAction): Buil
 
     case "start-edit": {
       const block = blockOf(document, action.blockId)
-      const editor = block && slotEditor(block.type, action.slot)
+      const editor = block && blockSlotEditor(block, action.slot)
       if (!editor || editor === "image") return state
       return { ...state, panel: state.panel?.kind === "images" ? null : state.panel, selection: validSelection({ kind: "editing", blockId: action.blockId, slot: action.slot }, document) }
     }
 
     case "commit-edit": {
       const block = blockOf(document, action.blockId)
-      const editor = block && slotEditor(block.type, action.slot)
+      const editor = block && blockSlotEditor(block, action.slot)
       const back: Selection = validSelection({ kind: "element", blockId: action.blockId, slot: action.slot }, document)
       if (!block || !editor || editor === "image") return { ...state, selection: back }
-      const value = slotValueFromDraft(action.draft)
+      const current = (block as unknown as { slots: Record<string, Record<string, unknown>> }).slots[action.slot]
+      // Le libellé d'un bouton GÉNÉRÉ se modifie, sa destination reste celle de la lame : l'opération set-slot la compare et refuserait un changement.
+      const value =
+        editor === "label" && isGeneratedBlock(block) && "text" in action.draft
+          ? { label: normalizeTextDraft(action.draft.text), destination: current?.destination }
+          : slotValueFromDraft(action.draft)
       // Valeur inchangée : ni opération, ni historique, ni retour.
-      if (sameSlotValue(value, (block as unknown as { slots: Record<string, unknown> }).slots[action.slot])) return { ...state, selection: back }
+      if (editor === "label" ? (value as { label?: unknown }).label === current?.label : sameSlotValue(value, current)) return { ...state, selection: back }
       const next = operate(state, { type: "set-slot", blockId: action.blockId, slot: action.slot, value }, () => ({}))
       return { ...next, selection: back }
     }
@@ -195,10 +202,10 @@ export function builderReducer(state: BuilderState, action: BuilderAction): Buil
       const op = action.operation
       return operate(state, op, (after, before) => {
         // Une lame ajoutée est sélectionnée (on voit où elle est) et la bibliothèque se ferme ; une image remplacée referme la banque.
-        const added = op.type === "add-block" ? ids(after).find((id) => !ids(before).includes(id)) : undefined
+        const added = op.type === "add-block" || op.type === "add-generated-block" ? ids(after).find((id) => !ids(before).includes(id)) : undefined
         return {
           selection: added ? ({ kind: "block", blockId: added } as Selection) : validSelection(state.selection, after),
-          panel: op.type === "add-block" || op.type === "set-image" ? null : state.panel,
+          panel: op.type === "add-block" || op.type === "add-generated-block" || op.type === "set-image" ? null : state.panel,
         }
       })
     }
