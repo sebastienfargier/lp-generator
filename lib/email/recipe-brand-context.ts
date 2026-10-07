@@ -213,3 +213,13 @@ export function buildPromotionBrandContext(audience: string, target?: BrandAudie
   if (profile) documentIds.add("adaptation-par-cible")
   return { context, provenance: { documents: [...documentIds].map((id) => ({ documentId: id, status: provenanceOf(id).status })), claims: [] } }
 }
+
+/**
+ * Contexte Brand de l'assistant éditorial du Builder : les règles de rédaction et
+ * les formulations à fort risque (leurs alternatives sont celles que le contrôle
+ * de copie d'une promotion accepte). Pas de voix imposée : l'email garde l'adresse
+ * (tutoiement ou vouvoiement) qu'il a déjà. Même source que les générateurs R1 à R4.
+ */
+export function buildEditorialBrandContext(): { rules: readonly string[]; avoid: readonly { term: string; instead?: string }[] } {
+  return { rules: emailWritingRules.map((rule) => rule.text), avoid: riskyTerms().map(promotionUsableAvoidance) }
+}

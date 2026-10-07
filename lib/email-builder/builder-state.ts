@@ -15,6 +15,8 @@
  *
  * Domaine Email Builder uniquement : aucun import depuis `lib/landing`.
  */
+import { chatFail, chatReply, chatSend, emptyChat, findChatProposal, setProposalStatus, type AssistantChat } from "./assistant-chat"
+import { documentFingerprint, validateProposal, type AssistantProposal } from "./assistant-proposal"
 import type { EmailDocument } from "./document"
 import { applyToHistory, canRedo, canUndo, createHistory, redo, undo, type History } from "./history"
 import { sameSlotValue, slotEditor, slotValueFromDraft, type SlotDraft } from "./inline-edit"
@@ -42,6 +44,8 @@ export type BuilderState = {
   baseId: string | null
   /** Version CONSULTÉE (lecture seule) ; `null` : on travaille. */
   viewingId: string | null
+  /** La conversation avec l'assistant éditorial : en mémoire, jamais dans le document ni dans les versions. */
+  assistant: AssistantChat
   selection: Selection
   panel: Panel | null
   notice: BuilderNotice | null
@@ -67,10 +71,15 @@ export type BuilderAction =
   | { type: "view-version"; id: string }
   | { type: "exit-view" }
   | { type: "restart-from"; id: string }
+  | { type: "assistant-send"; text: string }
+  | { type: "assistant-reply"; message: string; proposal?: AssistantProposal }
+  | { type: "assistant-fail"; message: string }
+  | { type: "apply-proposal"; id: string }
+  | { type: "ignore-proposal"; id: string }
 
 const none: Selection = { kind: "none" }
 
-export const createBuilderState = (document: EmailDocument): BuilderState => ({ history: createHistory(document), status: "draft", versions: [], baseId: null, viewingId: null, selection: none, panel: null, notice: null, noticeKey: 0 })
+export const createBuilderState = (document: EmailDocument): BuilderState => ({ history: createHistory(document), status: "draft", versions: [], baseId: null, viewingId: null, assistant: emptyChat, selection: none, panel: null, notice: null, noticeKey: 0 })
 
 export const builderDocument = (state: BuilderState) => state.history.present
 export const builderCanUndo = (state: BuilderState) => canUndo(state.history)
@@ -121,7 +130,7 @@ function operate(state: BuilderState, operation: DocumentOperation, after: (docu
 }
 
 /** Actions permises pendant la consultation d'une version : elle est en lecture seule. */
-const whileViewing: ReadonlySet<BuilderAction["type"]> = new Set(["view-version", "exit-view", "restart-from", "close-panel", "dismiss-notice"])
+const whileViewing: ReadonlySet<BuilderAction["type"]> = new Set(["view-version", "exit-view", "restart-from", "close-panel", "dismiss-notice", "assistant-reply", "assistant-fail", "ignore-proposal"])
 
 export function builderReducer(state: BuilderState, action: BuilderAction): BuilderState {
   if (state.viewingId !== null && !whileViewing.has(action.type)) return state
@@ -217,6 +226,32 @@ export function builderReducer(state: BuilderState, action: BuilderAction): Buil
       if (!version) return state
       // Nouveau point de départ : copie du snapshot, historique vierge, statut Brouillon ; les versions restent toutes.
       return { ...withNotice(state, null), history: createHistory(structuredClone(version.document)), status: "draft", baseId: version.id, viewingId: null, selection: none, panel: null }
+    }
+
+    case "assistant-send":
+      // Un seul appel à la fois ; un message vide n'est pas envoyé.
+      return state.assistant.pending || action.text.trim() === "" ? state : { ...state, assistant: chatSend(state.assistant, action.text) }
+    case "assistant-reply":
+      return { ...state, assistant: chatReply(state.assistant, { message: action.message, ...(action.proposal ? { proposal: action.proposal } : {}) }) }
+    case "assistant-fail":
+      return { ...state, assistant: chatFail(state.assistant, action.message) }
+    case "ignore-proposal":
+      return findChatProposal(state.assistant, action.id)?.status === "open" ? { ...state, assistant: setProposalStatus(state.assistant, action.id, "ignored") } : state
+
+    case "apply-proposal": {
+      // Une proposition ne s'applique que si elle est ouverte, que le document est celui sur lequel elle a été préparée, et que le domaine la valide encore : toutes ses opérations, ou aucune.
+      const proposal = findChatProposal(state.assistant, action.id)
+      if (!proposal || proposal.status !== "open") return state
+      if (proposal.basedOn !== documentFingerprint(document)) return withNotice(state, { tone: "warning", message: "L'email a changé depuis cette proposition. Demande-moi de l'actualiser." })
+      const checked = validateProposal(document, proposal.changes)
+      if (!checked.ok) return withNotice(state, { tone: "error", message: "Cette proposition ne peut plus être appliquée : l'email a évolué." })
+      // UNE transformation = UNE entrée d'historique ; le statut et les versions ne bougent pas.
+      return {
+        ...withNotice(state, newRecommendationNotice(document, checked.next)),
+        history: applyToHistory(state.history, checked.next),
+        selection: validSelection(state.selection, checked.next),
+        assistant: setProposalStatus(state.assistant, action.id, "applied"),
+      }
     }
   }
 }

@@ -9,6 +9,8 @@ import type { BuilderLame } from "@/lib/email-builder/catalog"
 import { builderCanRedo, builderCanUndo, builderDocument, builderReadOnly, builderReducer, builderViewing, createBuilderState, hasChangesSinceVersion, shownDocument } from "@/lib/email-builder/builder-state"
 import { statusLabels, versionLabel } from "@/lib/email-builder/versions"
 import type { EmailDocument } from "@/lib/email-builder/document"
+import { toApiHistory } from "@/lib/email-builder/assistant-chat"
+import type { AssistantResponseBody } from "@/lib/email-builder/assistant-handler"
 import type { BuilderRenderResponse } from "@/lib/email-builder/render-handler"
 
 import { AssistantPanel } from "./assistant-panel"
@@ -84,6 +86,27 @@ export function BuilderWorkspace({ initialDocument, initialHtml, lames }: Builde
   const panel = state.panel
   const libraryIndex = panel?.kind === "library" ? panel.index : undefined
   const imageBlock = panel?.kind === "images" ? document.config.blocks.find((block) => block.id === panel.blockId) : undefined
+
+  /**
+   * Un message à l'assistant : le SEUL déclencheur d'un appel. Le document envoyé est le
+   * travail COURANT au moment de l'envoi (jamais celui d'un message précédent). La réponse
+   * arrive comme message, avec une éventuelle proposition : rien n'est appliqué ici.
+   */
+  async function sendToAssistant(text: string) {
+    if (state.assistant.pending || readOnly || text.trim() === "") return
+    const history = toApiHistory(state.assistant)
+    // Développement : `?assistant=mock` simule l'assistant (aucun appel Anthropic) ; le serveur l'ignore en production.
+    const devMock = new URLSearchParams(window.location.search).get("assistant") === "mock"
+    dispatch({ type: "assistant-send", text })
+    try {
+      const response = await fetch("/api/email-builder/assistant", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ document, history, message: text.trim(), ...(devMock ? { devMock: true } : {}) }) })
+      const result = (await response.json()) as AssistantResponseBody
+      if (result.status === "success") dispatch({ type: "assistant-reply", message: result.message, ...(result.proposal ? { proposal: result.proposal } : {}) })
+      else dispatch({ type: "assistant-fail", message: result.message })
+    } catch {
+      dispatch({ type: "assistant-fail", message: "L'assistant n'a pas répondu. Réessaie dans un instant." })
+    }
+  }
 
   function onKeyDown(event: React.KeyboardEvent) {
     const target = event.target as HTMLElement
@@ -195,7 +218,19 @@ export function BuilderWorkspace({ initialDocument, initialHtml, lames }: Builde
           )}
         </main>
 
-        {assistantOpen && <AssistantPanel onClose={() => setAssistantOpen(false)} />}
+        {assistantOpen && (
+          <AssistantPanel
+            messages={state.assistant.messages}
+            pending={state.assistant.pending}
+            readOnly={readOnly}
+            document={document}
+            blockName={(type) => lamesByType[type]?.name ?? type}
+            onSend={sendToAssistant}
+            onApply={(id) => dispatch({ type: "apply-proposal", id })}
+            onIgnore={(id) => dispatch({ type: "ignore-proposal", id })}
+            onClose={() => setAssistantOpen(false)}
+          />
+        )}
       </div>
     </div>
   )

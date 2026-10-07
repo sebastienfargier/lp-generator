@@ -59,7 +59,7 @@ export type OperationErrorCode =
   | "position"
   | "integrity"
 
-export type OperationError = { code: OperationErrorCode; message: string; issues?: DocumentIssue[] }
+export type OperationError = { code: OperationErrorCode; message: string; issues?: DocumentIssue[]; /** `applyDocumentOperations` : position de l'opération refusée dans la liste. */ index?: number }
 
 export type OperationResult<Value = EmailDocument> = { ok: true; value: Value } | { ok: false; error: OperationError }
 
@@ -203,4 +203,23 @@ export function applyDocumentOperation(document: EmailDocument, input: DocumentO
 export function applyOperationToHistory(history: History<EmailDocument>, operation: DocumentOperation | unknown): OperationResult<History<EmailDocument>> {
   const result = applyDocumentOperation(history.present, operation)
   return result.ok ? { ok: true, value: applyToHistory(history, result.value) } : result
+}
+
+/**
+ * Applique une LISTE d'opérations comme une seule transformation : toutes
+ * réussissent, ou aucune n'est appliquée (le document d'entrée n'est jamais
+ * touché ; un échec dit quelle opération a été refusée, `error.index`). Chaque
+ * opération voit le résultat des précédentes. Le résultat est UN document : un
+ * seul `applyToHistory`, donc une seule entrée d'historique. Une liste vide est
+ * refusée (rien à transformer).
+ */
+export function applyDocumentOperations(document: EmailDocument, operations: readonly (DocumentOperation | unknown)[]): OperationResult {
+  if (operations.length === 0) return fail("invalid-operation", "Aucune opération à appliquer.")
+  let current = document
+  for (const [index, operation] of operations.entries()) {
+    const result = applyDocumentOperation(current, operation)
+    if (!result.ok) return { ok: false, error: { ...result.error, index } }
+    current = result.value
+  }
+  return { ok: true, value: current }
 }

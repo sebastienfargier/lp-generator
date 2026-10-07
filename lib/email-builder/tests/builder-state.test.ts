@@ -45,7 +45,7 @@ describe("Builder — document initial", () => {
 
   test("l'état ne contient que l'historique de documents et un peu d'interface : jamais de HTML, jamais un second modèle de l'email", () => {
     const state = run(start(), { type: "select-block", blockId: "offer" }, { type: "open-library", index: 2 })
-    assert.deepEqual(Object.keys(state).sort(), ["baseId", "history", "notice", "noticeKey", "panel", "selection", "status", "versions", "viewingId"])
+    assert.deepEqual(Object.keys(state).sort(), ["assistant", "baseId", "history", "notice", "noticeKey", "panel", "selection", "status", "versions", "viewingId"])
     assert.ok(!/<html|<table|<!--/i.test(JSON.stringify(state)))
     assert.deepEqual(Object.keys(state.history).sort(), ["future", "past", "present"])
   })

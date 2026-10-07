@@ -37,9 +37,9 @@ describe("Builder — structure et frontières", () => {
     }
   })
 
-  test("le seul appel réseau du Builder est le rendu du canvas", () => {
+  test("les seuls appels réseau du Builder : le rendu du canvas, et un message explicite à l'assistant", () => {
     const calls = files.flatMap((path) => [...code(path).matchAll(/fetch\(\s*([^,)]+)/g)].map((match) => match[1]!.trim()))
-    assert.deepEqual(calls, ['"/api/email-builder/render"'])
+    assert.deepEqual(calls.sort(), ['"/api/email-builder/assistant"', '"/api/email-builder/render"'])
   })
 
   test("le rendu vient du renderer serveur : aucun composant n'importe le renderer, ne lit un fichier, ni ne recrée une lame en JSX", () => {
@@ -145,14 +145,17 @@ describe("Builder — bibliothèque et assistant", () => {
     assert.match(code("components/email-builder/builder-workspace.tsx"), /panel\?\.kind === "library" && \(/)
   })
 
-  test("l'assistant est un emplacement : aucun état, aucun appel, repliable, masqué sous 1280 px", () => {
+  test("l'assistant est une conversation sobre : messages, saisie, envoi, propositions ; repliable, masqué sous 1280 px ; état vide simple", () => {
     const raw = read("components/email-builder/assistant-panel.tsx")
     const assistant = code("components/email-builder/assistant-panel.tsx")
-    assert.ok(!/"use client"|useState|useEffect|fetch/.test(assistant))
-    assert.match(raw, /Bientôt disponible/)
+    assert.ok(!/fetch\(|anthropic|localStorage/i.test(assistant), "le panneau ne connaît ni le réseau ni le modèle")
+    assert.match(raw, /Je peux relire cet email, proposer des améliorations ou retravailler son contenu\./)
     assert.match(assistant, /Replier l'assistant/)
     assert.match(assistant, /hidden[^"]*xl:flex/)
+    assert.match(assistant, /aria-label="Message à l'assistant"/)
+    assert.match(assistant, /aria-label="Envoyer"/)
   })
+
 })
 
 describe("Builder — édition directe du contenu (V2.3)", () => {
@@ -298,5 +301,64 @@ describe("Builder — versions nommées et statut (V2.4)", () => {
 
   test("aucune nouvelle dépendance ni hors périmètre (diff, branches, export)", () => {
     for (const path of [...files, "lib/email-builder/versions.ts"]) assert.ok(!/diff\(|branch|merge|exportHtml|anthropic/i.test(code(path).replace(/lib\/email\/export/g, "")), path)
+  })
+})
+
+describe("Builder — assistant éditorial (V2.5)", () => {
+  const workspace = code("components/email-builder/builder-workspace.tsx")
+  const panel = code("components/email-builder/assistant-panel.tsx")
+
+  test("un appel UNIQUEMENT sur envoi explicite : ni à l'ouverture du panneau, ni après une modification, une version ou un statut (aucun effet ne lance l'assistant)", () => {
+    const sendBody = workspace.slice(workspace.indexOf("async function sendToAssistant"), workspace.indexOf("function onKeyDown"))
+    assert.match(sendBody, /fetch\("\/api\/email-builder\/assistant"/)
+    assert.equal((workspace.match(/\/api\/email-builder\/assistant/g) ?? []).length, 1, "un seul point d'appel")
+    for (const effect of workspace.match(/useEffect\([\s\S]*?\n  \}, \[[^\]]*\]\)/g) ?? []) assert.ok(!/assistant/.test(effect), "aucun effet n'appelle l'assistant")
+    assert.match(workspace, /onSend=\{sendToAssistant\}/)
+  })
+
+  test("le document envoyé est le travail COURANT au moment de l'envoi ; un seul envoi à la fois ; consultation : pas d'envoi", () => {
+    const sendBody = workspace.slice(workspace.indexOf("async function sendToAssistant"), workspace.indexOf("function onKeyDown"))
+    assert.match(sendBody, /body: JSON\.stringify\(\{ document, history, message: text\.trim\(\)/)
+    assert.match(sendBody, /state\.assistant\.pending \|\| readOnly/)
+    assert.match(workspace, /const document = builderDocument\(state\)/)
+  })
+
+  test("rien ne s'applique tout seul : l'application est un dispatch explicite déclenché par le bouton « Appliquer », jamais par la réponse", () => {
+    assert.equal((workspace.match(/type: "apply-proposal"/g) ?? []).length, 1)
+    assert.match(workspace, /onApply=\{\(id\) => dispatch\(\{ type: "apply-proposal", id \}\)\}/)
+    assert.ok(!/apply-proposal/.test(workspace.slice(workspace.indexOf("async function sendToAssistant"), workspace.indexOf("function onKeyDown"))), "la réception d'une réponse n'applique rien")
+    assert.match(panel, /onClick=\{\(\) => onApply\(messageId\)\}/)
+  })
+
+  test("simulation de développement : seulement par ?assistant=mock, jamais par défaut", () => {
+    assert.match(workspace, /get\("assistant"\) === "mock"/)
+    assert.match(workspace, /\.\.\.\(devMock \? \{ devMock: true \} : \{\}\)/)
+  })
+
+  test("propositions lisibles : résumé, étendue (« 3 contenus changent »), où / quoi / avant / après ; périmée, appliquée, ignorée", () => {
+    assert.match(panel, /changent/)
+    assert.match(panel, /describeProposal\(document, proposal\.changes, blockName\)/)
+    assert.match(panel, /Proposition périmée/)
+    assert.match(panel, /L&apos;email a changé depuis cette proposition\. Demande-moi de l&apos;actualiser\./)
+    assert.match(panel, /Appliquée/)
+    assert.match(panel, /Ignorer/)
+    assert.match(panel, /isProposalStale\(proposal, document\)/)
+  })
+
+  test("consultation d'une version : saisie, amorces et « Appliquer » désactivés, avec l'explication", () => {
+    assert.match(panel, /Reviens au travail actuel pour utiliser l&apos;assistant\./)
+    assert.match(panel, /disabled=\{readOnly\}/)
+    assert.match(panel, /disabled=\{!canSend\}/)
+    assert.match(workspace, /readOnly=\{readOnly\}/)
+  })
+
+  test("conversation : défilement, annonce (log), état d'attente discret ; aucune note, aucun score, aucune liste imposée", () => {
+    assert.match(panel, /role="log"/)
+    assert.match(panel, /L&apos;assistant réfléchit…/)
+    assert.ok(!/\/10|score|note sur/i.test(panel))
+  })
+
+  test("l'assistant ne pilote ni le statut ni la structure : le panneau n'en connaît aucune action", () => {
+    assert.ok(!/set-status|onStatus|add-block|remove-block|move-block|set-surface/.test(panel))
   })
 })
