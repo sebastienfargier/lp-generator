@@ -31,6 +31,61 @@ const markup = /<(?:\/?[a-z][a-z0-9-]*(?:\s[^<>]*)?\/?>|!--|!doctype)/i
 const looseLink = /https?:\/\/|www\.|\bmailto:|\bjavascript:|(?:^|\s)\/(?:images|public|ressources)\/|\.(?:jpe?g|png|webp|gif|svg)\b/i
 const shortText = (label: string, max: number) => z.string().refine((value) => value.length <= max && !markup.test(value) && !looseLink.test(value), `${label} : texte brut, ${max} caractères au plus, ni HTML ni URL.`)
 
+/**
+ * Les textes DESCRIPTIFS du modèle (`intent`, `reason`) et les valeurs de contenu peuvent dépasser les bornes du contrat
+ * sans que le Structured Output le sache : le transport Anthropic ne porte ni `maxLength` ni `pattern`. Un « intent » ou
+ * une « reason » un peu long ne doit pas faire échouer TOUTE la création (V2.9.4, constaté sur Vercel : `mapping.3.reason`).
+ *
+ * `sanitizeReferenceDescriptions` est une étape AVANT le contrat, jamais un assouplissement du contrat :
+ * - `intent`, `reason` : un texte DESCRIPTIF (compte rendu seulement, jamais une décision) : retours à la ligne en espaces,
+ *   balises et liens RETIRÉS, coupe propre à 160 caractères (« … ») ; ce qui reste vide reste vide (les règles métier
+ *   existantes refusent alors « sans équivalent / approchée doit dire pourquoi ») ;
+ * - `content[].value` : un texte DU DOCUMENT : jamais tronqué ni réécrit ; trop long, balisé ou avec un lien, il est
+ *   VIDÉ, et le mapping l'abandonne comme tout contenu inutilisable (compté dans `dropped`).
+ * Rien d'autre n'est touché : références, rôles, statuts, `blockType`, `structure`, `slot`, `imageId`, tailles de listes
+ * restent soumis au schéma strict (`buildReferenceResponseSchema`), qui reste la dernière barrière.
+ */
+export const referenceDescriptionMaxLength = 160
+export const referenceContentValueMaxLength = 400
+
+const stripMarkup = (text: string) =>
+  text
+    .replace(new RegExp(markup.source, "gi"), " ")
+    .replace(/\S*(?:https?:\/\/|www\.|mailto:|javascript:)\S*/gi, " ")
+    .replace(/(?:^|\s)\/(?:images|public|ressources)\/\S*/gi, " ")
+    .replace(/\S*\.(?:jpe?g|png|webp|gif|svg)\b\S*/gi, " ")
+
+/** Un texte descriptif sûr : une ligne, sans balise ni lien, 160 caractères au plus, coupé proprement. */
+export function sanitizeDescription(raw: string, max = referenceDescriptionMaxLength): string {
+  let text = stripMarkup(raw.replace(/[\u0000-\u001F\u007F]+/g, " ")).replace(/\s+/g, " ").trim()
+  if (markup.test(text) || looseLink.test(text)) return ""
+  if (text.length <= max) return text
+  const room = text.slice(0, max - 1)
+  const cut = room.lastIndexOf(" ")
+  text = (cut > max / 2 ? room.slice(0, cut) : room).replace(/[\uD800-\uDBFF]$/, "").replace(/[\s,;:.\-–—]+$/, "")
+  return `${text}…`
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value)
+
+/** Une valeur de contenu utilisable telle quelle, ou `""` (abandonnée par le mapping). */
+const usableContentValue = (value: string) => (value.length <= referenceContentValueMaxLength && !markup.test(value) && !looseLink.test(value) ? value : "")
+
+/** Copie de la réponse brute avec `intent`, `reason` et `content[].value` bornés ; toute autre donnée est laissée telle quelle (le schéma strict la jugera). */
+export function sanitizeReferenceDescriptions(input: unknown): unknown {
+  if (!isRecord(input)) return input
+  const analysis = isRecord(input.analysis) && Array.isArray(input.analysis.sections) ? { ...input.analysis, sections: input.analysis.sections.map((section) => (isRecord(section) && typeof section.intent === "string" ? { ...section, intent: sanitizeDescription(section.intent) } : section)) } : input.analysis
+  const mapping = Array.isArray(input.mapping)
+    ? input.mapping.map((entry) => {
+        if (!isRecord(entry)) return entry
+        const reason = typeof entry.reason === "string" ? sanitizeDescription(entry.reason) : entry.reason
+        const content = Array.isArray(entry.content) ? entry.content.map((item) => (isRecord(item) && typeof item.value === "string" ? { ...item, value: usableContentValue(item.value) } : item)) : entry.content
+        return { ...entry, reason, content }
+      })
+    : input.mapping
+  return { ...input, analysis, mapping }
+}
+
 export type ReferenceSchemaContext = { blockTypes: readonly string[] }
 
 export function buildReferenceResponseSchema(context: ReferenceSchemaContext) {
