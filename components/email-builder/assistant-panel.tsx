@@ -15,6 +15,8 @@ type AssistantPanelProps = {
   pending: boolean
   /** Consultation d'une version : l'assistant ne travaille que sur le travail actuel. */
   readOnly: boolean
+  /** Aucune lame : il n'y a encore rien à relire, l'assistant attend la première lame. */
+  empty: boolean
   /** Le travail COURANT : ce que les propositions décrivent et ce qui les rend périmées. */
   document: EmailDocument
   blockName: (type: EmailBlockType) => string
@@ -88,16 +90,17 @@ function ProposalCard({ messageId, proposal, document, readOnly, blockName, onAp
  * personne n'a pas cliqué « Appliquer ». Le panneau ne connaît ni le modèle ni
  * le réseau : il reçoit des messages et renvoie des gestes.
  */
-export function AssistantPanel({ messages, pending, readOnly, document, blockName, onSend, onApply, onIgnore, onClose }: AssistantPanelProps) {
+export function AssistantPanel({ messages, pending, readOnly, empty, document, blockName, onSend, onApply, onIgnore, onClose }: AssistantPanelProps) {
   const [draft, setDraft] = useState("")
   const end = useRef<HTMLDivElement>(null)
   useEffect(() => {
     end.current?.scrollIntoView({ block: "end" })
   }, [messages.length, pending])
 
-  const canSend = !pending && !readOnly && draft.trim() !== ""
+  const idle = readOnly || empty
+  const canSend = !pending && !idle && draft.trim() !== ""
   function submit(text: string) {
-    if (pending || readOnly || text.trim() === "") return
+    if (pending || idle || text.trim() === "") return
     onSend(text)
     setDraft("")
   }
@@ -120,7 +123,7 @@ export function AssistantPanel({ messages, pending, readOnly, document, blockNam
             <p className="text-body text-muted-foreground">Je peux relire cet email, proposer des améliorations ou retravailler son contenu.</p>
             <div className="flex flex-wrap gap-2">
               {starters.map((starter) => (
-                <button key={starter} type="button" disabled={readOnly} onClick={() => submit(starter)} className="rounded-full border px-3 py-1 text-caption text-muted-foreground transition-colors outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50">
+                <button key={starter} type="button" disabled={idle} onClick={() => submit(starter)} className="rounded-full border px-3 py-1 text-caption text-muted-foreground transition-colors outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50">
                   {starter}
                 </button>
               ))}
@@ -156,12 +159,13 @@ export function AssistantPanel({ messages, pending, readOnly, document, blockNam
         }}
       >
         {readOnly && <p className="text-caption text-muted-foreground">Reviens au travail actuel pour utiliser l&apos;assistant.</p>}
+        {empty && !readOnly && <p className="text-caption text-muted-foreground">Ajoute une première lame pour utiliser l&apos;assistant.</p>}
         <div className="flex items-end gap-2">
           <textarea
             aria-label="Message à l'assistant"
             rows={2}
             value={draft}
-            disabled={readOnly}
+            disabled={idle}
             placeholder="Demande-lui un avis ou une modification"
             onChange={(event) => setDraft(event.target.value)}
             onKeyDown={(event) => {

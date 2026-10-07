@@ -13,11 +13,16 @@
  * modifié qu'à la validation (`commit-edit`), en UNE opération et UNE entrée
  * d'historique.
  *
+ * Un email peut être VIDE (aucune lame) : c'est un document ouvert, pas l'absence
+ * de document (« aucun email ouvert » est un état du shell, `shell-state.ts`). Tant
+ * qu'il est vide, il reste Brouillon, ne s'enregistre pas en version et l'assistant
+ * ne travaille pas : il n'y a encore rien à valider, à garder, ni à relire.
+ *
  * Domaine Email Builder uniquement : aucun import depuis `lib/landing`.
  */
 import { chatFail, chatReply, chatSend, emptyChat, findChatProposal, setProposalStatus, type AssistantChat } from "./assistant-chat"
 import { documentFingerprint, validateProposal, type AssistantProposal } from "./assistant-proposal"
-import type { EmailDocument } from "./document"
+import { isEmptyDocument, type EmailDocument } from "./document"
 import { applyToHistory, canRedo, canUndo, createHistory, redo, undo, type History } from "./history"
 import { sameSlotValue, slotEditor, slotValueFromDraft, type SlotDraft } from "./inline-edit"
 import { newRecommendationNotice, describeOperationError, type BuilderNotice } from "./notices"
@@ -82,6 +87,10 @@ const none: Selection = { kind: "none" }
 export const createBuilderState = (document: EmailDocument): BuilderState => ({ history: createHistory(document), status: "draft", versions: [], baseId: null, viewingId: null, assistant: emptyChat, selection: none, panel: null, notice: null, noticeKey: 0 })
 
 export const builderDocument = (state: BuilderState) => state.history.present
+/** Le travail courant n'a aucune lame. */
+export const builderIsEmpty = (state: BuilderState) => isEmptyDocument(state.history.present)
+/** Y a-t-il quelque chose à perdre en recommençant : au moins une lame, ou une version enregistrée. */
+export const builderHasWork = (state: BuilderState) => !builderIsEmpty(state) || state.versions.length > 0
 export const builderCanUndo = (state: BuilderState) => canUndo(state.history)
 export const builderCanRedo = (state: BuilderState) => canRedo(state.history)
 /** La version consultée, ou `null`. */
@@ -108,6 +117,9 @@ export const selectedBlockId = (state: BuilderState) => (state.selection.kind ==
 
 const withNotice = (state: BuilderState, notice: BuilderNotice | null): BuilderState => ({ ...state, notice, noticeKey: state.noticeKey + 1 })
 
+/** Un email vide reste Brouillon, quel que soit le chemin qui le vide (suppression, annuler, rétablir). */
+const settled = (state: BuilderState): BuilderState => (isEmptyDocument(state.history.present) && state.status !== "draft" ? { ...state, status: "draft" } : state)
+
 const ids = (document: EmailDocument) => document.config.blocks.map((block) => block.id)
 const blockOf = (document: EmailDocument, id: string) => document.config.blocks.find((block) => block.id === id)
 
@@ -126,7 +138,7 @@ function operate(state: BuilderState, operation: DocumentOperation, after: (docu
   const before = state.history.present
   const result = applyDocumentOperation(before, operation)
   if (!result.ok) return withNotice(state, describeOperationError(result.error))
-  return { ...withNotice(state, newRecommendationNotice(before, result.value)), history: applyToHistory(state.history, result.value), ...after(result.value, before) }
+  return settled({ ...withNotice(state, newRecommendationNotice(before, result.value)), history: applyToHistory(state.history, result.value), ...after(result.value, before) })
 }
 
 /** Actions permises pendant la consultation d'une version : elle est en lecture seule. */
@@ -194,7 +206,7 @@ export function builderReducer(state: BuilderState, action: BuilderAction): Buil
       if (history === state.history) return state
       // La sélection retombe au niveau de la lame (si elle existe encore) ; un panneau d'images se ferme.
       const selection = state.selection.kind === "none" ? none : validSelection({ kind: "block", blockId: state.selection.blockId }, history.present)
-      return { ...withNotice(state, null), history, selection, panel: state.panel?.kind === "images" ? null : state.panel }
+      return settled({ ...withNotice(state, null), history, selection, panel: state.panel?.kind === "images" ? null : state.panel })
     }
 
     case "open-library":
@@ -208,9 +220,13 @@ export function builderReducer(state: BuilderState, action: BuilderAction): Buil
 
     case "set-status":
       // Libre : aucune transition imposée, aucune recommandation ne bloque. Ni opération, ni historique.
-      return state.status === action.status ? state : { ...state, status: action.status }
+      // Seule impossibilité : un email sans lame n'a rien à valider ni à envoyer, il reste Brouillon.
+      if (state.status === action.status || (action.status !== "draft" && isEmptyDocument(document))) return state
+      return { ...state, status: action.status }
 
     case "save-version": {
+      // Un email vide n'est pas un travail à garder.
+      if (isEmptyDocument(document)) return state
       // Un snapshot du travail : le document, l'historique et la sélection ne bougent pas (l'objet `history` reste le même).
       const version = createVersion(state.versions, { name: action.name, document, status: state.status, createdAt: action.at })
       return { ...state, versions: [...state.versions, version], baseId: version.id }
@@ -229,8 +245,8 @@ export function builderReducer(state: BuilderState, action: BuilderAction): Buil
     }
 
     case "assistant-send":
-      // Un seul appel à la fois ; un message vide n'est pas envoyé.
-      return state.assistant.pending || action.text.trim() === "" ? state : { ...state, assistant: chatSend(state.assistant, action.text) }
+      // Un seul appel à la fois ; un message vide n'est pas envoyé ; un email vide n'a rien à relire.
+      return state.assistant.pending || action.text.trim() === "" || isEmptyDocument(document) ? state : { ...state, assistant: chatSend(state.assistant, action.text) }
     case "assistant-reply":
       return { ...state, assistant: chatReply(state.assistant, { message: action.message, ...(action.proposal ? { proposal: action.proposal } : {}) }) }
     case "assistant-fail":

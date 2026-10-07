@@ -9,6 +9,8 @@ type StatusMenuProps = {
   status: DocumentStatus
   /** Consultation d'une version : son statut est un fait historique, il ne se change pas. */
   readOnly: boolean
+  /** Aucune lame : il n'y a encore rien à valider ni à envoyer, le statut reste Brouillon. */
+  empty?: boolean
   onChange: (status: DocumentStatus) => void
 }
 
@@ -17,7 +19,7 @@ type StatusMenuProps = {
  * transition imposée. « Prêt à envoyer » dit que l'équipe juge l'email prêt ; le
  * Builder ne le garantit pas, et aucune recommandation ne le bloque.
  */
-export function StatusMenu({ status, readOnly, onChange }: StatusMenuProps) {
+export function StatusMenu({ status, readOnly, empty = false, onChange }: StatusMenuProps) {
   const chip = "flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-0.5 text-caption"
   if (readOnly) {
     return (
@@ -35,11 +37,12 @@ export function StatusMenu({ status, readOnly, onChange }: StatusMenuProps) {
       <DropdownMenuContent className="min-w-44" align="start">
         <DropdownMenuRadioGroup value={status} onValueChange={(value) => onChange(value as DocumentStatus)}>
           {documentStatuses.map((option) => (
-            <DropdownMenuRadioItem key={option} value={option} closeOnClick>
+            <DropdownMenuRadioItem key={option} value={option} disabled={empty && option !== "draft"} closeOnClick>
               {statusLabels[option]}
             </DropdownMenuRadioItem>
           ))}
         </DropdownMenuRadioGroup>
+        {empty && <p className="px-2 py-1.5 text-caption text-muted-foreground">Ajoute une première lame pour changer le statut.</p>}
       </DropdownMenuContent>
     </DropdownMenu>
   )

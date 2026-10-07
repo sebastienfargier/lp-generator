@@ -9,6 +9,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import type { DocumentStatus, EmailVersion } from "@/lib/email-builder/versions"
 
 import type { CanvasViewport } from "./builder-canvas"
+import { RestartButton } from "./restart-button"
 import { StatusMenu } from "./status-menu"
 import { VersionsMenu } from "./versions-menu"
 
@@ -23,6 +24,11 @@ type BuilderTopbarProps = {
   status: DocumentStatus
   /** Consultation d'une version : lecture seule (pas d'historique, pas d'ajout, pas de statut). */
   readOnly: boolean
+  /** L'email n'a aucune lame : il reste Brouillon et ne s'enregistre pas en version. */
+  empty: boolean
+  /** Recommencer perdrait du travail (une lame ou une version) : on demande confirmation. */
+  confirmRestart: boolean
+  onRestart: () => void
   versions: readonly EmailVersion[]
   baseId: string | null
   viewingId: string | null
@@ -44,12 +50,17 @@ type BuilderTopbarProps = {
 
 /**
  * Barre du Builder : l'email (nom, statut), l'historique de travail, la largeur
- * d'aperçu, le statut, les versions nommées et l'accès à la bibliothèque. Pas
- * d'export ni de persistance.
+ * d'aperçu, le statut, les versions nommées, l'accès à la bibliothèque et
+ * « Recommencer » (retour au choix de départ). Pas d'export ni de persistance.
+ *
+ * Responsive : à partir de `lg`, une seule ligne avec les libellés ; en dessous,
+ * la barre passe sur deux lignes (l'email et son statut, puis les actions) et
+ * les actions secondaires n'affichent que leur icône (nom accessible conservé).
+ * Aucune action n'est masquée : rien ne déborde.
  */
-export function BuilderTopbar({ name, status, readOnly, versions, baseId, viewingId, changedSinceVersion, onStatus, onViewVersion, onExitView, onSaveVersion, canUndo, canRedo, viewport, assistantOpen, onUndo, onRedo, onAddBlock, onViewport, onToggleAssistant }: BuilderTopbarProps) {
+export function BuilderTopbar({ name, status, readOnly, empty, confirmRestart, onRestart, versions, baseId, viewingId, changedSinceVersion, onStatus, onViewVersion, onExitView, onSaveVersion, canUndo, canRedo, viewport, assistantOpen, onUndo, onRedo, onAddBlock, onViewport, onToggleAssistant }: BuilderTopbarProps) {
   return (
-    <header className="flex h-12 shrink-0 items-center gap-3 border-b bg-background px-4">
+    <header className="flex min-h-12 shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b bg-background px-4 py-1 lg:h-12 lg:flex-nowrap lg:py-0">
       <Button variant="ghost" size="sm" nativeButton={false} render={<Link href="/" />} className="-ml-2">
         <ArrowLeftIcon data-icon="inline-start" aria-hidden />
         Dashboard
@@ -58,10 +69,11 @@ export function BuilderTopbar({ name, status, readOnly, versions, baseId, viewin
         <h1 className="truncate text-body font-semibold" title={name}>
           {name}
         </h1>
-        <StatusMenu status={status} readOnly={readOnly} onChange={onStatus} />
+        <StatusMenu status={status} readOnly={readOnly} empty={empty} onChange={onStatus} />
       </div>
 
       <div className="ml-auto flex items-center gap-2">
+        <RestartButton confirm={confirmRestart} onRestart={onRestart} />
         <div className="flex items-center">
           <Button type="button" variant="ghost" size="icon-sm" aria-label="Annuler" title="Annuler (Ctrl/Cmd+Z)" disabled={!canUndo} onClick={onUndo}>
             <Undo2Icon aria-hidden />
@@ -88,10 +100,10 @@ export function BuilderTopbar({ name, status, readOnly, versions, baseId, viewin
             </ToggleGroupItem>
           ))}
         </ToggleGroup>
-        <VersionsMenu versions={versions} baseId={baseId} viewingId={viewingId} changed={changedSinceVersion} onView={onViewVersion} onExitView={onExitView} onSave={onSaveVersion} />
-        <Button type="button" variant="outline" size="sm" disabled={readOnly} onClick={onAddBlock}>
+        <VersionsMenu empty={empty} versions={versions} baseId={baseId} viewingId={viewingId} changed={changedSinceVersion} onView={onViewVersion} onExitView={onExitView} onSave={onSaveVersion} />
+        <Button type="button" variant="outline" size="sm" aria-label="Ajouter une lame" title="Ajouter une lame" disabled={readOnly} onClick={onAddBlock}>
           <PlusIcon data-icon="inline-start" aria-hidden />
-          Ajouter une lame
+          <span className="hidden lg:inline">Ajouter une lame</span>
         </Button>
         <Button type="button" variant="ghost" size="icon-sm" className="hidden xl:inline-flex" aria-label={assistantOpen ? "Replier l'assistant" : "Ouvrir l'assistant"} aria-pressed={assistantOpen} onClick={onToggleAssistant}>
           <SparklesIcon aria-hidden />

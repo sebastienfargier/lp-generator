@@ -15,7 +15,7 @@ const root = process.cwd()
 const read = (path: string) => readFileSync(join(root, path), "utf8")
 const code = (path: string) => read(path).replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|\s)\/\/.*$/gm, "")
 
-const components = ["builder-workspace", "builder-topbar", "builder-canvas", "block-toolbar", "lame-library-panel", "image-picker-panel", "inline-editor", "versions-menu", "status-menu", "assistant-panel"]
+const components = ["builder-workspace", "builder-topbar", "builder-canvas", "block-toolbar", "lame-library-panel", "image-picker-panel", "inline-editor", "versions-menu", "status-menu", "assistant-panel", "builder-shell", "entry-screen", "empty-canvas", "restart-button"]
 const files = [...components.map((name) => `components/email-builder/${name}.tsx`), "app/email-builder/page.tsx"]
 
 describe("Builder — structure et frontières", () => {
@@ -48,7 +48,7 @@ describe("Builder — structure et frontières", () => {
       assert.ok(!/lib\/email\/renderer|node:fs|renderEmail|toPreviewHtml/.test(source), path)
       assert.ok(!/data-slot=|email-module-/.test(source), `${path} ne recrée aucune lame`)
     }
-    assert.match(code("app/email-builder/page.tsx"), /renderCanvasHtml/)
+    assert.ok(!/renderCanvasHtml|renderEmail/.test(code("app/email-builder/page.tsx")), "la page n'injecte aucun rendu : un email n'est rendu qu'une fois ouvert, par l'API de rendu")
   })
 })
 
@@ -77,7 +77,7 @@ describe("Builder — le document reste la source de vérité", () => {
 
   test("le rendu affiché est celui du serveur pour le document courant ; les rendus déjà vus sont réutilisés (annuler sans appel)", () => {
     assert.match(workspace, /renders\[key\]/)
-    assert.match(workspace, /if \(renders\[key\] !== undefined\) return/)
+    assert.match(workspace, /if \(shownEmpty \|\| renders\[key\] !== undefined\) return/)
   })
 })
 
@@ -124,8 +124,8 @@ describe("Builder — accessibilité et interactions", () => {
   })
 
   test("la suppression n'a pas de modale : un seul geste, annulable", () => {
-    // Seul l'enregistrement d'une version ouvre une petite fenêtre (un nom à saisir) ; aucune action sur une lame ne demande de confirmation.
-    for (const path of files.filter((entry) => !entry.endsWith("versions-menu.tsx"))) assert.ok(!/<Dialog|<AlertDialog|window\.confirm|confirm\(/.test(code(path)), path)
+    // Seuls l'enregistrement d'une version (un nom à saisir) et « Recommencer » (abandon du travail de la session) ouvrent une petite fenêtre ; aucune action sur une lame ne demande de confirmation.
+    for (const path of files.filter((entry) => !entry.endsWith("versions-menu.tsx") && !entry.endsWith("restart-button.tsx"))) assert.ok(!/<Dialog|<AlertDialog|window\.confirm|confirm\(/.test(code(path)), path)
   })
 
   test("retours : régions annoncées (status / alert), fermables", () => {
@@ -271,7 +271,7 @@ describe("Builder — versions nommées et statut (V2.4)", () => {
     assert.match(menu, /Enregistrer une nouvelle version/)
     assert.match(menu, /nextVersionPrefix\(versions\)/)
     assert.match(menu, /Facultatif/)
-    assert.match(menu, /disabled=\{viewing\}/)
+    assert.match(menu, /disabled=\{viewing \|\| empty\}/)
   })
 
   test("le wording de l'indicateur n'évoque pas une sauvegarde serveur", () => {

@@ -11,6 +11,7 @@
  * Domaine Email Builder uniquement : aucun import depuis `lib/landing`.
  */
 import { renderCanvasHtml } from "./canvas"
+import { isEmptyDocument } from "./document"
 import { parseEmailDocument } from "./integrity"
 
 export type BuilderRenderResponse =
@@ -36,6 +37,8 @@ export async function handleBuilderRender(request: Request): Promise<Response> {
 
   const parsed = parseEmailDocument((body as { document: unknown }).document)
   if (!parsed.success) return fail(422, "invalid-document", parsed.issues.map(({ path, message }) => ({ path, message })))
+  // Un email sans lame n'a pas d'aperçu : le renderer n'est jamais appelé (le canvas affiche son état vide).
+  if (isEmptyDocument(parsed.data)) return fail(422, "invalid-document", [{ path: "config.blocks", message: "Un email sans lame n'a pas d'aperçu." }])
   try {
     return Response.json({ status: "success", html: renderCanvasHtml(parsed.data) } satisfies BuilderRenderResponse, { headers })
   } catch {

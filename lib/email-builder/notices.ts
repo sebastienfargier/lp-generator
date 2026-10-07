@@ -21,8 +21,6 @@ export type BuilderNotice = { tone: "info" | "warning" | "error"; message: strin
 
 /** Refus d'une opération → une phrase pour la personne. */
 export function describeOperationError(error: OperationError): BuilderNotice {
-  const issues = error.issues?.map((issue) => issue.message) ?? []
-  if (issues.some((message) => message.includes("Au moins une lame"))) return { tone: "error", message: "Un email garde toujours au moins une lame." }
   if (error.code === "surface-unsupported") return { tone: "error", message: "Cette lame garde ses couleurs : sa surface ne se change pas." }
   return { tone: "error", message: error.message }
 }

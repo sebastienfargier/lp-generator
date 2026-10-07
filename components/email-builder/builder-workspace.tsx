@@ -6,9 +6,9 @@ import { XIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
 import type { BuilderLame } from "@/lib/email-builder/catalog"
-import { builderCanRedo, builderCanUndo, builderDocument, builderReadOnly, builderReducer, builderViewing, createBuilderState, hasChangesSinceVersion, shownDocument } from "@/lib/email-builder/builder-state"
+import { builderCanRedo, builderCanUndo, builderDocument, builderHasWork, builderIsEmpty, builderReadOnly, builderReducer, builderViewing, createBuilderState, hasChangesSinceVersion, shownDocument } from "@/lib/email-builder/builder-state"
 import { statusLabels, versionLabel } from "@/lib/email-builder/versions"
-import type { EmailDocument } from "@/lib/email-builder/document"
+import { isEmptyDocument, type EmailDocument } from "@/lib/email-builder/document"
 import { toApiHistory } from "@/lib/email-builder/assistant-chat"
 import type { AssistantResponseBody } from "@/lib/email-builder/assistant-handler"
 import type { BuilderRenderResponse } from "@/lib/email-builder/render-handler"
@@ -16,14 +16,16 @@ import type { BuilderRenderResponse } from "@/lib/email-builder/render-handler"
 import { AssistantPanel } from "./assistant-panel"
 import { BuilderCanvas, type CanvasViewport } from "./builder-canvas"
 import { BuilderTopbar } from "./builder-topbar"
+import { EmptyCanvas } from "./empty-canvas"
 import { ImagePickerPanel } from "./image-picker-panel"
 import { LameLibraryPanel } from "./lame-library-panel"
 
 type BuilderWorkspaceProps = {
-  /** Le document de départ (un vrai email du POC) et son HTML de canvas, rendus côté serveur. */
+  /** Le document de départ : un email vide (partir de zéro) ou celui d'un modèle. Le choisir n'est pas une opération. */
   initialDocument: EmailDocument
-  initialHtml: string
   lames: readonly BuilderLame[]
+  /** Abandonne ce travail et revient au choix de départ (le shell remplace alors le workspace). */
+  onRestart: () => void
 }
 
 /**
@@ -33,10 +35,11 @@ type BuilderWorkspaceProps = {
  * que le serveur rend pour le document courant (vrai renderer) ; annuler et
  * rétablir retrouvent les rendus déjà vus sans nouvel appel.
  *
- * Rien n'est persisté, rien n'est généré : aucun appel de modèle, un rendu
- * serveur par nouveau document seulement.
+ * Un email peut être vide : le canvas affiche alors son état vide (aucun rendu,
+ * aucune iframe). Rien n'est persisté, rien n'est généré : aucun appel de modèle,
+ * un rendu serveur par nouveau document non vide seulement.
  */
-export function BuilderWorkspace({ initialDocument, initialHtml, lames }: BuilderWorkspaceProps) {
+export function BuilderWorkspace({ initialDocument, lames, onRestart }: BuilderWorkspaceProps) {
   const [state, dispatch] = useReducer(builderReducer, initialDocument, createBuilderState)
   const [viewport, setViewport] = useState<CanvasViewport>("desktop")
   const [assistantOpen, setAssistantOpen] = useState(true)
@@ -45,17 +48,21 @@ export function BuilderWorkspace({ initialDocument, initialHtml, lames }: Builde
   const shown = shownDocument(state)
   const viewing = builderViewing(state)
   const readOnly = builderReadOnly(state)
+  const empty = builderIsEmpty(state)
+  const shownEmpty = isEmptyDocument(shown)
   const key = JSON.stringify(shown)
 
-  // HTML déjà rendu, par document. `shownKey` : le dernier rendu reçu pour le document courant (affiché en attendant le suivant).
-  const [renders, setRenders] = useState<Record<string, string>>({ [JSON.stringify(initialDocument)]: initialHtml })
-  const [shownKey, setShownKey] = useState(JSON.stringify(initialDocument))
-  const [renderError, setRenderError] = useState<string | null>(null)
+  // HTML déjà rendu, par document. `shownKey` : le dernier rendu reçu (affiché en attendant le suivant).
+  const [renders, setRenders] = useState<Record<string, string>>({})
+  const [shownKey, setShownKey] = useState<string | null>(null)
+  const [renderFailure, setRenderError] = useState<string | null>(null)
+  const renderError = shownEmpty ? null : renderFailure
   const current = renders[key]
-  const html = current ?? renders[shownKey] ?? initialHtml
+  const html = current ?? (shownKey === null ? undefined : renders[shownKey])
 
   useEffect(() => {
-    if (renders[key] !== undefined) return
+    // Un email vide n'a pas de rendu : le renderer n'est jamais appelé.
+    if (shownEmpty || renders[key] !== undefined) return
     const controller = new AbortController()
     fetch("/api/email-builder/render", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ document: JSON.parse(key) }), signal: controller.signal })
       .then((response) => response.json() as Promise<BuilderRenderResponse>)
@@ -72,7 +79,7 @@ export function BuilderWorkspace({ initialDocument, initialHtml, lames }: Builde
         if (!(error instanceof DOMException && error.name === "AbortError")) setRenderError("Le rendu de l'email n'a pas répondu.")
       })
     return () => controller.abort()
-  }, [key, renders])
+  }, [key, renders, shownEmpty])
 
   // Retour discret : disparaît seul, ou à la demande ; ne bloque rien.
   const { notice, noticeKey } = state
@@ -93,7 +100,7 @@ export function BuilderWorkspace({ initialDocument, initialHtml, lames }: Builde
    * arrive comme message, avec une éventuelle proposition : rien n'est appliqué ici.
    */
   async function sendToAssistant(text: string) {
-    if (state.assistant.pending || readOnly || text.trim() === "") return
+    if (state.assistant.pending || readOnly || empty || text.trim() === "") return
     const history = toApiHistory(state.assistant)
     // Développement : `?assistant=mock` simule l'assistant (aucun appel Anthropic) ; le serveur l'ignore en production.
     const devMock = new URLSearchParams(window.location.search).get("assistant") === "mock"
@@ -129,6 +136,9 @@ export function BuilderWorkspace({ initialDocument, initialHtml, lames }: Builde
         baseId={state.baseId}
         viewingId={state.viewingId}
         changedSinceVersion={hasChangesSinceVersion(state)}
+        empty={empty}
+        confirmRestart={builderHasWork(state)}
+        onRestart={onRestart}
         onStatus={(status) => dispatch({ type: "set-status", status })}
         onViewVersion={(id) => dispatch({ type: "view-version", id })}
         onExitView={() => dispatch({ type: "exit-view" })}
@@ -148,7 +158,7 @@ export function BuilderWorkspace({ initialDocument, initialHtml, lames }: Builde
         {panel?.kind === "library" && (
           <LameLibraryPanel
             lames={lames}
-            where={libraryIndex === undefined ? "Avant les mentions légales et le footer" : `En position ${libraryIndex + 1}`}
+            where={empty ? "Ce sera la première lame de l'email" : libraryIndex === undefined ? "Avant les mentions légales et le footer" : `En position ${libraryIndex + 1}`}
             onPick={(lame) => lame.starter && dispatch({ type: "operation", operation: { type: "add-block", blockType: lame.type, slots: lame.starter, ...(libraryIndex === undefined ? {} : { index: libraryIndex }) } })}
             onClose={() => dispatch({ type: "close-panel" })}
           />
@@ -180,25 +190,33 @@ export function BuilderWorkspace({ initialDocument, initialHtml, lames }: Builde
             </div>
           )}
           <div className="min-h-0 flex-1 overflow-x-auto overflow-y-auto px-4 pt-8 pb-28">
-            <BuilderCanvas
-              html={html}
-              document={shown}
-              lames={lamesByType}
-              selection={state.selection}
-              viewport={viewport}
-              interactive={!renderError}
-              readOnly={readOnly}
-              onSelectBlock={(blockId) => dispatch({ type: "select-block", blockId })}
-              onSelectElement={(blockId, slot) => dispatch({ type: "select-element", blockId, slot })}
-              onStartEdit={(blockId, slot) => dispatch({ type: "start-edit", blockId, slot })}
-              onCommitEdit={(blockId, slot, draft) => dispatch({ type: "commit-edit", blockId, slot, draft })}
-              onCancelEdit={() => dispatch({ type: "escape" })}
-              onReplaceImage={(blockId, slot) => dispatch({ type: "open-images", blockId, slot })}
-              onInsert={(index) => dispatch({ type: "open-library", index })}
-              onMove={(blockId, toIndex) => dispatch({ type: "operation", operation: { type: "move-block", blockId, toIndex } })}
-              onSurface={(blockId, surface) => dispatch({ type: "operation", operation: { type: "set-surface", blockId, surface } })}
-              onRemove={(blockId) => dispatch({ type: "operation", operation: { type: "remove-block", blockId } })}
-            />
+            {shownEmpty ? (
+              <EmptyCanvas onAddFirst={() => dispatch({ type: "open-library" })} />
+            ) : html === undefined ? (
+              <p role="status" className="mx-auto max-w-sm py-12 text-center text-body text-muted-foreground">
+                Préparation de l&apos;aperçu…
+              </p>
+            ) : (
+              <BuilderCanvas
+                html={html}
+                document={shown}
+                lames={lamesByType}
+                selection={state.selection}
+                viewport={viewport}
+                interactive={!renderError}
+                readOnly={readOnly}
+                onSelectBlock={(blockId) => dispatch({ type: "select-block", blockId })}
+                onSelectElement={(blockId, slot) => dispatch({ type: "select-element", blockId, slot })}
+                onStartEdit={(blockId, slot) => dispatch({ type: "start-edit", blockId, slot })}
+                onCommitEdit={(blockId, slot, draft) => dispatch({ type: "commit-edit", blockId, slot, draft })}
+                onCancelEdit={() => dispatch({ type: "escape" })}
+                onReplaceImage={(blockId, slot) => dispatch({ type: "open-images", blockId, slot })}
+                onInsert={(index) => dispatch({ type: "open-library", index })}
+                onMove={(blockId, toIndex) => dispatch({ type: "operation", operation: { type: "move-block", blockId, toIndex } })}
+                onSurface={(blockId, surface) => dispatch({ type: "operation", operation: { type: "set-surface", blockId, surface } })}
+                onRemove={(blockId) => dispatch({ type: "operation", operation: { type: "remove-block", blockId } })}
+              />
+            )}
           </div>
 
           {(notice || renderError) && (
@@ -223,6 +241,7 @@ export function BuilderWorkspace({ initialDocument, initialHtml, lames }: Builde
             messages={state.assistant.messages}
             pending={state.assistant.pending}
             readOnly={readOnly}
+            empty={empty}
             document={document}
             blockName={(type) => lamesByType[type]?.name ?? type}
             onSend={sendToAssistant}

@@ -94,6 +94,13 @@ export function createEmailDocument(config: EmailConfig, options: CreateEmailDoc
   }
 }
 
+/** Un email en cours de création peut n'avoir encore aucune lame : ce n'est ni un email exportable ni un email à rendre. */
+export const isEmptyDocument = (document: EmailDocument): boolean => document.config.blocks.length === 0
+
+/** Un email vierge : aucune lame, un nom neutre. Il commence le travail du Builder ; ce n'est pas une opération. */
+export const createBlankDocument = (): EmailDocument =>
+  createEmailDocument({ version: 1, id: "nouvel-email", name: "Nouvel email", subject: "Objet à définir", preheader: "Texte d'aperçu à définir", blocks: [] }, { provenance: { origin: "manual" } })
+
 /** Snapshot indépendant : modifier la copie ne touche jamais l'original. */
 export const cloneEmailDocument = (document: EmailDocument): EmailDocument => structuredClone(document)
 

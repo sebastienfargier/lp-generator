@@ -438,6 +438,16 @@ export const EmailConfigStructureSchema = emailConfigObject.superRefine((config,
   addAll(ctx, idIssues(config))
 })
 
+/**
+ * Contrat structurel du BUILDER : le même que `EmailConfigStructureSchema`, sauf
+ * qu'un email en cours de création peut n'avoir encore AUCUNE lame. Ce n'est pas
+ * un email exportable : le POC, le renderer et l'export gardent « au moins une
+ * lame ».
+ */
+const EmailConfigBuilderSchema = emailConfigObject.extend({ blocks: z.array(EmailBlockSchema) }).superRefine((config, ctx) => {
+  addAll(ctx, idIssues(config))
+})
+
 /** Règles de produit que le contrat structurel n'impose pas (voir plus haut). */
 export const emailConfigPolicyRules = ["footer-missing", "footer-duplicate", "footer-not-last", "disclaimer-duplicate", "disclaimer-not-before-footer", "consecutive-colored"] as const
 export type EmailConfigPolicyRule = (typeof emailConfigPolicyRules)[number]
@@ -496,6 +506,14 @@ export function safeParseEmailConfigStructure(input: unknown) {
   const result = EmailConfigStructureSchema.safeParse(input, frenchErrors)
   return result.success
     ? { success: true as const, data: toEmailConfig(result.data) }
+    : { success: false as const, error: result.error }
+}
+
+/** Comme `safeParseEmailConfigStructure`, mais un email sans aucune lame est accepté (travail en cours du Builder). */
+export function safeParseEmailConfigBuilder(input: unknown) {
+  const result = EmailConfigBuilderSchema.safeParse(input, frenchErrors)
+  return result.success
+    ? { success: true as const, data: toEmailConfig(result.data as z.output<typeof EmailConfigSchema>) }
     : { success: false as const, error: result.error }
 }
 

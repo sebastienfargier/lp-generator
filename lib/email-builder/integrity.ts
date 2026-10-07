@@ -6,9 +6,11 @@
  *
  * Quatre familles de problèmes, toutes techniques :
  * 1. la structure du document (schéma, version) ;
- * 2. le contrat STRUCTUREL d'EmailConfig (`safeParseEmailConfigStructure` :
+ * 2. le contrat STRUCTUREL d'EmailConfig (`safeParseEmailConfigBuilder` :
  *    lames et slots connus, valeurs des catalogues, texte brut, identifiants
- *    uniques, au moins une lame). On ne le recopie pas : on l'appelle. Les
+ *    uniques). On ne le recopie pas : on l'appelle. Un email en cours de
+ *    création peut n'avoir aucune lame (le POC, le renderer et l'export
+ *    exigent toujours au moins une lame : un document vide n'est pas exportable). Les
  *    règles de produit du contrat historique (footer unique en dernier,
  *    mentions légales juste avant lui, jamais deux zones colorées à la suite)
  *    n'en font PAS partie : le renderer produit un email HTML valide sans elles,
@@ -25,7 +27,7 @@
 import { z } from "zod"
 
 import { emailBankImageIdFromSrc } from "../email/image-bank"
-import { safeParseEmailConfigStructure } from "../email/schemas"
+import { safeParseEmailConfigBuilder } from "../email/schemas"
 import { EmailDocumentSchema, type EmailDocument } from "./document"
 
 export type DocumentIssueCode = "document-structure" | "config-contract" | "block-meta" | "missing-facts" | "unknown-asset"
@@ -43,7 +45,7 @@ export function validateDocumentIntegrity(input: unknown): DocumentIssue[] {
     return structure.error.issues.map((issue) => ({ code: "document-structure", path: issue.path.join(".") || "document", message: issue.message }))
   }
   const document = structure.data
-  const config = safeParseEmailConfigStructure(document.config)
+  const config = safeParseEmailConfigBuilder(document.config)
   if (!config.success) {
     return config.error.issues.map((issue) => ({ code: "config-contract", path: ["config", ...issue.path].join("."), message: issue.message }))
   }

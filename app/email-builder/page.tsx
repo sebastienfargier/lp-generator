@@ -1,21 +1,20 @@
 import type { Metadata } from "next"
 
-import { BuilderWorkspace } from "@/components/email-builder/builder-workspace"
-import { renderCanvasHtml } from "@/lib/email-builder/canvas"
+import { BuilderShell } from "@/components/email-builder/builder-shell"
 import { builderLames } from "@/lib/email-builder/catalog"
-import { buildDemoDocument } from "@/lib/email-builder/demo-document"
+import { builderTemplates } from "@/lib/email-builder/templates"
 
 export const metadata: Metadata = {
   title: "Email Builder",
 }
 
 /**
- * Email Builder V2 : un vrai email Studi du POC (promotion « R4-B », valeurs de
- * démonstration) ouvert dans un canvas manipulable. Le document, son rendu et le
- * catalogue de lames sont préparés côté serveur ; aucun appel de modèle, aucune
- * persistance (un rechargement revient à ce document).
+ * Email Builder : la porte d'entrée. AUCUN email n'est ouvert à l'arrivée : la
+ * personne choisit de partir de zéro ou d'un modèle (la référence viendra plus
+ * tard). Les modèles et le catalogue de lames sont préparés côté serveur ; aucun
+ * appel de modèle, aucune persistance. Le document de démonstration reste une
+ * fixture de développement et de test (`demo-document.ts`), jamais injecté ici.
  */
 export default function EmailBuilderPage() {
-  const initialDocument = buildDemoDocument()
-  return <BuilderWorkspace initialDocument={initialDocument} initialHtml={renderCanvasHtml(initialDocument)} lames={builderLames()} />
+  return <BuilderShell lames={builderLames()} templates={builderTemplates()} />
 }

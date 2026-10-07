@@ -184,13 +184,12 @@ describe("EmailDocument — intégrité (technique, bloquante)", () => {
     for (const input of [null, "texte", 42, {}, []]) assert.equal(validateDocumentIntegrity(input)[0]!.code, "document-structure")
   })
 
-  test("contrat structurel : lame inconnue, slot inconnu, HTML dans un slot, id en double, aucune lame", () => {
+  test("contrat structurel : lame inconnue, slot inconnu, HTML dans un slot, id en double (un email sans lame est valide pour le Builder)", () => {
     const cases: [string, (d: Json) => void][] = [
       ["lame inconnue", (d) => (d.config.blocks[2].type = "email-module-inconnue")],
       ["slot inconnu", (d) => (d.config.blocks[2].slots.inconnu = { text: "x" })],
       ["HTML dans un slot", (d) => (d.config.blocks[3].slots["titre-section"].text = "<b>x</b>")],
       ["id en double", (d) => (d.config.blocks[2].id = "closing")],
-      ["aucune lame", (d) => ((d.config.blocks = []), (d.blockMeta = {}))],
     ]
     for (const [label, change] of cases) {
       const issues = broken(change)
@@ -368,11 +367,14 @@ describe("opération remove-block", () => {
     assert.equal(exported.placeholders.length, 0)
   })
 
-  test("refus techniques : lame inconnue ; la dernière lame (un email sans aucune lame n'a ni contenu ni logo à exporter)", () => {
+  test("refus technique : lame inconnue ; la dernière lame peut être retirée (un email en cours de création peut être vide : il n'est ni rendu ni exportable)", () => {
     refused(promoDocument(), { type: "remove-block", blockId: "fantome" }, "unknown-block")
     const alone = createEmailDocument({ ...promoFixture().config, blocks: [buildEmailLibraryBlock("email-module-footer-compact-legal")].map((footer) => ({ ...footer, id: "footer" })) } as EmailConfig)
     assert.deepEqual(validateDocumentIntegrity(alone), [])
-    refused(alone, { type: "remove-block", blockId: "footer" }, "integrity")
+    const emptied = ok(alone, { type: "remove-block", blockId: "footer" })
+    assert.deepEqual(emptied.config.blocks, [])
+    assert.deepEqual(emptied.blockMeta, {})
+    assert.deepEqual(validateDocumentIntegrity(emptied), [])
   })
 })
 

@@ -212,12 +212,15 @@ describe("Builder — recommandations et refus", () => {
     }
   })
 
-  test("le dernier bloc ne peut pas être supprimé : message clair", () => {
+  test("la dernière lame peut être supprimée : l'email devient vide (un document valide pour le Builder), sans retour d'erreur ; annuler la restaure", () => {
     let state = start()
     for (const id of ["header", "offer", "support", "closing", "mentions-legales"]) state = operate(state, { type: "remove-block", blockId: id })
     assert.deepEqual(ids(state), ["footer"])
     state = operate(state, { type: "remove-block", blockId: "footer" })
-    assert.equal(state.notice?.message, "Un email garde toujours au moins une lame.")
+    assert.deepEqual(ids(state), [])
+    assert.ok(!state.notice || state.notice.tone !== "error")
+    assert.deepEqual(validateDocumentIntegrity(builderDocument(state)), [])
+    state = run(state, { type: "undo" })
     assert.deepEqual(ids(state), ["footer"])
   })
 

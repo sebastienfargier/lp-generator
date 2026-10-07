@@ -17,6 +17,7 @@ import { runAssistant, type AssistantEngineInput, type AssistantEngineResult } f
 import { createMockAssistantClient } from "./assistant-mock"
 import type { AssistantProposal } from "./assistant-proposal"
 import { AssistantRequestSchema } from "./assistant-schema"
+import { isEmptyDocument } from "./document"
 import { parseEmailDocument } from "./integrity"
 
 export type AssistantPublicCode = "invalid-request" | "invalid-document" | "unavailable" | "provider" | "invalid-output" | "internal"
@@ -82,6 +83,8 @@ export async function handleAssistant(request: Request, options: AssistantHandle
   if (!parsed.success) return fail(400, "invalid-request", parsed.error.issues[0]?.message ?? "La demande est invalide.")
   const document = parseEmailDocument(parsed.data.document)
   if (!document.success) return fail(422, "invalid-document", "L'email ne peut pas être analysé : il est invalide.")
+  // Un email vide n'a rien à relire : aucun appel du moteur, donc aucun appel de modèle.
+  if (isEmptyDocument(document.data)) return fail(422, "invalid-document", "Ajoute une première lame pour utiliser l'assistant.")
 
   // Simulation : jamais en production, quoi que demande le navigateur.
   const devMock = parsed.data.devMock === true && env.NODE_ENV !== "production"

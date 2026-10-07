@@ -16,6 +16,8 @@ type VersionsMenuProps = {
   viewingId: string | null
   /** Le travail diffère de sa version de départ. */
   changed: boolean
+  /** Aucune lame : un email vide ne s'enregistre pas en version. */
+  empty?: boolean
   onView: (id: string) => void
   onExitView: () => void
   /** Enregistre une version du travail actuel ; le nom peut être vide. */
@@ -28,7 +30,7 @@ type VersionsMenuProps = {
  * l'historique annuler / rétablir, ni le statut. Le numéro est attribué par le
  * système : on ne saisit que le nom.
  */
-export function VersionsMenu({ versions, baseId, viewingId, changed, onView, onExitView, onSave }: VersionsMenuProps) {
+export function VersionsMenu({ versions, baseId, viewingId, changed, empty = false, onView, onExitView, onSave }: VersionsMenuProps) {
   const [now, setNow] = useState(() => Date.now())
   const [saving, setSaving] = useState(false)
   const [name, setName] = useState("")
@@ -48,7 +50,7 @@ export function VersionsMenu({ versions, baseId, viewingId, changed, onView, onE
       <DropdownMenu onOpenChange={(open) => open && setNow(Date.now())}>
         <DropdownMenuTrigger render={<Button type="button" variant="outline" size="sm" aria-label={`Versions${base ? ` : version actuelle ${versionLabel(base)}` : ""}${changed ? ", modifications non enregistrées dans une version" : ""}`} />}>
           <HistoryIcon data-icon="inline-start" aria-hidden />
-          <span className="max-w-40 truncate">{base ? versionLabel(base) : "Versions"}</span>
+          <span className="hidden max-w-40 truncate lg:inline">{base ? versionLabel(base) : "Versions"}</span>
           {changed && <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-brand-green" />}
           <ChevronDownIcon data-icon="inline-end" aria-hidden />
         </DropdownMenuTrigger>
@@ -79,10 +81,11 @@ export function VersionsMenu({ versions, baseId, viewingId, changed, onView, onE
             ))}
           </DropdownMenuGroup>
           <DropdownMenuSeparator />
-          <DropdownMenuItem disabled={viewing} onClick={() => setSaving(true)}>
+          <DropdownMenuItem disabled={viewing || empty} onClick={() => setSaving(true)}>
             <PlusIcon aria-hidden />
             Enregistrer une nouvelle version
           </DropdownMenuItem>
+          {empty && <p className="px-2 py-1.5 text-caption text-muted-foreground">Ajoute une première lame pour enregistrer une version.</p>}
         </DropdownMenuContent>
       </DropdownMenu>
 
