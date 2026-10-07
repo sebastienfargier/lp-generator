@@ -22,6 +22,7 @@ import { compatibleImages } from "./assistant-proposal"
 import { editableSlots, type CompositionCatalog } from "./composition"
 import { normalizeTextDraft } from "./inline-edit"
 import { isReferenceBodyBlock } from "./reference-catalog"
+import type { ReferenceGap } from "./reference-gap"
 import type { ReferenceMappingEntry, ReferenceResponse, ReferenceSection, ReferenceSensitiveKind } from "./reference-schema"
 
 export type NormalizedSection = {
@@ -31,6 +32,8 @@ export type NormalizedSection = {
   /** Absent si `unmatched`. */
   blockType?: string
   reason: string
+  /** Les écarts de structure déclarés (valeurs fermées) : seule entrée de la sélection des lames générées. */
+  structure: ReferenceGap[]
   content: { slot: string; value: string }[]
   images: { slot: string; imageId: string }[]
 }
@@ -52,7 +55,7 @@ export const containsSensitiveFact = (text: string) => sensitiveFact.test(text) 
 
 const imageSlotsOf = (type: string) => Object.entries((emailBlockManifest as unknown as Record<string, { slots: Record<string, string> }>)[type]?.slots ?? {}).filter(([, kind]) => kind === "asset:visuel").map(([slot]) => slot)
 
-export function normalizeReferenceMapping(response: { analysis: ReferenceResponse["analysis"]; mapping: readonly { ref: string; status: ReferenceMappingEntry["status"]; blockType: string; reason: string; content: { slot: string; value: string }[]; images: { slot: string; imageId: string }[] }[]; sensitive: readonly ReferenceSensitiveKind[] }, catalog: CompositionCatalog): NormalizeResult {
+export function normalizeReferenceMapping(response: { analysis: ReferenceResponse["analysis"]; mapping: readonly { ref: string; status: ReferenceMappingEntry["status"]; blockType: string; reason: string; structure: readonly ReferenceGap[]; content: { slot: string; value: string }[]; images: { slot: string; imageId: string }[] }[]; sensitive: readonly ReferenceSensitiveKind[] }, catalog: CompositionCatalog): NormalizeResult {
   const { sections } = response.analysis
   const refs = sections.map((section) => section.ref)
   if (new Set(refs).size !== refs.length) return { ok: false, message: "Deux sections portent la même référence." }
@@ -71,7 +74,7 @@ export function normalizeReferenceMapping(response: { analysis: ReferenceRespons
     if (entry.status === "unmatched") {
       if (entry.blockType !== "") return { ok: false, message: `La section « ${section.ref} » est sans équivalent : elle ne peut pas désigner une lame.` }
       if (reason === "") return { ok: false, message: `La section « ${section.ref} » sans équivalent doit dire pourquoi.` }
-      normalized.push({ ref: section.ref, analysis: section, status: "unmatched", reason, content: [], images: [] })
+      normalized.push({ ref: section.ref, analysis: section, status: "unmatched", reason, structure: [...entry.structure], content: [], images: [] })
       continue
     }
     const type = entry.blockType
@@ -110,6 +113,7 @@ export function normalizeReferenceMapping(response: { analysis: ReferenceRespons
       analysis: section,
       status: losesImage ? "approximate" : entry.status,
       blockType: type,
+      structure: [...entry.structure],
       reason: losesImage ? (reason === "" ? imageLostReason : /(?:pas|non) repris|absent/i.test(reason) ? reason : `${reason.replace(/\s*\.?\s*$/, ".")} ${imageNotReproduced}`) : reason,
       content,
       images,

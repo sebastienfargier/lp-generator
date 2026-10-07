@@ -21,8 +21,11 @@ import type { EmailGenerationErrorKind } from "../email/anthropic"
 import type { EmailDocument } from "./document"
 import { referenceLimits, validateReferenceBytes } from "./reference-file"
 import { analyzeReference, type ReferenceEngineInput, type ReferenceEngineResult } from "./reference-engine"
+import { analyzeGeneratedReference, type GeneratedReferenceEngineResult } from "./reference-generated-engine"
+import { createMockGeneratedClient } from "./reference-generated-mock"
+import type { GeneratedReferenceRequest } from "./reference-generated-request"
 import { createMockReferenceClient, mockScenarioFor } from "./reference-mock"
-import { createDocumentFromReference } from "./reference-pipeline"
+import { createReferenceWithGeneration, type GenerateReferenceBlocks } from "./reference-pipeline"
 import type { ReferenceReport } from "./reference-report"
 import { builderLames } from "./catalog"
 import { compositionCatalog } from "./composition"
@@ -36,6 +39,11 @@ export type ReferenceHandlerOptions = {
   log?: (entry: { kind: string; status?: number; requestId?: string; rule?: string }) => void
   /** Pour les tests : remplace l'analyse multimodale. */
   engine?: (input: ReferenceEngineInput, options: { devMock: boolean; fileName: string }) => Promise<ReferenceEngineResult>
+  /**
+   * Pour les tests : remplace le SECOND appel (construction de lames générées). Il n'est appelé que si la sélection a des
+   * candidats (jamais sinon), une seule fois, avec 3 candidats au plus ; son échec ne fait jamais échouer la création.
+   */
+  generatedEngine?: (request: GeneratedReferenceRequest, options: { devMock: boolean; fileName: string }) => Promise<GeneratedReferenceEngineResult>
 }
 
 const headers = { "Cache-Control": "no-store" }
@@ -73,6 +81,7 @@ export async function handleReference(request: Request, options: ReferenceHandle
   const env = options.env ?? process.env
   const log = options.log ?? defaultLog
   const engine = options.engine ?? ((input, { devMock, fileName }) => analyzeReference(input, devMock ? { client: createMockReferenceClient(mockScenarioFor(fileName)), env } : { env }))
+  const generatedEngine = options.generatedEngine ?? ((request, { devMock, fileName }) => analyzeGeneratedReference(request, devMock ? { client: createMockGeneratedClient(mockScenarioFor(fileName)), env } : { env }))
 
   // La taille annoncée d'abord : on ne lit pas un corps manifestement trop lourd.
   const announced = Number(request.headers.get("content-length") ?? "0")
@@ -109,7 +118,18 @@ export async function handleReference(request: Request, options: ReferenceHandle
     return fail(mapped.status, mapped.code, mapped.message)
   }
 
-  const created = createDocumentFromReference(result.response, compositionCatalog(builderLames()))
+  // Le second appel est une amélioration facultative : le pipeline le demande seulement s'il y a des candidats ; toute erreur ou réponse inexploitable le laisse sans effet (la journalisation ne garde que sa nature).
+  const generate: GenerateReferenceBlocks = async (request) => {
+    try {
+      const answer = await generatedEngine(request, { devMock, fileName: typeof file.name === "string" ? file.name : "" })
+      if (answer.status === "success") return { status: "success", output: answer.output }
+      log({ kind: `generated-${answer.error.kind}`, ...(answer.error.status ? { status: answer.error.status } : {}), ...(answer.error.requestId ? { requestId: answer.error.requestId } : {}) })
+    } catch {
+      log({ kind: "generated-engine-threw" })
+    }
+    return { status: "error" }
+  }
+  const created = await createReferenceWithGeneration(result.response, compositionCatalog(builderLames()), generate)
   if (created.status === "not-an-email") return fail(422, "not-an-email", "Cette image ne semble pas représenter un email exploitable.")
   if (created.status === "no-match") {
     log({ kind: "no-match" })

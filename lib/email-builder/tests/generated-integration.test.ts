@@ -626,10 +626,12 @@ describe("V2.9.3 — recommandations : la lame générée est un citoyen normal,
 })
 
 describe("V2.9.3 — non-régression : Reference, recettes et assistant restent officiels", () => {
-  test("la création depuis une référence ne produit aucune lame générée (matched / approximate → officiel ; unmatched → rapport)", () => {
-    for (const file of ["reference-engine.ts", "reference-pipeline.ts", "reference-plan.ts", "reference-mapping.ts", "reference-handler.ts", "reference-schema.ts", "reference-catalog.ts", "reference-report.ts", "reference-mock.ts", "templates.ts", "demo-document.ts"]) {
+  test("seule la création depuis une référence crée des lames générées, et seulement par le noyau V2.9.4 : jamais la bibliothèque, les modèles, les recettes ni l'assistant (V2.9.4b a câblé le pipeline)", () => {
+    for (const file of ["reference-engine.ts", "reference-mapping.ts", "reference-handler.ts", "reference-schema.ts", "reference-catalog.ts", "reference-report.ts", "reference-mock.ts", "templates.ts", "demo-document.ts"]) {
       assert.ok(!/addGenerated|add-generated-block|generated-block|GeneratedBlockSpec|renderGeneratedBlock/.test(code(`lib/email-builder/${file}`)), file)
     }
+    // le plan et le pipeline ne connaissent que ce qu'ils posent : jamais le DSL ni le rendu
+    assert.ok(!/GeneratedBlockSpec|renderGeneratedBlock|generated-html/.test(code("lib/email-builder/reference-pipeline.ts") + code("lib/email-builder/reference-plan.ts")))
     for (const file of ["lib/email/recipes.ts", "lib/email/recipe-resolver.ts", "lib/email/promotion-resolver.ts"]) assert.ok(!/generated-block|GeneratedBlockSpec/.test(code(file)), file)
   })
 

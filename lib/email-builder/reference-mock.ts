@@ -12,12 +12,35 @@
 import type { EmailClaudeClient } from "../email/anthropic"
 import type { ReferenceResponse } from "./reference-schema"
 
-export const referenceMockScenarios = ["good", "approximate", "unmatched", "sensitive", "promotion", "proof", "visual", "not-an-email", "error", "no-match"] as const
+export const referenceMockScenarios = [
+  "good",
+  "approximate",
+  "unmatched",
+  "sensitive",
+  "promotion",
+  "proof",
+  "visual",
+  "not-an-email",
+  "error",
+  "no-match",
+  // V2.9.4b : des sections à gap STRUCTUREL, qui déclenchent (ou non) le second appel simulé (`reference-generated-mock.ts`).
+  "generated-unmatched",
+  "generated-approximate",
+  "generated-invalid-unmatched",
+  "generated-invalid-approximate",
+  "generated-over-quota",
+  "generated-offer",
+  "generated-overlap",
+  "generated-mixed",
+  "generated-engine-error",
+] as const
 export type ReferenceMockScenario = (typeof referenceMockScenarios)[number]
 
 /** Le scénario d'un nom de fichier (`approximate.png`, `sensitive-offer.jpg`…) ; « good » par défaut. */
 export function mockScenarioFor(fileName: string): ReferenceMockScenario {
   const name = fileName.toLowerCase()
+  const generated = /generated-(unmatched|approximate|invalid-unmatched|invalid-approximate|over-quota|offer|overlap|mixed|engine-error)/.exec(name)?.[1]
+  if (generated) return `generated-${generated}` as ReferenceMockScenario
   if (/not-?an-?email|notemail/.test(name)) return "not-an-email"
   if (/no-?match/.test(name)) return "no-match"
   if (/error|erreur/.test(name)) return "error"
@@ -39,13 +62,43 @@ const sample = (field: string) => (field.includes("(titre)") ? "Avancer à votre
 
 const section = (ref: string, role: Section["role"], layout: Section["layout"], intent: string, extra: Partial<Section> = {}): Section => ({ ref, role, layout, intent, hasImage: false, imageCount: 0, hasCta: false, repeatedItems: 0, tone: "light", ...extra })
 
-function map(catalog: CatalogEntry[], ref: string, name: string, status: Mapping["status"] = "matched", reason = "", imageIndex = 0, extraContent: Mapping["content"] = []): Mapping {
+function map(catalog: CatalogEntry[], ref: string, name: string, status: Mapping["status"] = "matched", reason = "", imageIndex = 0, extraContent: Mapping["content"] = [], structure: Mapping["structure"] = []): Mapping {
   const entry = catalog.find((candidate) => candidate.name === name) ?? catalog[0]!
   const images = Object.entries(entry.imageChoices ?? {}).map(([slot, ids]) => ({ slot, imageId: ids[imageIndex % ids.length]! }))
-  return { ref, status, blockType: entry.type, reason, content: [...entry.fields.map((field) => ({ slot: slotOf(field), value: sample(field) })).filter((item) => !extraContent.some((extra) => extra.slot === item.slot)), ...extraContent], images }
+  return { ref, status, blockType: entry.type, reason, structure, content: [...entry.fields.map((field) => ({ slot: slotOf(field), value: sample(field) })).filter((item) => !extraContent.some((extra) => extra.slot === item.slot)), ...extraContent], images }
 }
 
-const unmatched = (ref: string, reason: string): Mapping => ({ ref, status: "unmatched", blockType: "", reason, content: [], images: [] })
+const unmatched = (ref: string, reason: string, structure: Mapping["structure"] = []): Mapping => ({ ref, status: "unmatched", blockType: "", reason, structure, content: [], images: [] })
+
+/** Les sections à gap STRUCTUREL des scénarios générés : l'analyse (rôle, disposition, répétitions, visuel) et ce que le modèle déclare dans `structure`. */
+function structural(catalog: CatalogEntry[], kind: "cards" | "icons" | "stat" | "overlap" | "benefits" | "offer", ref: string): { section: Section; mapping: Mapping } {
+  switch (kind) {
+    case "cards":
+      return { section: section(ref, "products", "columns-3", "Trois parcours côte à côte", { repeatedItems: 3, hasCta: true }), mapping: unmatched(ref, "Aucune lame ne présente trois cartes côte à côte.", ["columns", "repeated-cards"]) }
+    case "icons":
+      return { section: section(ref, "feature-list", "columns-2", "Quatre atouts en grille", { repeatedItems: 4 }), mapping: map(catalog, ref, "Liste à icônes", "approximate", "Liste verticale plutôt qu'une grille de deux colonnes.", 0, [], ["columns", "icon-items"]) }
+    case "stat":
+      return { section: section(ref, "proof", "single-column", "Un grand chiffre qui rassure", { hasCta: true }), mapping: unmatched(ref, "Aucune lame ne met un chiffre en avant sur une carte.", ["stat-emphasis"]) }
+    case "overlap":
+      return { section: section(ref, "hero", "image-top", "Une photo avec une carte qui la chevauche", { hasImage: true, imageCount: 1, hasCta: true }), mapping: unmatched(ref, "Aucune lame ne superpose une carte à l'image.", ["card-over-image"]) }
+    case "benefits":
+      return { section: section(ref, "benefits", "columns-3", "Trois bénéfices côte à côte", { repeatedItems: 3 }), mapping: map(catalog, ref, "Liste à icônes", "approximate", "Liste verticale plutôt que trois colonnes.", 0, [], ["columns", "repeated-cards"]) }
+    case "offer":
+      return { section: section(ref, "offer", "image-top", "Une offre avec une carte sur l'image", { hasImage: true, imageCount: 1, hasCta: true }), mapping: unmatched(ref, "Aucune lame ne superpose une carte à l'image.", ["card-over-image"]) }
+  }
+}
+
+const generatedScenarioKinds: Partial<Record<ReferenceMockScenario, ("cards" | "icons" | "stat" | "overlap" | "benefits" | "offer")[]>> = {
+  "generated-unmatched": ["cards"],
+  "generated-approximate": ["icons"],
+  "generated-invalid-unmatched": ["cards"],
+  "generated-invalid-approximate": ["icons"],
+  "generated-over-quota": ["cards", "icons", "stat", "overlap", "benefits"],
+  "generated-offer": ["offer"],
+  "generated-overlap": ["overlap"],
+  "generated-mixed": ["cards", "icons", "stat"],
+  "generated-engine-error": ["cards"],
+}
 
 export function mockReferenceAnswer(catalog: CatalogEntry[], scenario: ReferenceMockScenario): ReferenceResponse {
   const empty: Pick<ReferenceResponse, "status" | "sensitive"> = { status: "valid", sensitive: [] }
@@ -67,6 +120,14 @@ export function mockReferenceAnswer(catalog: CatalogEntry[], scenario: Reference
   if (scenario === "unmatched") {
     sections.splice(2, 0, section("s5", "products", "columns-3", "Tableau comparatif de formations", { repeatedItems: 3, hasCta: true }))
     mapping.splice(2, 0, unmatched("s5", "Aucune lame ne présente un tableau comparatif."))
+  }
+  const kinds = generatedScenarioKinds[scenario]
+  if (kinds) {
+    // Les sections de base (s1 à s4) puis les sections structurelles, insérées avant le dernier appel à l'action.
+    const extras = kinds.map((kind, index) => structural(catalog, kind, `s${5 + index}`))
+    sections.splice(3, 0, ...extras.map((extra) => extra.section))
+    mapping.splice(3, 0, ...extras.map((extra) => extra.mapping))
+    return { ...empty, analysis: { sections }, mapping }
   }
   if (scenario === "promotion") {
     // Une offre promotionnelle : la STRUCTURE (lame promo) est reproduite, jamais ses valeurs (remise, code, date).

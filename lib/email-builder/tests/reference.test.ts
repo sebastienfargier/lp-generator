@@ -172,7 +172,8 @@ describe("V2.8 — contrat ReferenceAnalysis + ReferenceMapping (schéma)", () =
   test("le schéma de transport : aucune union, aucun optionnel, aucune clé de plan, de place, d'opération, de HTML ou de coordonnée", () => {
     const text = JSON.stringify(buildReferenceTransportSchema(ctx))
     assert.ok(!/anyOf|oneOf|"pattern"|minLength|maxLength|\$schema/.test(text.replace(/"pattern":"\^s\[0-9\]\{1,2\}\$"/g, "")))
-    assert.ok(!/placement|anchor|operation|add-block|remove-block|html|css|\bx\b|\by\b|coordinates/i.test(text))
+    // `structure` (V2.9.4b) a des valeurs fermées dont « image-placement » : ce n'est pas une clé de placement de lame.
+    assert.ok(!/placement|anchor|operation|add-block|remove-block|html|css|\bx\b|\by\b|coordinates/i.test(text.replace(/"image-placement"/g, "")))
     for (const kind of ["price", "percentage", "date", "guarantee", "quantified-proof", "partner"]) assert.ok(text.includes(`"${kind}"`), kind)
     for (const id of emailBankImageIds) assert.ok(text.includes(`"${id}"`), id)
     assert.ok(text.length < 6000, `${text.length}`)
@@ -834,7 +835,7 @@ describe("V2.8.2 — derniers correctifs (footer, promotion, visuel, rapport, so
     assert.deepEqual([plain.promotional, plain.pendingValues], [true, []])
     assert.ok(!/restent « à définir »/.test(referenceReportMessage(plain)))
     // rôle « offer » sans équivalent : signalée, pas « reproduite »
-    const gap = created(parsed(withSection((value) => (value.analysis.sections.push({ ...value.analysis.sections[0], ref: "s9", role: "offer", intent: "Une offre sans lame" }), value.mapping.push({ ref: "s9", status: "unmatched", blockType: "", reason: "Aucune lame ne convient.", content: [], images: [] }))))).report
+    const gap = created(parsed(withSection((value) => (value.analysis.sections.push({ ...value.analysis.sections[0], ref: "s9", role: "offer", intent: "Une offre sans lame" }), value.mapping.push({ ref: "s9", status: "unmatched", blockType: "", reason: "Aucune lame ne convient.", structure: [], content: [], images: [] }))))).report
     assert.deepEqual([gap.promotional, gap.promotionalReproduced], [true, false])
     assert.match(referenceReportMessage(gap), /aucune lame ne la reproduit/)
     // une référence sans offre ni valeur à définir : aucun des deux messages
@@ -873,7 +874,7 @@ describe("V2.8.2 — derniers correctifs (footer, promotion, visuel, rapport, so
     const already = norm(withSection((value) => ((value.analysis.sections[2].hasImage = true), (value.mapping[2].status = "approximate"), (value.mapping[2].reason = "Le visuel est absent de la lame."))))
     assert.equal(already.sections[2]!.reason, "Le visuel est absent de la lame.")
     // sans équivalent : inchangé, même avec visuel
-    const gap = norm(withSection((value) => ((value.analysis.sections[2].hasImage = true), (value.mapping[2] = { ref: "s3", status: "unmatched", blockType: "", reason: "Rien ne convient.", content: [], images: [] }))))
+    const gap = norm(withSection((value) => ((value.analysis.sections[2].hasImage = true), (value.mapping[2] = { ref: "s3", status: "unmatched", blockType: "", reason: "Rien ne convient.", structure: [], content: [], images: [] }))))
     assert.equal(gap.sections[2]!.status, "unmatched")
     assert.equal(gap.sections[2]!.reason, "Rien ne convient.")
     assert.equal(imageLostReason, "La structure éditoriale est reproduite, mais le visuel de la référence n'est pas repris.")
@@ -893,7 +894,7 @@ describe("V2.8.2 — derniers correctifs (footer, promotion, visuel, rapport, so
     }
     const long = "Aucune lame ne présente trois cartes de parcours côte à côte avec visuel, titre, texte et lien dans une seule rangée alignée."
     assert.ok(long.length <= 160)
-    const result = created(parsed(withSection((value) => (value.analysis.sections.push({ ...value.analysis.sections[2], ref: "s8", role: "products", layout: "columns-3", intent: "Trois parcours côte à côte." }), value.mapping.push({ ref: "s8", status: "unmatched", blockType: "", reason: long, content: [], images: [] })))))
+    const result = created(parsed(withSection((value) => (value.analysis.sections.push({ ...value.analysis.sections[2], ref: "s8", role: "products", layout: "columns-3", intent: "Trois parcours côte à côte." }), value.mapping.push({ ref: "s8", status: "unmatched", blockType: "", reason: long, structure: [], content: [], images: [] })))))
     assert.equal(result.report.lines[0]!.text, `Produits (3 colonnes) → aucun équivalent. ${long}`)
     assert.equal(created(parsed(response("unmatched"))).report.lines[0]!.text, "Produits (3 colonnes) → aucun équivalent. Aucune lame ne présente un tableau comparatif.")
   })

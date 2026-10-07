@@ -16,6 +16,7 @@ import { z } from "zod"
 import { toAnthropicEmailJsonSchema } from "../email/anthropic-schema"
 import { emailBankImageIds } from "../email/image-bank"
 import { referenceLayouts, referenceRoles } from "./document"
+import { referenceGaps } from "./reference-gap"
 import { referenceLimits } from "./reference-file"
 
 export const referenceStatuses = ["valid", "not-an-email"] as const
@@ -64,6 +65,11 @@ export function buildReferenceResponseSchema(context: ReferenceSchemaContext) {
           status: z.enum(referenceMappingStatuses, { error: "Statut de correspondance inconnu." }),
           blockType,
           reason: shortText("Raison", 160),
+          /**
+           * Les écarts de STRUCTURE (valeurs fermées de `reference-gap.ts`) entre la section et la meilleure lame ; [] si aucun.
+           * La `reason` ci-dessus reste descriptive (compte rendu) : elle ne décide JAMAIS d'une lame générée, seul `structure` et le code.
+           */
+          structure: z.array(z.enum(referenceGaps, { error: "Écart de structure inconnu." })),
           content: z.array(z.strictObject({ slot: shortText("Champ", 60), value: shortText("Valeur", 400) })),
           images: z.array(z.strictObject({ slot: shortText("Visuel", 60), imageId })),
         }),

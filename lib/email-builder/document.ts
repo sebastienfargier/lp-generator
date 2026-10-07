@@ -51,6 +51,8 @@ export const ReferenceProvenanceSchema = z.strictObject({
   sections: z.number().int().min(0).max(40),
   matched: z.number().int().min(0).max(40),
   approximate: z.number().int().min(0).max(40),
+  /** Sections reproduites par une lame GÉNÉRÉE (V2.9.4) : un nombre, jamais une spec. Absent d'un document sans lame générée. */
+  generated: z.number().int().min(0).max(3).optional(),
   unmatched: z
     .array(z.strictObject({ role: z.enum(referenceRoles), layout: z.enum(referenceLayouts), intent: z.string().max(160), hasImage: z.boolean(), repeatedItems: z.number().int().min(0).max(20), hasCta: z.boolean() }))
     .max(40),
