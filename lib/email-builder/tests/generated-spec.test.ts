@@ -13,7 +13,7 @@ import { emailSystemElements } from "../../email/system"
 import { safeParseEmailConfig } from "../../email/schemas"
 import { slotProtection } from "../assistant-proposal"
 import { referenceRoles } from "../document"
-import { availableImageFormats, buttonMaxLength, columnRatios, futureImageFormats, generatedLimits, maxGeneratedBlocksPerEmail, radii, spacerSizes, stackGaps, textMaxLength } from "../generated/tokens"
+import { availableImageFormats, buttonMaxLength, columnRatios, sectionPaddingX, sectionPaddingY, futureImageFormats, generatedLimits, maxGeneratedBlocksPerEmail, radii, spacerSizes, stackGaps, textMaxLength } from "../generated/tokens"
 import { deriveGeneratedSlots, slotNameProblem } from "../generated/slots"
 import { deriveGeneratedCapabilities, generatedSpecBytes, validateGeneratedBlockSpec } from "../generated/validate"
 import { controlledSlotStems, isControlledSlotName } from "../slot-roles"
@@ -361,5 +361,70 @@ describe("V2.9.1 — frontières du module", () => {
     for (const size of spacerSizes) assert.ok(new RegExp(`height="${size}"`).test(html), `espaceur ${size}`)
     for (const radius of radii.filter((value) => value > 0)) assert.ok(new RegExp(`border-radius:${radius}px`).test(html), `rayon ${radius}`)
     assert.deepEqual([...Object.keys(emailImageFormats)], [...availableImageFormats])
+  })
+})
+
+describe("V2.9.2.1 — `inset` (padding contrôlé)", () => {
+  const inset = (spec: Json) => spec.root.children[1] as Json
+  const hero = () => clone(heroImageText) as Json
+
+  test("valide : mêmes échelles que la section ; compté dans la profondeur et les nœuds ; aucun slot", () => {
+    const result = ok(heroImageText)
+    assert.deepEqual(result.slots.map((slot) => slot.name), ["image", "sur-titre", "titre", "texte", "cta"])
+    assert.equal(result.stats.nodes, 7, "image + inset + stack + 3 textes + bouton")
+    assert.equal(result.stats.depth, 3, "inset → stack → feuille")
+    for (const x of sectionPaddingX) for (const y of sectionPaddingY) {
+      const spec = hero()
+      Object.assign(inset(spec), { padX: x, padY: y })
+      ok(spec)
+    }
+  })
+
+  test("refusés : enfants vides, trop nombreux ; padding hors vocabulaire ; clés inconnues ; champs de style", () => {
+    const empty = hero()
+    inset(empty).children = []
+    refused(empty, "schema")
+    const many = hero()
+    inset(many).children = Array.from({ length: 9 }, (_, i) => ({ t: "spacer", size: 8 + 0 * i }))
+    refused(many, "schema")
+    for (const bad of [0.5, 41, -1, "40", "#fff", "calc(1px)", null, true, {}, []]) for (const key of ["padX", "padY"]) {
+      const spec = hero()
+      inset(spec)[key] = bad
+      refused(spec, "schema")
+    }
+    for (const key of ["style", "className", "id", "href", "background", "backgroundColor", "radius", "border", "margin", "width", "height", "align", "gap", "fill", "slot", "position", "zIndex", "html"]) for (const value of ["<script>alert(1)</script>", "javascript:alert(1)", "#ff0000", "calc(100% - 20px)", "-12px", 12]) {
+      const spec = hero()
+      inset(spec)[key] = value
+      refused(spec, "schema")
+    }
+    const missing = hero()
+    delete inset(missing).padX
+    refused(missing, "schema")
+  })
+
+  test("limites : l'inset consomme de la profondeur (4 niveaux au plus) et des nœuds (40 au plus)", () => {
+    const nest = (insets: number) => {
+      let node: Json = { t: "text", slot: "t", style: "body", align: "start", tone: "text" }
+      for (let i = 0; i < insets; i += 1) node = { t: "inset", padX: 20, padY: 0, children: [node] }
+      return { specVersion: 1, role: "text", root: { t: "section", padX: 0, padY: 0, children: [node] } }
+    }
+    assert.equal(ok(nest(3)).stats.depth, 4)
+    refused(nest(4), "depth")
+    const wide = (perInset: number) => ({ specVersion: 1, role: "text", root: { t: "section", padX: 0, padY: 0, children: Array.from({ length: 5 }, () => ({ t: "inset", padX: 20, padY: 0, children: Array.from({ length: perInset }, () => ({ t: "spacer", size: 8 })) })) } })
+    assert.equal(ok(wide(7)).stats.nodes, 40)
+    refused(wide(8), "nodes")
+  })
+
+  test("l'inset ne rend pas un slot réservé acceptable et ne contourne pas l'overlap : la règle suit dans les sous-arbres", () => {
+    const spec = hero()
+    inset(spec).children[0].children[1].slot = "valeur-cle"
+    refused(spec, "slot-reserved")
+    const lone = clone(bannerOverlapCard) as Json
+    lone.root.children = [{ t: "inset", padX: 40, padY: 0, children: [lone.root.children[1]] }]
+    refused(lone, "overlap")
+  })
+
+  test("capacités : l'inset n'ajoute aucune exigence (ni overlap, ni colonnes)", () => {
+    assert.deepEqual(deriveGeneratedCapabilities(ok(heroImageText).spec), { usesOverlap: false, maxColumns: 1, imageFormats: ["large"] })
   })
 })

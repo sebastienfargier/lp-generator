@@ -141,7 +141,7 @@ export function renderEmailFromUnknown(
 /* -------------------------------------------------------------------------- */
 
 /** Contenu textuel d'un élément : `&`, `<`, `>`. Liquid reste une chaîne. */
-function escapeText(value: string) {
+export function escapeText(value: string) {
   return value
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
@@ -149,7 +149,7 @@ function escapeText(value: string) {
 }
 
 /** Valeur d'attribut entre guillemets doubles : en plus `"`. */
-function escapeAttribute(value: string) {
+export function escapeAttribute(value: string) {
   return escapeText(value).replaceAll('"', "&quot;")
 }
 

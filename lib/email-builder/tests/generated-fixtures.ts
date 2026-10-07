@@ -15,7 +15,7 @@ export const textSection = {
   root: { t: "section", padX: 40, padY: 48, children: [{ t: "stack", gap: 18, align: "start", children: [text("titre", "title", "title"), text("texte", "body"), button("cta")] }] },
 }
 
-/** B. Un hero : visuel large, sur-titre, titre, texte, bouton. */
+/** B. Un hero : visuel pleine largeur, puis un `inset` qui porte le texte (le visuel est plus large que le contenu éditorial). */
 export const heroImageText = {
   specVersion: 1,
   role: "hero",
@@ -25,7 +25,7 @@ export const heroImageText = {
     padY: 0,
     children: [
       { t: "image", slot: "image", format: "large", radius: 0, align: "start" },
-      { t: "stack", gap: 18, align: "start", children: [text("sur-titre", "eyebrow", "muted"), text("titre", "title-xl", "title"), text("texte", "body"), button("cta")] },
+      { t: "inset", padX: 40, padY: 40, children: [{ t: "stack", gap: 18, align: "start", children: [text("sur-titre", "eyebrow", "muted"), text("titre", "title-xl", "title"), text("texte", "body"), button("cta")] }] },
     ],
   },
 }

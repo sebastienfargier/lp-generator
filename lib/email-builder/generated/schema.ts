@@ -79,7 +79,9 @@ function nodeSchema(level: number): z.ZodType<unknown> {
     .strictObject({ t: z.literal("columns"), ratio: z.enum(ratios, { error: "Ratio de colonnes inconnu." }), gap: oneOf(columnGaps, "Écart de colonnes"), align: z.enum(columnAligns, { error: "Alignement inconnu." }), children: children(2, 4) })
     .refine((node) => node.children.length === columnRatios[node.ratio], { error: "Le nombre de colonnes ne correspond pas au ratio.", path: ["children"] })
   const card = z.strictObject({ t: z.literal("card"), fill: z.enum(cardFills, { error: "Fond de carte inconnu." }), radius: oneOf(radii, "Rayon"), pad: oneOf(cardPaddings, "Padding"), overlap: oneOf(overlaps, "Chevauchement"), children: children(1, 6) })
-  return z.discriminatedUnion("t", [stack, columns, card, ...leaves], { error: "Primitive inconnue." })
+  // `inset` : un padding contrôlé sur un groupe d'enfants, rien d'autre (ni fond, ni bordure, ni marge, ni slot). Mêmes échelles que la section : elles ont leurs classes `pxN` / `pyN` responsives.
+  const inset = z.strictObject({ t: z.literal("inset"), padX: oneOf(sectionPaddingX, "Padding horizontal"), padY: oneOf(sectionPaddingY, "Padding vertical"), children: children(1, 8) })
+  return z.discriminatedUnion("t", [stack, columns, card, inset, ...leaves], { error: "Primitive inconnue." })
 }
 
 export const GeneratedBlockSpecSchema = z.strictObject({
@@ -97,6 +99,7 @@ export const GeneratedBlockSpecSchema = z.strictObject({
 /** Un nœud validé : les feuilles et les conteneurs. */
 export type GeneratedNode =
   | { t: "stack"; gap: (typeof stackGaps)[number]; align: (typeof aligns)[number]; children: GeneratedNode[] }
+  | { t: "inset"; padX: (typeof sectionPaddingX)[number]; padY: (typeof sectionPaddingY)[number]; children: GeneratedNode[] }
   | { t: "columns"; ratio: keyof typeof columnRatios; gap: (typeof columnGaps)[number]; align: (typeof columnAligns)[number]; children: GeneratedNode[] }
   | { t: "card"; fill: (typeof cardFills)[number]; radius: (typeof radii)[number]; pad: (typeof cardPaddings)[number]; overlap: (typeof overlaps)[number]; children: GeneratedNode[] }
   | { t: "image"; slot: string; format: keyof typeof import("../../email/image-bank").emailImageFormats; radius: (typeof radii)[number]; align: (typeof aligns)[number] }
