@@ -104,7 +104,8 @@ describe("écran : plus d'apparence de démo, état initial vide", () => {
     assert.ok(card)
     assert.ok(!/démo|demo|sans IA/i.test(`${card[1]} ${card[2]}`))
     assert.match(card[1]!, /IA/)
-    assert.equal(card[2], "Générer un email")
+    // La carte mène désormais au Builder (« Créer un email », comme son écran d'entrée) ; l'ancien Generator reste, sans accès depuis le dashboard.
+    assert.equal(card[2], "Créer un email")
   })
 
   test("C-D. aucun aperçu déterministe ni génération au chargement : la page n'appelle rien, l'état initial est vide", () => {

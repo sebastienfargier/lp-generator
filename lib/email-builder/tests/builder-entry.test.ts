@@ -5,7 +5,7 @@
  * suites). Aucun réseau, aucun appel de modèle.
  */
 import assert from "node:assert/strict"
-import { readFileSync } from "node:fs"
+import { existsSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import { after, before, describe, mock, test } from "node:test"
 
@@ -406,5 +406,33 @@ describe("V2.6 — topbar responsive (structure, pas de pixels)", () => {
   test("aucune action n'est retirée de la barre : annuler, rétablir, statut, versions, bibliothèque, recommencer restent rendus à toute largeur", () => {
     for (const piece of ["aria-label=\"Annuler\"", "aria-label=\"Rétablir\"", "<StatusMenu", "<VersionsMenu", "onClick={onAddBlock}", "<RestartButton"]) assert.ok(topbar.includes(piece), piece)
     assert.ok(!/hidden (sm|md|lg):(flex|inline-flex|block)[^"]*"[^>]*>\s*<(Button|StatusMenu|VersionsMenu|RestartButton)/.test(topbar.replace(/className="hidden sm:flex"/, "")), "aucune action cachée")
+  })
+})
+
+describe("Dashboard → Email Builder", () => {
+  const dashboard = code("components/dashboard/dashboard-data.ts")
+
+  test("l'accès Email principal du dashboard (carte outil, navigation, recherche) est le Builder", () => {
+    assert.match(dashboard, /title: "Emails",\s*description: "[^"]+",\s*cta: "Créer un email",\s*href: "\/email-builder"/)
+    assert.match(dashboard, /\{ title: "Emails", href: "\/email-builder", icon: Mail \}/)
+    // la recherche (⌘K) est dérivée de la navigation : aucune seconde source d'accès
+    assert.match(dashboard, /export const searchableItems = navItems/)
+    assert.ok(!/\/email-generator/.test(dashboard), "plus aucun lien du dashboard vers l'ancien générateur")
+    assert.ok(!/L'IA le compose|l'IA compose/.test(dashboard.match(/title: "Emails"[\s\S]*?href/)?.[0] ?? ""), "la carte ne promet pas une composition par l'IA que le Builder ne fait pas encore")
+  })
+
+  test("le bouton Dashboard du Builder (entrée comme topbar) retourne au dashboard global, pas à l'ancien générateur", () => {
+    for (const path of ["entry-screen", "builder-topbar"]) {
+      const source = code(`components/email-builder/${path}.tsx`)
+      assert.match(source, /render=\{<Link href="\/" \/>\}/, path)
+      assert.ok(!/email-generator/.test(source), path)
+    }
+    assert.ok(existsSync(join(root, "app/(dashboard)/page.tsx")), "le dashboard global est la page racine")
+  })
+
+  test("l'ancien générateur, ses API, la bibliothèque et le Builder restent en place ; aucune redirection globale", () => {
+    for (const path of ["app/email-generator/page.tsx", "app/api/generate-email/route.ts", "app/api/edit-email/route.ts", "app/api/export-email/route.ts", "app/(dashboard)/email-library/page.tsx", "app/email-builder/page.tsx", "app/api/email-builder/render/route.ts", "app/api/email-builder/assistant/route.ts"]) assert.ok(existsSync(join(root, path)), path)
+    assert.ok(!/redirects|rewrites|permanentRedirect|redirect\(/.test(code("next.config.ts")), "aucune redirection de routes")
+    assert.ok(!/email-builder/.test(code("app/email-generator/page.tsx")), "l'ancien générateur ne connaît pas le Builder")
   })
 })

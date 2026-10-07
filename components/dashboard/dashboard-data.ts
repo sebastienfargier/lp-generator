@@ -14,7 +14,9 @@ import { emailBlockManifest } from "@/lib/email/manifest"
 
 /**
  * Données du dashboard : outils, ressources et navigation. Les destinations
- * sont celles des routes existantes ; aucune page n'est inventée. Les
+ * sont celles des routes existantes ; aucune page n'est inventée. L'accès Email
+ * principal est le Builder (`/email-builder`) ; l'ancien générateur
+ * (`/email-generator`) reste en place, sans accès depuis le dashboard. Les
  * compteurs viennent des vraies sources (registre de la bibliothèque).
  */
 
@@ -49,9 +51,9 @@ export const tools: Tool[] = [
   },
   {
     title: "Emails",
-    description: "Décrivez votre email : l'IA le compose à partir de lames contrôlées.",
-    cta: "Générer un email",
-    href: "/email-generator",
+    description: "Construisez votre email lame par lame, ou partez d'un modèle Studi, avec l'aide de l'assistant IA.",
+    cta: "Créer un email",
+    href: "/email-builder",
     icon: Mail,
   },
 ]
@@ -98,7 +100,7 @@ export type NavItem = {
 export const navItems: NavItem[] = [
   { title: "Dashboard", href: "/", icon: LayoutDashboard },
   { title: "Landing Pages", href: "/generator", icon: PanelsTopLeft },
-  { title: "Emails", href: "/email-generator", icon: Mail },
+  { title: "Emails", href: "/email-builder", icon: Mail },
   {
     title: "Ressources",
     icon: Library,

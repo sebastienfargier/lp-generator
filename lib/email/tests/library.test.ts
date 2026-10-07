@@ -4,7 +4,7 @@
  * resolver. Aucune liste de lames n'est tenue à part.
  */
 import assert from "node:assert/strict"
-import { readdirSync, readFileSync, statSync } from "node:fs"
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs"
 import { join } from "node:path"
 import { describe, test } from "node:test"
 
@@ -303,11 +303,12 @@ describe("bibliothèque Email : portée et non-régression", () => {
     for (const path of ["lib/email/demo-generator.ts", "lib/email/generation.ts", "lib/email/demo-assets.ts"]) assert.ok(!/library/i.test(strip(path)), path)
   })
 
-  test("accès : le Dashboard mène à la bibliothèque sans remplacer le Generator", () => {
+  test("accès : le Dashboard mène à la bibliothèque ; l'accès Email principal est le Builder, l'ancien Generator reste en place", () => {
     const dashboard = code("components/dashboard/dashboard-data.ts")
     assert.match(dashboard, /title: "Lames Email"[\s\S]*?href: "\/email-library"/)
-    assert.match(dashboard, /title: "Emails",\s*description: "[^"]+",\s*cta: "[^"]+",\s*href: "\/email-generator"/)
-    assert.match(dashboard, /\{ title: "Emails", href: "\/email-generator", icon: Mail \}/)
+    assert.match(dashboard, /title: "Emails",\s*description: "[^"]+",\s*cta: "[^"]+",\s*href: "\/email-builder"/)
+    assert.match(dashboard, /\{ title: "Emails", href: "\/email-builder", icon: Mail \}/)
+    assert.ok(existsSync(join(process.cwd(), "app/email-generator/page.tsx")), "l'ancien Generator reste disponible")
     assert.match(code("app/(dashboard)/email-library/page.tsx"), /title="Bibliothèque Email"/)
   })
 })

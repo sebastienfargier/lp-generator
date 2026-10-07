@@ -244,16 +244,17 @@ describe("clarté de la démonstration", () => {
     assert.ok(!/fetch\(|requestLandingGeneration/.test(preview))
   })
 
-  test("Dashboard : Landing et Email disent « IA » et « Décrivez », plus de « démo » ni de « sans IA », ni de « gérez » ou d'« éditeur »", () => {
+  test("Dashboard : Landing dit « IA » et « Décrivez » ; Email (Builder) dit « lame par lame » et « assistant IA » ; plus de « démo » ni de « sans IA », ni de « gérez » ou d'« éditeur »", () => {
     const landing = tools.match(/title: "Landing Pages",\s*description: "([^"]+)",\s*cta: "([^"]+)"/)
     const email = tools.match(/title: "Emails",\s*description: "([^"]+)",\s*cta: "([^"]+)"/)
     assert.ok(landing && email)
     assert.match(landing[1]!, /IA/)
     assert.match(landing[1]!, /Décrivez/)
     assert.equal(landing[2], "Générer une landing page")
-    assert.match(email[1]!, /IA/)
-    assert.match(email[1]!, /Décrivez/)
-    assert.equal(email[2], "Générer un email")
+    // La carte Email mène au Builder (V2.6) : on y construit lame par lame, avec l'assistant ; l'IA ne compose pas l'email à partir d'une description.
+    assert.match(email[1]!, /lame par lame/)
+    assert.match(email[1]!, /assistant IA/)
+    assert.equal(email[2], "Créer un email")
     assert.ok(!/démo|sans IA/i.test(`${email[1]} ${email[2]}`))
     assert.ok(!/gérez|éditeur/i.test(`${tools}\n${card}`))
     assert.match(card, /\{cta\}/)
