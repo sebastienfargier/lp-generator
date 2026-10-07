@@ -65,19 +65,21 @@ describe("V2.6 — état d'entrée : aucun email ouvert", () => {
     assert.ok(!isEmptyDocument(demo))
   })
 
-  test("trois choix, tous activés depuis V2.8 : partir de zéro, d'un modèle, d'une référence ; l'écran d'entrée lui-même n'a ni champ ni appel", () => {
+  test("trois chemins de même poids (V2.8, copy de l'Entry V2) : partir de zéro, d'un modèle, d'une référence ; l'écran d'entrée lui-même n'a ni champ ni appel", () => {
     const screen = code("components/email-builder/entry-screen.tsx")
     const raw = read("components/email-builder/entry-screen.tsx")
-    for (const label of ["Partir de zéro", "Partir d&apos;un modèle", "Depuis une référence", "Construire mon email lame par lame", "Utiliser une base Studi existante", "Créer à partir d&apos;une inspiration", "Comment veux-tu commencer"]) assert.ok(raw.includes(label), label)
-    assert.match(screen, /<button type="button" onClick=\{onReference\}/)
+    for (const label of ["Créons ton prochain email.", "Partir de zéro", "Partir d'un modèle", "Créer depuis une référence", "Assemble ton email lame par lame.", "Une base Studi que tu modifies librement.", "Importe une inspiration, nous l'adaptons à Studi.", "Commencer", "Voir les modèles", "Importer une capture"]) assert.ok(raw.includes(label.replace("'", "'")) || raw.includes(label.replace("'", "&apos;")), label)
+    assert.match(screen, /onSelect=\{onBlank\}/)
+    assert.match(screen, /onSelect=\{onTemplates\}/)
+    assert.match(screen, /onSelect=\{onReference\}/)
     assert.ok(!/Bientôt disponible|disabled/.test(raw), "la référence n'est plus désactivée")
     assert.ok(!/<input|type="file"|type="url"|fetch\(|anthropic/i.test(screen), "l'écran d'entrée ne porte ni upload, ni champ, ni appel")
   })
 
-  test("responsive : les trois choix s'empilent sur petit écran", () => {
+  test("responsive : les trois choix s'empilent sur petit écran, passent à 2 + 1 sur tablette puis à 3 colonnes", () => {
     const screen = code("components/email-builder/entry-screen.tsx")
-    assert.match(screen, /grid-cols-1 gap-4 md:grid-cols-3/)
-    assert.match(screen, /grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3/)
+    assert.match(screen, /grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3/)
+    assert.match(screen, /grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3/)
   })
 
   test("transitions du shell : entrée → modèles → retour ; seules les transitions valides agissent", () => {

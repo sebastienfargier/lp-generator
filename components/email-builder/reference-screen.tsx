@@ -10,6 +10,7 @@ import type { ReferenceResponseBody } from "@/lib/email-builder/reference-handle
 import { referenceReportMessage } from "@/lib/email-builder/reference-report"
 import { referenceLimits } from "@/lib/email-builder/reference-file"
 
+import { EntryFrame } from "./entry-frame"
 import { prepareReferenceImage, type PreparedReference } from "./reference-image"
 
 type ReferenceScreenProps = {
@@ -83,88 +84,88 @@ export function ReferenceScreen({ onBack, onCreated }: ReferenceScreenProps) {
   }
 
   return (
-    <div className="flex h-dvh min-h-0 flex-col bg-background">
-      <header className="flex h-12 shrink-0 items-center border-b px-4">
+    <EntryFrame
+      label="Créer depuis une référence"
+      maxWidth="max-w-2xl"
+      back={
         <Button type="button" variant="ghost" size="sm" className="-ml-2" disabled={analyzing} onClick={onBack}>
           <ArrowLeftIcon data-icon="inline-start" aria-hidden />
           Retour
         </Button>
-      </header>
+      }
+    >
+      <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-6 sm:py-10">
+        <div className="flex flex-col gap-2">
+          <h1 className="text-h1">Créer depuis une référence</h1>
+          <p className="text-body text-muted-foreground">Dépose la capture d&apos;un email qui t&apos;inspire. Je reproduis sa structure avec les lames Studi, avec des textes provisoires à relire. L&apos;image n&apos;est pas conservée.</p>
+        </div>
 
-      <main aria-label="Créer depuis une référence" className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-12">
-          <div className="flex flex-col gap-2">
-            <h1 className="text-h1">Depuis une référence</h1>
-            <p className="text-body text-muted-foreground">Dépose la capture d&apos;un email qui t&apos;inspire. Je reproduis sa structure avec les lames Studi, avec des textes provisoires à relire. L&apos;image n&apos;est pas conservée.</p>
-          </div>
-
-          {chosen ? (
-            <div className="flex flex-col gap-4 rounded-lg border p-4">
-              {/* eslint-disable-next-line @next/next/no-img-element -- aperçu local (blob:) de l'image choisie */}
-              <img src={chosen.previewUrl} alt="Aperçu de la référence" className="max-h-96 w-full rounded-md border bg-muted object-contain object-top" />
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="min-w-0 truncate text-caption text-muted-foreground">
-                  {chosen.image.name} · {chosen.image.width} × {chosen.image.height} px
-                </p>
-                <div className="flex shrink-0 items-center gap-2">
-                  <Button type="button" variant="outline" size="sm" disabled={analyzing} onClick={() => input.current?.click()}>
-                    <UploadIcon data-icon="inline-start" aria-hidden />
-                    Remplacer
-                  </Button>
-                  <Button type="button" variant="ghost" size="sm" disabled={analyzing} onClick={() => (setChosen(null), setError(null), setDetails([]))}>
-                    <Trash2Icon data-icon="inline-start" aria-hidden />
-                    Supprimer
-                  </Button>
-                </div>
+        {chosen ? (
+          <div className="flex flex-col gap-4 rounded-lg border p-4">
+            {/* eslint-disable-next-line @next/next/no-img-element -- aperçu local (blob:) de l'image choisie */}
+            <img src={chosen.previewUrl} alt="Aperçu de la référence" className="max-h-96 w-full rounded-md border bg-muted object-contain object-top" />
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="min-w-0 truncate text-caption text-muted-foreground">
+                {chosen.image.name} · {chosen.image.width} × {chosen.image.height} px
+              </p>
+              <div className="flex shrink-0 items-center gap-2">
+                <Button type="button" variant="outline" size="sm" disabled={analyzing} onClick={() => input.current?.click()}>
+                  <UploadIcon data-icon="inline-start" aria-hidden />
+                  Remplacer
+                </Button>
+                <Button type="button" variant="ghost" size="sm" disabled={analyzing} onClick={() => (setChosen(null), setError(null), setDetails([]))}>
+                  <Trash2Icon data-icon="inline-start" aria-hidden />
+                  Supprimer
+                </Button>
               </div>
             </div>
-          ) : (
-            <div
-              onDragOver={(event) => (event.preventDefault(), setDragging(true))}
-              onDragLeave={() => setDragging(false)}
-              onDrop={(event) => {
-                event.preventDefault()
-                setDragging(false)
-                void choose(event.dataTransfer.files[0])
-              }}
-              className={`flex flex-col items-center gap-3 rounded-lg border border-dashed px-6 py-12 text-center transition-colors ${dragging ? "bg-muted" : ""}`}
-            >
-              <ImageIcon className="size-6 text-muted-foreground" aria-hidden />
-              <p className="text-body">Glisse une capture ici</p>
-              <Button type="button" variant="outline" size="sm" onClick={() => input.current?.click()}>
-                <UploadIcon data-icon="inline-start" aria-hidden />
-                Choisir un fichier
-              </Button>
-              <p className="text-caption text-muted-foreground">PNG, JPEG ou WebP · {referenceLimits.maxBytes / 1024 / 1024} Mo au plus</p>
-            </div>
-          )}
-
-          <input ref={input} type="file" accept="image/png,image/jpeg,image/webp" aria-label="Choisir une image de référence" className="hidden" onChange={(event) => (void choose(event.target.files?.[0]), (event.target.value = ""))} />
-
-          {error && (
-            <div role="alert" className="flex flex-col gap-1 rounded-lg border border-destructive/40 px-4 py-3 text-body text-destructive">
-              <p>{error}</p>
-              {details.map((line) => (
-                <p key={line} className="text-caption">
-                  ? {line}
-                </p>
-              ))}
-            </div>
-          )}
-
-          <div className="flex items-center justify-end gap-3">
-            {analyzing && (
-              <p role="status" className="flex items-center gap-2 text-caption text-muted-foreground">
-                <Spinner aria-hidden />
-                Analyse de la référence…
-              </p>
-            )}
-            <Button type="button" disabled={!chosen || analyzing} onClick={() => void analyze()}>
-              Analyser et créer
-            </Button>
           </div>
+        ) : (
+          <div
+            onDragOver={(event) => (event.preventDefault(), setDragging(true))}
+            onDragLeave={() => setDragging(false)}
+            onDrop={(event) => {
+              event.preventDefault()
+              setDragging(false)
+              void choose(event.dataTransfer.files[0])
+            }}
+            className={`flex flex-col items-center gap-3 rounded-lg border border-dashed px-6 py-12 text-center transition-colors ${dragging ? "bg-muted" : ""}`}
+          >
+            <ImageIcon className="size-6 text-muted-foreground" aria-hidden />
+            <p className="text-body">Glisse une capture ici</p>
+            <Button type="button" variant="outline" size="sm" onClick={() => input.current?.click()}>
+              <UploadIcon data-icon="inline-start" aria-hidden />
+              Choisir un fichier
+            </Button>
+            <p className="text-caption text-muted-foreground">PNG, JPEG ou WebP · {referenceLimits.maxBytes / 1024 / 1024} Mo au plus</p>
+          </div>
+        )}
+
+        <input ref={input} type="file" accept="image/png,image/jpeg,image/webp" aria-label="Choisir une image de référence" className="hidden" onChange={(event) => (void choose(event.target.files?.[0]), (event.target.value = ""))} />
+
+        {error && (
+          <div role="alert" className="flex flex-col gap-1 rounded-lg border border-destructive/40 px-4 py-3 text-body text-destructive">
+            <p>{error}</p>
+            {details.map((line) => (
+              <p key={line} className="text-caption">
+                ? {line}
+              </p>
+            ))}
+          </div>
+        )}
+
+        <div className="flex items-center justify-end gap-3">
+          {analyzing && (
+            <p role="status" className="flex items-center gap-2 text-caption text-muted-foreground">
+              <Spinner aria-hidden />
+              Analyse de la référence…
+            </p>
+          )}
+          <Button type="button" disabled={!chosen || analyzing} onClick={() => void analyze()}>
+            Analyser et créer
+          </Button>
         </div>
-      </main>
-    </div>
+      </div>
+    </EntryFrame>
   )
 }
