@@ -31,6 +31,7 @@
  *
  * Domaine Email Builder uniquement : aucun import depuis `lib/landing`.
  */
+import { isEmailBankImageId } from "../email/image-bank"
 import { emailBlockManifest } from "../email/manifest"
 import type { EmailBlockType } from "../email/types"
 import type { EmailDocument } from "./document"
@@ -38,6 +39,7 @@ import {
   assistantFields,
   blocksOf,
   checkContentProtection,
+  compatibleImages,
   maxProposalChanges,
   proposalToOperations,
   slotProtection,
@@ -58,7 +60,14 @@ export type PlacementWhere = (typeof placementWheres)[number]
 /** `anchor` : l'identifiant d'une lame (ou la `ref` d'une lame ajoutée) pour `before` / `after` ; vide pour `first` / `last`. */
 export type Placement = { where: PlacementWhere; anchor: string }
 
-export type AddAction = { ref: string; blockType: string; placement: Placement; content: { slot: string; value: string }[] }
+export type AddAction = {
+  ref: string
+  blockType: string
+  placement: Placement
+  content: { slot: string; value: string }[]
+  /** Images de la BANQUE (identifiant, jamais une URL) pour les visuels de la lame ; absent : l'image par défaut de la bibliothèque. */
+  images?: { slot: string; imageId: string }[]
+}
 export type MoveAction = { blockId: string; placement: Placement }
 export type RemoveAction = { blockId: string }
 
@@ -77,8 +86,9 @@ export const planOf = (proposal: { changes: readonly ProposalChange[]; structure
 
 export const hasStructure = (structure: Partial<CompositionStructure> | undefined) => (structure?.add?.length ?? 0) + (structure?.move?.length ?? 0) + (structure?.remove?.length ?? 0) > 0
 
-/** Limites d'un plan : une proposition reste relisible d'un coup d'œil. */
-export const compositionLimits = { add: 5, move: 8, remove: 8, content: maxProposalChanges, slotsPerBlock: 16 } as const
+/** Limites d'un plan. Celles-ci sont les valeurs par défaut (l'assistant : une proposition reste relisible d'un coup d'œil) ; un autre producteur de plan peut en passer d'autres. */
+export type CompositionLimits = { add: number; move: number; remove: number; content: number; slotsPerBlock: number }
+export const compositionLimits: CompositionLimits = { add: 5, move: 8, remove: 8, content: maxProposalChanges, slotsPerBlock: 16 }
 
 /** Une ref symbolique : un mot court, jamais un identifiant existant. */
 const refPattern = /^[a-z][a-z0-9-]{0,29}$/
@@ -148,13 +158,14 @@ function indexFor(order: readonly string[], types: ReadonlyMap<string, string>, 
  * document résultat : toutes les actions s'appliquent, ou aucune (un échec ne
  * laisse rien). Le catalogue dit quelles lames sont ajoutables.
  */
-export function validateCompositionPlan(document: EmailDocument, plan: CompositionPlan, catalog: CompositionCatalog): CompositionCheck {
+export function validateCompositionPlan(document: EmailDocument, plan: CompositionPlan, catalog: CompositionCatalog, options: { limits?: Partial<CompositionLimits> } = {}): CompositionCheck {
+  const limits = { ...compositionLimits, ...options.limits }
   const { add, move, remove, content } = plan
   const total = add.length + move.length + remove.length + content.length
   if (total === 0) return invalid("La proposition ne contient aucun changement.")
-  if (add.length > compositionLimits.add) return invalid(`Une proposition ajoute ${compositionLimits.add} lames au plus.`)
-  if (move.length > compositionLimits.move) return invalid(`Une proposition déplace ${compositionLimits.move} lames au plus.`)
-  if (remove.length > compositionLimits.remove) return invalid(`Une proposition supprime ${compositionLimits.remove} lames au plus.`)
+  if (add.length > limits.add) return invalid(`Une proposition ajoute ${limits.add} lames au plus.`)
+  if (move.length > limits.move) return invalid(`Une proposition déplace ${limits.move} lames au plus.`)
+  if (remove.length > limits.remove) return invalid(`Une proposition supprime ${limits.remove} lames au plus.`)
 
   const blocks = blocksOf(document)
   const types = new Map<string, string>(blocks.map((block) => [block.id, block.type]))
@@ -187,13 +198,22 @@ export function validateCompositionPlan(document: EmailDocument, plan: Compositi
     if (refs.has(action.ref)) return invalid(`La référence « ${action.ref} » est utilisée deux fois.`)
     if (!Object.hasOwn(catalog, action.blockType)) return invalid(`Lame « ${action.blockType} » : inconnue ou non ajoutable.`)
     const allowed = new Set(editableSlots(action.blockType).map((field) => field.slot))
-    if (action.content.length > compositionLimits.slotsPerBlock) return invalid(`Une lame ajoutée reçoit ${compositionLimits.slotsPerBlock} contenus au plus.`)
+    if (action.content.length > limits.slotsPerBlock) return invalid(`Une lame ajoutée reçoit ${limits.slotsPerBlock} contenus au plus.`)
     const seen = new Set<string>()
     for (const entry of action.content) {
       if (!allowed.has(entry.slot)) return invalid(`Le champ « ${entry.slot} » n'existe pas (ou n'est pas modifiable) dans la lame « ${action.blockType} ».`)
       if (seen.has(entry.slot)) return invalid(`Le champ « ${entry.slot} » est renseigné deux fois.`)
       seen.add(entry.slot)
       if (normalizeTextDraft(entry.value) === "") return invalid("Un texte proposé est vide.")
+    }
+    const imageSlots = new Set(Object.entries((emailBlockManifest as Record<string, { slots: Record<string, string> }>)[action.blockType]?.slots ?? {}).filter(([, kind]) => kind === "asset:visuel").map(([slot]) => slot))
+    const usedImages = new Set<string>()
+    for (const entry of action.images ?? []) {
+      if (!imageSlots.has(entry.slot)) return invalid(`Le champ « ${entry.slot} » n'est pas un visuel de la lame « ${action.blockType} ».`)
+      if (usedImages.has(entry.slot)) return invalid(`Le visuel « ${entry.slot} » est renseigné deux fois.`)
+      usedImages.add(entry.slot)
+      if (!isEmailBankImageId(entry.imageId)) return invalid(`Image inconnue de la banque : « ${entry.imageId} ».`)
+      if (!compatibleImages(action.blockType as EmailBlockType).some((image) => image.id === entry.imageId)) return invalid(`L'image « ${entry.imageId} » n'est pas compatible avec la lame « ${action.blockType} ».`)
     }
     refs.set(action.ref, action.blockType)
   }
@@ -262,6 +282,10 @@ export function validateCompositionPlan(document: EmailDocument, plan: Compositi
       const value = normalizeTextDraft(entry.value)
       operations.push({ type: "set-slot", blockId: id, slot: entry.slot, value: genres.get(entry.slot) === "bouton" ? { label: value, href: starter[entry.slot]?.href ?? "" } : { text: value } })
     }
+  }
+
+  for (const action of add) {
+    for (const entry of action.images ?? []) operations.push({ type: "set-image", blockId: ids.get(action.ref)!, slot: entry.slot, imageId: entry.imageId })
   }
 
   const applied = applyDocumentOperations(document, operations)

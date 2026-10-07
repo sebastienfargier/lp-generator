@@ -167,7 +167,7 @@ export function AssistantPanel({ messages, pending, readOnly, empty, document, b
             </p>
           ) : (
             <div key={message.id} className="flex flex-col gap-2">
-              <p className={`text-body ${message.failed ? "text-destructive" : ""}`}>{message.text}</p>
+              <p className={`text-body whitespace-pre-line ${message.failed ? "text-destructive" : ""}`}>{message.text}</p>
               {message.proposal && <ProposalCard messageId={message.id} proposal={message.proposal} document={document} readOnly={readOnly} blockName={blockName} catalog={catalog} onApply={onApply} onIgnore={onIgnore} />}
             </div>
           ),

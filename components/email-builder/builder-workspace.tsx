@@ -26,6 +26,8 @@ type BuilderWorkspaceProps = {
   /** Le document de départ : un email vide (partir de zéro) ou celui d'un modèle. Le choisir n'est pas une opération. */
   initialDocument: EmailDocument
   lames: readonly BuilderLame[]
+  /** Un premier message de l'assistant : le compte rendu d'une création depuis une référence. */
+  initialMessage?: string
   /** Abandonne ce travail et revient au choix de départ (le shell remplace alors le workspace). */
   onRestart: () => void
 }
@@ -44,8 +46,8 @@ const selectionHint = (selection: BuilderState["selection"]) => (selection.kind 
  * aucune iframe). Rien n'est persisté, rien n'est généré : aucun appel de modèle,
  * un rendu serveur par nouveau document non vide seulement.
  */
-export function BuilderWorkspace({ initialDocument, lames, onRestart }: BuilderWorkspaceProps) {
-  const [state, dispatch] = useReducer(builderReducer, initialDocument, createBuilderState)
+export function BuilderWorkspace({ initialDocument, initialMessage, lames, onRestart }: BuilderWorkspaceProps) {
+  const [state, dispatch] = useReducer(builderReducer, { document: initialDocument, message: initialMessage }, ({ document: start, message }) => createBuilderState(start, message))
   const [viewport, setViewport] = useState<CanvasViewport>("desktop")
   const [assistantOpen, setAssistantOpen] = useState(true)
   // `document` : le TRAVAIL (opérations, bibliothèque, banque d'images). `shown` : ce que le canvas affiche, le même en travail, le snapshot d'une version en consultation.

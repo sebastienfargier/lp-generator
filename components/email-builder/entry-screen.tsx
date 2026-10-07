@@ -3,7 +3,6 @@
 import Link from "next/link"
 import { ArrowLeftIcon, FilePlusIcon, ImageIcon, LayoutTemplateIcon } from "lucide-react"
 
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import type { BuilderTemplate } from "@/lib/email-builder/templates"
 
@@ -13,6 +12,7 @@ type EntryScreenProps = {
   templates: readonly BuilderTemplate[]
   onBlank: () => void
   onTemplates: () => void
+  onReference: () => void
   onTemplate: (template: BuilderTemplate) => void
   onBack: () => void
 }
@@ -26,7 +26,7 @@ const interactive = "cursor-pointer outline-none hover:bg-muted/60 focus-visible
  * référence. Choisir ne crée aucune opération : cela ouvre le travail. Pas de
  * wizard, pas de formulaire : un choix, puis le Builder.
  */
-export function EntryScreen({ mode, templates, onBlank, onTemplates, onTemplate, onBack }: EntryScreenProps) {
+export function EntryScreen({ mode, templates, onBlank, onTemplates, onReference, onTemplate, onBack }: EntryScreenProps) {
   return (
     <div className="flex h-dvh min-h-0 flex-col bg-background">
       <header className="flex h-12 shrink-0 items-center border-b px-4">
@@ -71,15 +71,12 @@ export function EntryScreen({ mode, templates, onBlank, onTemplates, onTemplate,
                   </button>
                 </li>
                 <li className="flex">
-                  <button type="button" disabled aria-describedby="reference-soon" className={`${card} cursor-not-allowed opacity-60`}>
+                  <button type="button" onClick={onReference} className={`${card} ${interactive}`}>
                     <ImageIcon className="size-6" aria-hidden />
                     <span className="flex flex-col gap-1">
                       <span className="text-h2">Depuis une référence</span>
                       <span className="text-body text-muted-foreground">Créer à partir d&apos;une inspiration</span>
                     </span>
-                    <Badge id="reference-soon" variant="outline">
-                      Bientôt disponible
-                    </Badge>
                   </button>
                 </li>
               </ul>

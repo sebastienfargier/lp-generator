@@ -8,6 +8,7 @@ import type { BuilderTemplate } from "@/lib/email-builder/templates"
 
 import { BuilderWorkspace } from "./builder-workspace"
 import { EntryScreen } from "./entry-screen"
+import { ReferenceScreen } from "./reference-screen"
 
 type BuilderShellProps = {
   lames: readonly BuilderLame[]
@@ -25,7 +26,10 @@ export function BuilderShell({ lames, templates }: BuilderShellProps) {
   const [shell, dispatch] = useReducer(shellReducer, undefined, createShell)
 
   if (shell.screen === "builder") {
-    return <BuilderWorkspace key={shell.opened} initialDocument={shell.document} lames={lames} onRestart={() => dispatch({ type: "restart" })} />
+    return <BuilderWorkspace key={shell.opened} initialDocument={shell.document} {...(shell.intro ? { initialMessage: shell.intro } : {})} lames={lames} onRestart={() => dispatch({ type: "restart" })} />
+  }
+  if (shell.screen === "reference") {
+    return <ReferenceScreen onBack={() => dispatch({ type: "back" })} onCreated={(document, intro) => dispatch({ type: "reference-created", document, intro })} />
   }
   return (
     <EntryScreen
@@ -33,6 +37,7 @@ export function BuilderShell({ lames, templates }: BuilderShellProps) {
       templates={templates}
       onBlank={() => dispatch({ type: "choose-blank" })}
       onTemplates={() => dispatch({ type: "choose-templates" })}
+      onReference={() => dispatch({ type: "choose-reference" })}
       onTemplate={(template) => dispatch({ type: "choose-template", document: template.document })}
       onBack={() => dispatch({ type: "back" })}
     />

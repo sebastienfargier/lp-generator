@@ -7,7 +7,7 @@
  *   distinguent « ce que l'email contient maintenant » (`config`) de « ce que
  *   l'email est censé dire » ; l'écart n'est jamais bloqué, il devient une
  *   recommandation (`recommendations.ts`) ;
- * - `provenance` : comment l'email est né (recette, ou à la main) ;
+ * - `provenance` : comment l'email est né (recette, référence, ou à la main) ;
  * - `blockMeta` : une métadonnée minimale par lame (d'où elle vient) ;
  * - `registry` : la version du manifeste des lames avec laquelle le document a
  *   été écrit (un document sauvegardé survit à une évolution des lames).
@@ -29,7 +29,7 @@ export const emailDocumentSchemaVersion = 1
 /** Version du registre de lames (manifeste + normalisation) du code courant. */
 export const currentEmailRegistry = () => ({ manifestVersion: `${emailManifestSource.version}/${emailManifestSource.normalization}` })
 
-export const emailDocumentOrigins = ["recipe", "manual"] as const
+export const emailDocumentOrigins = ["recipe", "manual", "reference"] as const
 export type EmailDocumentOrigin = (typeof emailDocumentOrigins)[number]
 
 /** D'où vient une lame : de la composition d'origine, ou ajoutée depuis dans le Builder. */
@@ -38,6 +38,24 @@ export type EmailBlockOrigin = (typeof emailBlockOrigins)[number]
 
 export const emailDocumentRecipes = [...emailRecipeIds, "promotion"] as const
 export type EmailDocumentRecipe = (typeof emailDocumentRecipes)[number]
+
+/**
+ * Résumé COMPACT d'une création depuis une référence : combien de sections ont
+ * été reproduites, et, pour celles qui ne l'ont pas été, juste de quoi décrire ce
+ * qui manque (futures lames générées). Jamais l'image, jamais son texte, jamais
+ * l'analyse complète.
+ */
+export const referenceRoles = ["hero", "text", "feature-list", "benefits", "proof", "testimonial", "offer", "cta", "products", "divider", "other"] as const
+export const referenceLayouts = ["image-top", "image-left", "image-right", "image-background", "columns-2", "columns-3", "columns-4", "list", "single-column", "cards", "banner", "other"] as const
+export const ReferenceProvenanceSchema = z.strictObject({
+  sections: z.number().int().min(0).max(40),
+  matched: z.number().int().min(0).max(40),
+  approximate: z.number().int().min(0).max(40),
+  unmatched: z
+    .array(z.strictObject({ role: z.enum(referenceRoles), layout: z.enum(referenceLayouts), intent: z.string().max(160), hasImage: z.boolean(), repeatedItems: z.number().int().min(0).max(20), hasCta: z.boolean() }))
+    .max(40),
+})
+export type ReferenceProvenance = z.infer<typeof ReferenceProvenanceSchema>
 
 /**
  * Structure du document, `config` mis à part : il est validé par le contrat
@@ -54,6 +72,7 @@ export const EmailDocumentSchema = z.strictObject({
   provenance: z.strictObject({
     origin: z.enum(emailDocumentOrigins),
     recipe: z.enum(emailDocumentRecipes).optional(),
+    reference: ReferenceProvenanceSchema.optional(),
   }),
   blockMeta: z.record(z.string(), z.strictObject({ origin: z.enum(emailBlockOrigins) })),
   registry: z.strictObject({ manifestVersion: z.string().min(1) }),
@@ -65,7 +84,7 @@ export type EmailDocument = {
   schemaVersion: typeof emailDocumentSchemaVersion
   config: EmailConfig
   facts: EmailDocumentFacts
-  provenance: { origin: EmailDocumentOrigin; recipe?: EmailDocumentRecipe }
+  provenance: { origin: EmailDocumentOrigin; recipe?: EmailDocumentRecipe; reference?: ReferenceProvenance }
   /** Une entrée par lame, clé = `id` de la lame. */
   blockMeta: Record<string, { origin: EmailBlockOrigin }>
   registry: { manifestVersion: string }

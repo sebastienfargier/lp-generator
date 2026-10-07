@@ -134,7 +134,7 @@ export function buildAssistantContext(document: EmailDocument) {
         : {}),
       ...(document.facts.claimIds && document.facts.claimIds.length > 0 ? { claims: document.facts.claimIds } : {}),
     },
-    provenance: document.provenance.recipe ?? "manuel",
+    provenance: document.provenance.recipe ?? (document.provenance.origin === "reference" ? "référence" : "manuel"),
     recommendations,
   }
 }

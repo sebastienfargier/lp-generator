@@ -65,13 +65,13 @@ describe("V2.6 — état d'entrée : aucun email ouvert", () => {
     assert.ok(!isEmptyDocument(demo))
   })
 
-  test("trois choix : partir de zéro, partir d'un modèle ; la référence est visible mais NON activable (aucun upload, aucun champ, aucun appel)", () => {
+  test("trois choix, tous activés depuis V2.8 : partir de zéro, d'un modèle, d'une référence ; l'écran d'entrée lui-même n'a ni champ ni appel", () => {
     const screen = code("components/email-builder/entry-screen.tsx")
     const raw = read("components/email-builder/entry-screen.tsx")
     for (const label of ["Partir de zéro", "Partir d&apos;un modèle", "Depuis une référence", "Construire mon email lame par lame", "Utiliser une base Studi existante", "Créer à partir d&apos;une inspiration", "Comment veux-tu commencer"]) assert.ok(raw.includes(label), label)
-    assert.match(raw, /Bientôt disponible/)
-    assert.match(screen, /<button type="button" disabled aria-describedby="reference-soon"/)
-    assert.ok(!/<input|type="file"|type="url"|fetch\(|onReference|anthropic/i.test(screen), "pas de faux upload, pas de champ URL, pas d'appel")
+    assert.match(screen, /<button type="button" onClick=\{onReference\}/)
+    assert.ok(!/Bientôt disponible|disabled/.test(raw), "la référence n'est plus désactivée")
+    assert.ok(!/<input|type="file"|type="url"|fetch\(|anthropic/i.test(screen), "l'écran d'entrée ne porte ni upload, ni champ, ni appel")
   })
 
   test("responsive : les trois choix s'empilent sur petit écran", () => {
@@ -88,6 +88,8 @@ describe("V2.6 — état d'entrée : aucun email ouvert", () => {
     assert.equal(shell({ type: "choose-template", document: template.document }).screen, "entry")
     assert.equal(shell({ type: "back" }).screen, "entry")
     assert.equal(shell({ type: "restart" }).screen, "entry")
+    assert.equal(shell({ type: "choose-reference" }).screen, "reference")
+    assert.equal(shell({ type: "choose-reference" }, { type: "back" }).screen, "entry")
     assert.equal(shell({ type: "choose-blank" }, { type: "choose-blank" }).opened, 1)
   })
 })

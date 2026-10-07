@@ -86,7 +86,8 @@ export type BuilderAction =
 
 const none: Selection = { kind: "none" }
 
-export const createBuilderState = (document: EmailDocument): BuilderState => ({ history: createHistory(document), status: "draft", versions: [], baseId: null, viewingId: null, assistant: emptyChat, selection: none, panel: null, notice: null, noticeKey: 0 })
+/** `intro` : un premier message de l'assistant (le compte rendu d'une création depuis une référence) ; ce n'est ni une proposition ni une opération. */
+export const createBuilderState = (document: EmailDocument, intro?: string): BuilderState => ({ history: createHistory(document), status: "draft", versions: [], baseId: null, viewingId: null, assistant: intro ? chatReply(emptyChat, { message: intro }) : emptyChat, selection: none, panel: null, notice: null, noticeKey: 0 })
 
 export const builderDocument = (state: BuilderState) => state.history.present
 /** Le travail courant n'a aucune lame. */
