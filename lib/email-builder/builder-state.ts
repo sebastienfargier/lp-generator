@@ -21,7 +21,8 @@
  * Domaine Email Builder uniquement : aucun import depuis `lib/landing`.
  */
 import { chatFail, chatReply, chatSend, emptyChat, findChatProposal, setProposalStatus, type AssistantChat } from "./assistant-chat"
-import { documentFingerprint, validateProposal, type AssistantProposal } from "./assistant-proposal"
+import { documentFingerprint, type AssistantProposal } from "./assistant-proposal"
+import { planOf, validateCompositionPlan, type CompositionCatalog } from "./composition"
 import { isEmptyDocument, type EmailDocument } from "./document"
 import { applyToHistory, canRedo, canUndo, createHistory, redo, undo, type History } from "./history"
 import { sameSlotValue, slotEditor, slotValueFromDraft, type SlotDraft } from "./inline-edit"
@@ -79,7 +80,8 @@ export type BuilderAction =
   | { type: "assistant-send"; text: string }
   | { type: "assistant-reply"; message: string; proposal?: AssistantProposal }
   | { type: "assistant-fail"; message: string }
-  | { type: "apply-proposal"; id: string }
+  /** `catalog` : les lames ajoutables (contenu initial), nécessaire seulement à une proposition qui ajoute une lame. */
+  | { type: "apply-proposal"; id: string; catalog?: CompositionCatalog }
   | { type: "ignore-proposal"; id: string }
 
 const none: Selection = { kind: "none" }
@@ -259,15 +261,15 @@ export function builderReducer(state: BuilderState, action: BuilderAction): Buil
       const proposal = findChatProposal(state.assistant, action.id)
       if (!proposal || proposal.status !== "open") return state
       if (proposal.basedOn !== documentFingerprint(document)) return withNotice(state, { tone: "warning", message: "L'email a changé depuis cette proposition. Demande-moi de l'actualiser." })
-      const checked = validateProposal(document, proposal.changes)
+      const checked = validateCompositionPlan(document, planOf(proposal), action.catalog ?? {})
       if (!checked.ok) return withNotice(state, { tone: "error", message: "Cette proposition ne peut plus être appliquée : l'email a évolué." })
-      // UNE transformation = UNE entrée d'historique ; le statut et les versions ne bougent pas.
-      return {
+      // UNE transformation (contenus, ajouts, déplacements, suppressions) = UNE entrée d'historique ; le statut et les versions ne bougent pas, sauf qu'un email vidé redevient Brouillon.
+      return settled({
         ...withNotice(state, newRecommendationNotice(document, checked.next)),
         history: applyToHistory(state.history, checked.next),
         selection: validSelection(state.selection, checked.next),
         assistant: setProposalStatus(state.assistant, action.id, "applied"),
-      }
+      })
     }
   }
 }

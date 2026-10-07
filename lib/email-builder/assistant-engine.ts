@@ -2,17 +2,16 @@
  * Moteur de l'assistant éditorial : SERVEUR UNIQUEMENT.
  *
  *   document courant + conversation + demande
- *     → champs éditables (liste fermée, décidée par le code)
- *     → prompt (instructions / contexte Studi / email-donnée / conversation)
- *     → UN appel `messages.create`, Structured Output { message, summary, changes }
- *     → réponse validée (Zod, champs de la liste fermée)
- *     → proposition validée par le DOMAINE (`validateProposal` : champs existants,
- *       opérations V2.1 applicables toutes ou aucune, valeurs de référence
- *       conservées, aucune nouvelle alerte)
+ *     → champs éditables, lames existantes, lames ajoutables (listes fermées)
+ *     → prompt (instructions / contexte Studi / catalogue / email-donnée / conversation)
+ *     → UN appel `messages.create`, Structured Output { message, summary, changes, add, move, remove }
+ *     → réponse validée (Zod, listes fermées)
+ *     → plan validé par le MOTEUR DE COMPOSITION (`composition.ts` : références,
+ *       lames, places, contenus, opérations V2.1 toutes ou aucune, protections)
  *     → { message, proposal? }
  *
  * Le modèle ne produit ni HTML, ni opération, ni document : il désigne des champs
- * et leur donne un texte. Rien n'est appliqué ici : la personne décide, le
+ * et des lames de listes fermées, et écrit du texte. Rien n'est appliqué ici : la personne décide, le
  * navigateur applique (une transformation, une entrée d'historique).
  *
  * Réutilise l'intégration Anthropic du domaine Email (`anthropic.ts` : client,
@@ -23,15 +22,25 @@
  * Domaine Email Builder uniquement : aucun import depuis `lib/landing`.
  */
 import { createClient, failure, mapApiError, readStructuredOutput, resolveEmailModel, type CreateParams, type EmailClaudeDependencies, type EmailClaudeUsage, type EmailEngineError } from "../email/anthropic"
-import { assistantSystemPrompt, buildAssistantMessages, type AssistantTurn } from "./assistant-context"
-import { assistantFields, documentFingerprint, validateProposal, type AssistantProposal } from "./assistant-proposal"
-import { buildAssistantTransportSchema, safeParseAssistantResponse } from "./assistant-schema"
+import { assistantSystemPrompt, buildAssistantMessages, type AssistantSelection, type AssistantTurn } from "./assistant-context"
+import { assistantFields, blocksOf, documentFingerprint, type AssistantProposal } from "./assistant-proposal"
+import { buildAssistantTransportSchema, safeParseAssistantResponse, type AssistantSchemaContext } from "./assistant-schema"
+import { builderLames } from "./catalog"
+import { compositionCatalog, hasStructure, validateCompositionPlan, type CompositionCatalog } from "./composition"
 import type { EmailDocument } from "./document"
 
 /** Une réponse d'assistant tient en quelques centaines de tokens. */
 export const ASSISTANT_MAX_TOKENS = 4000
 
-export type AssistantEngineInput = { document: EmailDocument; history: readonly AssistantTurn[]; message: string }
+export type AssistantEngineInput = {
+  document: EmailDocument
+  history: readonly AssistantTurn[]
+  message: string
+  /** La sélection du canvas au moment de l'envoi : un indice, jamais une autorisation. */
+  selection?: AssistantSelection | null
+  /** Les lames ajoutables ; par défaut, celles de la bibliothèque du Builder. */
+  catalog?: CompositionCatalog
+}
 
 export type AssistantEngineResult =
   | { status: "success"; message: string; proposal?: AssistantProposal; model: string; usage?: EmailClaudeUsage; requestId?: string }
@@ -55,14 +64,15 @@ export async function runAssistant(input: AssistantEngineInput, dependencies: Em
   }
 
   const { document } = input
-  const targets = assistantFields(document).map((field) => field.target)
+  const catalog = input.catalog ?? compositionCatalog(builderLames())
+  const schemaContext: AssistantSchemaContext = { targets: assistantFields(document).map((field) => field.target), blockIds: blocksOf(document).map((block) => block.id), blockTypes: Object.keys(catalog) }
   const model = resolveEmailModel(env)
   const params: CreateParams = {
     model,
     max_tokens: ASSISTANT_MAX_TOKENS,
     system: assistantSystemPrompt,
-    messages: buildAssistantMessages(document, input.history, input.message),
-    output_config: { format: { type: "json_schema", schema: buildAssistantTransportSchema(targets) } },
+    messages: buildAssistantMessages(document, input.history, input.message, { catalog, selection: input.selection ?? null }),
+    output_config: { format: { type: "json_schema", schema: buildAssistantTransportSchema(schemaContext) } },
   }
 
   let response
@@ -74,21 +84,22 @@ export async function runAssistant(input: AssistantEngineInput, dependencies: Em
 
   const read = readStructuredOutput(response)
   if (!read.ok) return read.failure
-  const parsed = safeParseAssistantResponse(targets, read.output)
+  const parsed = safeParseAssistantResponse(schemaContext, read.output)
   if (!parsed.success) {
     return failure({ ...read.meta, kind: "invalid-draft", message: "La réponse de l'assistant ne respecte pas le contrat attendu.", issues: parsed.error.issues.map((issue) => ({ path: issue.path.join(".") || "réponse", message: issue.message })), output: read.text })
   }
 
-  const { message, summary, changes } = parsed.data
+  const { message, summary, changes, add, move, remove } = parsed.data
   const meta = { model: response.model || model, ...read.meta }
+  const structure = { add, move, remove }
   // Un conseil : aucune proposition, rien à valider.
-  if (changes.length === 0) return { status: "success", message, ...meta }
+  if (changes.length === 0 && !hasStructure(structure)) return { status: "success", message, ...meta }
   if (summary.trim() === "") return failure({ ...read.meta, kind: "invalid-draft", message: "Une proposition sans résumé n'est pas présentable.", output: read.text })
 
   // Le domaine a le dernier mot : une proposition invalide ou qui touche aux valeurs de référence est refusée en entier.
-  const checked = validateProposal(document, changes)
+  const checked = validateCompositionPlan(document, { content: changes, ...structure }, catalog)
   if (!checked.ok) {
     return failure({ ...read.meta, kind: "validation-failed", message: checked.message, issues: [{ path: "proposition", message: checked.message, code: checked.reason }], output: read.text })
   }
-  return { status: "success", message, proposal: { summary: summary.trim(), changes, basedOn: documentFingerprint(document) }, ...meta }
+  return { status: "success", message, proposal: { summary: summary.trim(), changes, ...(hasStructure(structure) ? { structure } : {}), basedOn: documentFingerprint(document) }, ...meta }
 }

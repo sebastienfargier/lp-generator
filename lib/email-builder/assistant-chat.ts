@@ -64,7 +64,13 @@ export function toApiHistory(chat: AssistantChat): { role: "user" | "assistant";
     .map((message) => {
       if (message.role === "user" || !message.proposal) return { role: message.role, text: message.text }
       const { proposal } = message
-      const lines = proposal.changes.map((change) => `${change.target} → « ${clip(change.value)} »`).join(" ; ")
+      const placeText = (place: { where: string; anchor: string }) => (place.anchor ? `${place.where} ${place.anchor}` : place.where)
+      const lines = [
+        ...(proposal.structure?.add ?? []).map((action) => `ajout ${action.blockType} (${action.ref}, ${placeText(action.placement)})`),
+        ...(proposal.structure?.move ?? []).map((action) => `déplacement ${action.blockId} (${placeText(action.placement)})`),
+        ...(proposal.structure?.remove ?? []).map((action) => `suppression ${action.blockId}`),
+        ...proposal.changes.map((change) => `${change.target} → « ${clip(change.value)} »`),
+      ].join(" ; ")
       return { role: "assistant" as const, text: `${message.text}\n[Proposition ${statusWords[proposal.status]} : ${proposal.summary} — ${lines}]` }
     })
 }

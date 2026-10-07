@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import type { ChatMessage, ChatProposal } from "@/lib/email-builder/assistant-chat"
 import { describeProposal, isProposalStale } from "@/lib/email-builder/assistant-proposal"
+import { describeStructure, hasStructure, planOf, validateCompositionPlan, type CompositionCatalog } from "@/lib/email-builder/composition"
 import type { EmailDocument } from "@/lib/email-builder/document"
 import type { EmailBlockType } from "@/lib/email/types"
 
@@ -20,6 +21,8 @@ type AssistantPanelProps = {
   /** Le travail COURANT : ce que les propositions décrivent et ce qui les rend périmées. */
   document: EmailDocument
   blockName: (type: EmailBlockType) => string
+  /** Les lames ajoutables : le nom d'une lame ajoutée, et le conseil que la proposition appelle. */
+  catalog: CompositionCatalog
   onSend: (text: string) => void
   onApply: (messageId: string) => void
   onIgnore: (messageId: string) => void
@@ -30,9 +33,10 @@ const starters = ["Qu'est-ce que tu en penses ?", "Rends-le plus direct", "Amél
 
 const clip = (value: string, length = 90) => (value.length > length ? `${value.slice(0, length - 1)}…` : value)
 
-function ProposalCard({ messageId, proposal, document, readOnly, blockName, onApply, onIgnore }: { messageId: string; proposal: ChatProposal; document: EmailDocument; readOnly: boolean; blockName: AssistantPanelProps["blockName"]; onApply: (id: string) => void; onIgnore: (id: string) => void }) {
+function ProposalCard({ messageId, proposal, document, readOnly, blockName, catalog, onApply, onIgnore }: { messageId: string; proposal: ChatProposal; document: EmailDocument; readOnly: boolean; blockName: AssistantPanelProps["blockName"]; catalog: CompositionCatalog; onApply: (id: string) => void; onIgnore: (id: string) => void }) {
   const count = proposal.changes.length
-  const sentence = `${count} contenu${count > 1 ? "s" : ""} ${count > 1 ? "changent" : "change"}`
+  const actions = (proposal.structure?.add.length ?? 0) + (proposal.structure?.move.length ?? 0) + (proposal.structure?.remove.length ?? 0)
+  const sentence = [actions > 0 ? `${actions} action${actions > 1 ? "s" : ""} sur la structure` : "", count > 0 ? `${count} contenu${count > 1 ? "s" : ""} ${count > 1 ? "changent" : "change"}` : ""].filter(Boolean).join(" · ")
   if (proposal.status === "applied") {
     return (
       <div className="rounded-lg border bg-muted/50 px-3 py-2 text-caption text-muted-foreground">
@@ -55,23 +59,49 @@ function ProposalCard({ messageId, proposal, document, readOnly, blockName, onAp
     )
   }
   const items = describeProposal(document, proposal.changes, blockName)
+  const structure = describeStructure(document, proposal.structure, catalog, blockName)
+  // Le conseil que le résultat appelle (par exemple un footer retiré) : il informe, il ne bloque pas.
+  const checked = hasStructure(proposal.structure) ? validateCompositionPlan(document, planOf(proposal), catalog) : null
+  const notice = checked?.ok ? checked.notice : null
   return (
     <div className="flex flex-col gap-3 rounded-lg border bg-background px-3 py-3 shadow-xs">
       <div className="flex flex-col gap-0.5">
         <p className="text-body font-medium">{proposal.summary}</p>
         <p className="text-caption text-muted-foreground">{sentence}</p>
       </div>
-      <ul role="list" className="flex flex-col gap-2">
-        {items.map((item) => (
-          <li key={item.target} className="flex flex-col gap-0.5 border-l-2 border-accent-1 pl-2.5 text-caption">
-            <span className="text-muted-foreground">
-              {item.blockName} · {item.label}
-            </span>
-            <span className="text-muted-foreground line-through decoration-muted-foreground/40">{clip(item.before)}</span>
-            <span className="text-foreground">{clip(item.after)}</span>
-          </li>
-        ))}
-      </ul>
+      {structure.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          <p className="text-caption font-medium">Structure</p>
+          <ul role="list" className="flex flex-col gap-2">
+            {structure.map((item, index) => (
+              <li key={`${item.kind}-${index}`} className={`flex flex-col gap-0.5 border-l-2 pl-2.5 text-caption ${item.kind === "remove" ? "border-destructive/60" : "border-accent-1"}`}>
+                <span className="text-foreground">
+                  {item.kind === "add" ? "Ajouter " : item.kind === "move" ? "Déplacer " : "Supprimer "}
+                  {item.title}
+                </span>
+                {item.detail && <span className="text-muted-foreground">{item.detail}</span>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {items.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          {structure.length > 0 && <p className="text-caption font-medium">Contenu</p>}
+          <ul role="list" className="flex flex-col gap-2">
+            {items.map((item) => (
+              <li key={item.target} className="flex flex-col gap-0.5 border-l-2 border-accent-1 pl-2.5 text-caption">
+                <span className="text-muted-foreground">
+                  {item.blockName} · {item.label}
+                </span>
+                <span className="text-muted-foreground line-through decoration-muted-foreground/40">{clip(item.before)}</span>
+                <span className="text-foreground">{clip(item.after)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {notice && <p className="text-caption text-muted-foreground">À savoir : {notice}</p>}
       <div className="flex items-center justify-end gap-2">
         <Button type="button" size="xs" variant="ghost" onClick={() => onIgnore(messageId)}>
           Ignorer
@@ -90,7 +120,7 @@ function ProposalCard({ messageId, proposal, document, readOnly, blockName, onAp
  * personne n'a pas cliqué « Appliquer ». Le panneau ne connaît ni le modèle ni
  * le réseau : il reçoit des messages et renvoie des gestes.
  */
-export function AssistantPanel({ messages, pending, readOnly, empty, document, blockName, onSend, onApply, onIgnore, onClose }: AssistantPanelProps) {
+export function AssistantPanel({ messages, pending, readOnly, empty, document, blockName, catalog, onSend, onApply, onIgnore, onClose }: AssistantPanelProps) {
   const [draft, setDraft] = useState("")
   const end = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -138,7 +168,7 @@ export function AssistantPanel({ messages, pending, readOnly, empty, document, b
           ) : (
             <div key={message.id} className="flex flex-col gap-2">
               <p className={`text-body ${message.failed ? "text-destructive" : ""}`}>{message.text}</p>
-              {message.proposal && <ProposalCard messageId={message.id} proposal={message.proposal} document={document} readOnly={readOnly} blockName={blockName} onApply={onApply} onIgnore={onIgnore} />}
+              {message.proposal && <ProposalCard messageId={message.id} proposal={message.proposal} document={document} readOnly={readOnly} blockName={blockName} catalog={catalog} onApply={onApply} onIgnore={onIgnore} />}
             </div>
           ),
         )}

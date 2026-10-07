@@ -301,6 +301,6 @@ describe("garde-fous de source : l'assistant ne peut ni toucher au statut, ni à
 
   test("le prompt dit ce que l'assistant ne fait pas et ne simule jamais", () => {
     const prompt = readFileSync(join(root, "lib/email-builder/assistant-context.ts"), "utf8")
-    for (const phrase of ["Tu ne modifies pas la structure", "Ne simule jamais l'action", "n'invente pas de problème", "fais-le quand même", "jamais le changer", "mot pour mot"]) assert.ok(prompt.includes(phrase), phrase)
+    for (const phrase of ["Tu ne crées pas de nouveau type de lame", "Ne simule jamais l'action", "n'invente pas de problème", "fais-le quand même", "jamais le changer", "mot pour mot"]) assert.ok(prompt.includes(phrase), phrase)
   })
 })

@@ -29,6 +29,7 @@ import type { EmailDocument } from "./document"
 import { normalizeTextDraft, slotEditor } from "./inline-edit"
 import { applyDocumentOperations, type DocumentOperation } from "./operations"
 import { getDocumentRecommendations } from "./recommendations"
+import type { CompositionStructure } from "./composition"
 import { canonicalJson, sameDocumentContent } from "./versions"
 
 export type AssistantFieldKind = "titre" | "paragraphe" | "bouton" | "image"
@@ -48,8 +49,12 @@ export type AssistantField = {
 
 export type ProposalChange = { target: string; value: string }
 
-/** Ce que le serveur renvoie, lié à l'état du document sur lequel il a été préparé. */
-export type AssistantProposal = { summary: string; changes: ProposalChange[]; basedOn: string }
+/**
+ * Ce que le serveur renvoie, lié à l'état du document sur lequel il a été préparé.
+ * `changes` : les contenus (V2.5). `structure` : ajouts, déplacements et
+ * suppressions de lames (V2.7), absent d'une proposition de contenu seul.
+ */
+export type AssistantProposal = { summary: string; changes: ProposalChange[]; structure?: CompositionStructure; basedOn: string }
 
 export const maxProposalChanges = 12
 
@@ -171,9 +176,20 @@ export function validateProposal(document: EmailDocument, changes: readonly Prop
   const applied = applyDocumentOperations(document, translated.operations)
   if (!applied.ok) return { ok: false, reason: "invalid", message: `Une modification n'est pas applicable : ${applied.error.message}` }
   if (sameDocumentContent(document, applied.value)) return { ok: false, reason: "invalid", message: "Cette proposition ne change rien." }
+  const protectedCheck = checkContentProtection(document, applied.value, changes)
+  if (!protectedCheck.ok) return protectedCheck
+  return { ok: true, operations: translated.operations, next: applied.value }
+}
 
+/**
+ * Les protections de CONTENU, indépendantes de la structure : les valeurs de
+ * référence d'un champ modifié sont conservées, et aucune nouvelle alerte
+ * (écart aux faits, aux claims ou à une règle approuvée) n'apparaît. `applied` :
+ * le document avec les seuls changements de contenu.
+ */
+export function checkContentProtection(document: EmailDocument, applied: EmailDocument, changes: readonly ProposalChange[]): { ok: true } | { ok: false; reason: "protected"; message: string } {
   const fields = new Map(assistantFields(document).map((field) => [field.target, field]))
-  const after = new Map(assistantFields(applied.value).map((field) => [field.target, field]))
+  const after = new Map(assistantFields(applied).map((field) => [field.target, field]))
   for (const change of changes) {
     const before = fields.get(change.target)!
     const kept = after.get(change.target)
@@ -182,10 +198,10 @@ export function validateProposal(document: EmailDocument, changes: readonly Prop
     }
   }
   const known = alertKeys(document)
-  for (const key of alertKeys(applied.value)) {
+  for (const key of alertKeys(applied)) {
     if (!known.has(key)) return { ok: false, reason: "protected", message: "La proposition éloigne l'email de ses données de référence (offre, claims ou règle approuvée)." }
   }
-  return { ok: true, operations: translated.operations, next: applied.value }
+  return { ok: true }
 }
 
 /* -------------------------------------------------------------------------- */

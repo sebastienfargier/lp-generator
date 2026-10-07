@@ -79,7 +79,7 @@ const isFooter = (type: string) => entryOf(type)?.system?.includes("lien-desabon
 const isDisclaimer = (type: string) => Object.values(entryOf(type)?.slots ?? {}).includes("disclaimer")
 
 /** Position par défaut d'une nouvelle lame : avant la queue (mentions légales puis footer) de l'email. */
-function defaultIndex(blocks: readonly EmailBlock[], type: string): number {
+export function defaultIndex(blocks: readonly { type: string }[], type: string): number {
   if (isDisclaimer(type)) {
     const footer = blocks.findIndex((block) => isFooter(block.type))
     return footer >= 0 ? footer : blocks.length
@@ -90,7 +90,7 @@ function defaultIndex(blocks: readonly EmailBlock[], type: string): number {
 }
 
 /** Identifiant libre : le type de la lame, suffixé -2, -3… s'il existe déjà. */
-function freeId(base: string, taken: ReadonlySet<string>): string {
+export function freeId(base: string, taken: ReadonlySet<string>): string {
   if (!taken.has(base)) return base
   for (let n = 2; ; n += 1) if (!taken.has(`${base}-${n}`)) return `${base}-${n}`
 }

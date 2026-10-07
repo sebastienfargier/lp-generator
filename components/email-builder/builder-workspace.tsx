@@ -1,15 +1,17 @@
 "use client"
 
-import { useEffect, useReducer, useState } from "react"
+import { useEffect, useMemo, useReducer, useState } from "react"
 import { XIcon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 
 import type { BuilderLame } from "@/lib/email-builder/catalog"
+import type { BuilderState } from "@/lib/email-builder/builder-state"
 import { builderCanRedo, builderCanUndo, builderDocument, builderHasWork, builderIsEmpty, builderReadOnly, builderReducer, builderViewing, createBuilderState, hasChangesSinceVersion, shownDocument } from "@/lib/email-builder/builder-state"
 import { statusLabels, versionLabel } from "@/lib/email-builder/versions"
 import { isEmptyDocument, type EmailDocument } from "@/lib/email-builder/document"
 import { toApiHistory } from "@/lib/email-builder/assistant-chat"
+import { compositionCatalog } from "@/lib/email-builder/composition"
 import type { AssistantResponseBody } from "@/lib/email-builder/assistant-handler"
 import type { BuilderRenderResponse } from "@/lib/email-builder/render-handler"
 
@@ -27,6 +29,9 @@ type BuilderWorkspaceProps = {
   /** Abandonne ce travail et revient au choix de départ (le shell remplace alors le workspace). */
   onRestart: () => void
 }
+
+/** La sélection du canvas, telle que l'assistant la reçoit : un indice (lame, éventuellement champ), ou rien. */
+const selectionHint = (selection: BuilderState["selection"]) => (selection.kind === "none" ? null : selection.kind === "block" ? { blockId: selection.blockId } : { blockId: selection.blockId, slot: selection.slot })
 
 /**
  * Le Builder : un seul état, l'historique d'EmailDocument. Chaque geste de la
@@ -89,6 +94,7 @@ export function BuilderWorkspace({ initialDocument, lames, onRestart }: BuilderW
     return () => clearTimeout(timer)
   }, [notice, noticeKey])
 
+  const catalog = useMemo(() => compositionCatalog(lames), [lames])
   const lamesByType = Object.fromEntries(lames.map((lame) => [lame.type, { name: lame.name, surfaceMode: lame.surfaceMode }]))
   const panel = state.panel
   const libraryIndex = panel?.kind === "library" ? panel.index : undefined
@@ -106,7 +112,7 @@ export function BuilderWorkspace({ initialDocument, lames, onRestart }: BuilderW
     const devMock = new URLSearchParams(window.location.search).get("assistant") === "mock"
     dispatch({ type: "assistant-send", text })
     try {
-      const response = await fetch("/api/email-builder/assistant", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ document, history, message: text.trim(), ...(devMock ? { devMock: true } : {}) }) })
+      const response = await fetch("/api/email-builder/assistant", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ document, history, message: text.trim(), selection: selectionHint(state.selection), ...(devMock ? { devMock: true } : {}) }) })
       const result = (await response.json()) as AssistantResponseBody
       if (result.status === "success") dispatch({ type: "assistant-reply", message: result.message, ...(result.proposal ? { proposal: result.proposal } : {}) })
       else dispatch({ type: "assistant-fail", message: result.message })
@@ -245,7 +251,8 @@ export function BuilderWorkspace({ initialDocument, lames, onRestart }: BuilderW
             document={document}
             blockName={(type) => lamesByType[type]?.name ?? type}
             onSend={sendToAssistant}
-            onApply={(id) => dispatch({ type: "apply-proposal", id })}
+            onApply={(id) => dispatch({ type: "apply-proposal", id, catalog })}
+            catalog={catalog}
             onIgnore={(id) => dispatch({ type: "ignore-proposal", id })}
             onClose={() => setAssistantOpen(false)}
           />

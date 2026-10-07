@@ -325,7 +325,7 @@ describe("Builder — assistant éditorial (V2.5)", () => {
 
   test("rien ne s'applique tout seul : l'application est un dispatch explicite déclenché par le bouton « Appliquer », jamais par la réponse", () => {
     assert.equal((workspace.match(/type: "apply-proposal"/g) ?? []).length, 1)
-    assert.match(workspace, /onApply=\{\(id\) => dispatch\(\{ type: "apply-proposal", id \}\)\}/)
+    assert.match(workspace, /onApply=\{\(id\) => dispatch\(\{ type: "apply-proposal", id, catalog \}\)\}/)
     assert.ok(!/apply-proposal/.test(workspace.slice(workspace.indexOf("async function sendToAssistant"), workspace.indexOf("function onKeyDown"))), "la réception d'une réponse n'applique rien")
     assert.match(panel, /onClick=\{\(\) => onApply\(messageId\)\}/)
   })

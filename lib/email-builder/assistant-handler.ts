@@ -90,7 +90,7 @@ export async function handleAssistant(request: Request, options: AssistantHandle
   const devMock = parsed.data.devMock === true && env.NODE_ENV !== "production"
   let result: AssistantEngineResult
   try {
-    result = await engine({ document: document.data, history: parsed.data.history, message: parsed.data.message }, { devMock })
+    result = await engine({ document: document.data, history: parsed.data.history, message: parsed.data.message, selection: parsed.data.selection ?? null }, { devMock })
   } catch {
     log({ kind: "engine-threw" })
     return fail(500, "internal", simple.retry)

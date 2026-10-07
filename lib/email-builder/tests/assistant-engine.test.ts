@@ -16,6 +16,8 @@ import { handleAssistant } from "../assistant-handler"
 import { createMockAssistantClient } from "../assistant-mock"
 import { assistantFields, documentFingerprint, plain, proposalToOperations, protectedFragments, slotProtection } from "../assistant-proposal"
 import { AssistantRequestSchema, buildAssistantTransportSchema, safeParseAssistantResponse } from "../assistant-schema"
+import { builderLames } from "../catalog"
+import { compositionCatalog } from "../composition"
 import { buildDemoDocument } from "../demo-document"
 import { emailBlockManifest } from "../../email/manifest"
 import type { EmailBlockType } from "../../email/types"
@@ -36,6 +38,8 @@ const root = process.cwd()
 const code = (path: string) => readFileSync(join(root, path), "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|\s)\/\/.*$/gm, "")
 const doc = () => buildDemoDocument()
 const targets = (document = doc()) => assistantFields(document).map((field) => field.target)
+const catalogOf = () => compositionCatalog(builderLames())
+const schemaContext = (document = doc()) => ({ targets: targets(document), blockIds: document.config.blocks.map((block) => block.id), blockTypes: Object.keys(catalogOf()) })
 
 const message = (value: unknown) =>
   ({
@@ -50,18 +54,18 @@ function fakeClient(respond: (params: CreateParams) => unknown) {
   const client: EmailClaudeClient = { messages: { create: async (params) => (calls.push(params), respond(params) as Awaited<ReturnType<EmailClaudeClient["messages"]["create"]>>) } }
   return { calls, client }
 }
-const advice = (text = "L'ensemble est cohérent.") => ({ message: text, summary: "", changes: [] })
-const proposal = (changes: { target: string; value: string }[], summary = "Plus direct") => ({ message: "Je propose ceci.", summary, changes })
+const advice = (text = "L'ensemble est cohérent.") => ({ message: text, summary: "", changes: [], add: [], move: [], remove: [] })
+const proposal = (changes: { target: string; value: string }[], summary = "Plus direct") => ({ message: "Je propose ceci.", summary, changes, add: [], move: [], remove: [] })
 const run = (document: ReturnType<typeof doc>, history: { role: "user" | "assistant"; text: string }[], text: string, client: EmailClaudeClient) => runAssistant({ document, history, message: text }, { client, env: {} })
 
 describe("contrat de réponse (Structured Output)", () => {
   test("un conseil (aucun changement) et une proposition sont valides", () => {
-    assert.equal(safeParseAssistantResponse(targets(), advice()).success, true)
-    assert.equal(safeParseAssistantResponse(targets(), proposal([{ target: "offer:cta-1:label", value: "Découvrir" }])).success, true)
+    assert.equal(safeParseAssistantResponse(schemaContext(), advice()).success, true)
+    assert.equal(safeParseAssistantResponse(schemaContext(), proposal([{ target: "offer:cta-1:label", value: "Découvrir" }])).success, true)
   })
 
   test("le schéma LUI-MÊME limite les pouvoirs : aucune clé ni valeur de structure, de surface, de statut, de lien, d'HTML ou d'opération", () => {
-    const refuse = (input: unknown) => assert.equal(safeParseAssistantResponse(targets(), input).success, false, JSON.stringify(input).slice(0, 90))
+    const refuse = (input: unknown) => assert.equal(safeParseAssistantResponse(schemaContext(), input).success, false, JSON.stringify(input).slice(0, 90))
     for (const target of ["add_block", "remove_block", "move_block", "set_surface", "offer", "support", "set_status", "offer:cta-1:href", "offer:valeur-cle"]) refuse(proposal([{ target, value: "x" }]))
     refuse({ ...proposal([{ target: "offer:sous-titre", value: "x" }]), operations: [{ type: "remove_block", blockId: "support" }] })
     refuse({ ...proposal([{ target: "offer:sous-titre", value: "x" }]), status: "ready" })
@@ -79,18 +83,19 @@ describe("contrat de réponse (Structured Output)", () => {
     refuse(null)
   })
 
-  test("le schéma de transport : trois propriétés, une énumération des champs du document, aucune union, aucun optionnel, rien de structurel", () => {
-    const schema = buildAssistantTransportSchema(targets()) as Record<string, unknown>
+  test("le schéma de transport : six propriétés de haut niveau, des énumérations fermées (champs, lames existantes, lames ajoutables), aucune union, aucun optionnel, ni opération ni HTML", () => {
+    const schema = buildAssistantTransportSchema(schemaContext()) as Record<string, unknown>
     const metrics = measure(schema)
-    assert.equal(metrics.objects, 2)
-    assert.equal(metrics.properties, 5)
+    assert.equal(metrics.objects, 8)
     assert.equal(metrics.optional, 0)
     assert.equal(metrics.unions, 0)
     assert.equal(metrics.patterns, 0)
     const text = JSON.stringify(schema)
-    assert.ok(!/oneOf|anyOf|minLength|maxLength|"pattern"|\$schema|add_block|remove|move|surface|status|html|href/i.test(text.replace(/offer:cta-1:label/g, "")))
+    assert.deepEqual(Object.keys((schema as { properties: Record<string, unknown> }).properties), ["message", "summary", "changes", "add", "move", "remove"])
+    assert.ok(!/oneOf|anyOf|minLength|maxLength|"pattern"|\$schema|add-block|remove-block|move-block|set-slot|surface|status|html|href/i.test(text.replace(/offer:cta-1:label/g, "")))
     for (const target of targets()) assert.ok(text.includes(`"${target}"`), target)
-    assert.ok(metrics.bytes < 3500, `${metrics.bytes}`)
+    for (const type of Object.keys(catalogOf())) assert.ok(text.includes(`"${type}"`), type)
+    assert.ok(metrics.bytes < 6000, `${metrics.bytes}`)
   })
 
   test("un JSON invalide ou non conforme échoue proprement (jamais d'exception)", async () => {
@@ -225,13 +230,13 @@ describe("visible ≠ modifiable", () => {
       "support:titre-section", "support:item-1-titre", "support:texte-descriptif-1", "support:item-2-titre", "support:texte-descriptif-2", "support:item-3-titre", "support:texte-descriptif-3",
       "closing:titre-section", "closing:texte-descriptif", "closing:cta-1:label",
     ])
-    const schema = JSON.stringify(buildAssistantTransportSchema(targets()))
+    const schema = JSON.stringify(buildAssistantTransportSchema(schemaContext()))
     for (const entry of readOnlyOf()) assert.ok(!schema.includes(`${entry.blockId}:${entry.slot}`), `${entry.blockId}:${entry.slot}`)
   })
 
   test("le modèle ne peut toujours pas les modifier : refusé par le schéma, par le domaine, et par le moteur en entier", async () => {
     const readOnly = readOnlyOf().map((entry) => `${entry.blockId}:${entry.slot}`)
-    for (const target of readOnly) assert.equal(safeParseAssistantResponse(targets(), proposal([{ target, value: "Autre" }])).success, false, target)
+    for (const target of readOnly) assert.equal(safeParseAssistantResponse(schemaContext(), proposal([{ target, value: "Autre" }])).success, false, target)
     for (const target of readOnly) {
       assert.equal(proposalToOperations(doc(), [{ target: "offer:sous-titre", value: "Lance-toi" }, { target, value: "-50 %" }]).ok, false, target)
       const { client } = fakeClient(() => message(proposal([{ target: "offer:sous-titre", value: "Lance-toi" }, { target, value: "-50 %" }])))
@@ -264,7 +269,7 @@ describe("visible ≠ modifiable", () => {
       assert.equal(entry.reason, "valeur de référence", label)
       assert.ok(!targets(document).includes("offer:valeur-cle"), label)
       assert.ok(!assistantFields(document).some((field) => field.slot === "valeur-cle"), label)
-      assert.ok(!JSON.stringify(buildAssistantTransportSchema(targets(document))).includes("valeur-cle"), label)
+      assert.ok(!JSON.stringify(buildAssistantTransportSchema(schemaContext(document))).includes("valeur-cle"), label)
       assert.deepEqual(targets(document), targets(), label)
     }
   })
@@ -275,7 +280,7 @@ describe("visible ≠ modifiable", () => {
     assert.equal(context.facts.promotion?.valeur, "-20 %")
     assert.equal(found("offer", "valeur-cle", edited)?.current, "-30 %")
     assert.ok(context.recommendations.some((entry) => entry.level === "alert" && /valeur de l'offre/.test(entry.message)))
-    assert.equal(safeParseAssistantResponse(targets(edited), proposal([{ target: "offer:valeur-cle", value: "-20 %*" }])).success, false)
+    assert.equal(safeParseAssistantResponse(schemaContext(edited), proposal([{ target: "offer:valeur-cle", value: "-20 %*" }])).success, false)
     assert.equal(proposalToOperations(edited, [{ target: "offer:valeur-cle", value: "-20 %*" }]).ok, false)
     const { client } = fakeClient(() => message(proposal([{ target: "offer:valeur-cle", value: "-20 %*" }])))
     assert.equal((await run(edited, [], "Corrige la valeur", client)).status, "error")
@@ -438,15 +443,16 @@ describe("route POST /api/email-builder/assistant", () => {
     assert.equal(real.status, 503)
   })
 
-  test("la simulation fonctionne de bout en bout, hors réseau : conseil, transformation, structure refusée, puis la proposition se valide", async () => {
+  test("la simulation fonctionne de bout en bout, hors réseau : conseil, transformation, suppression, ajout, puis la proposition se valide", async () => {
     const ask = async (text: string) => (await (await post({ ...base(), message: text, devMock: true }, { env: { NODE_ENV: "development" } })).json()) as Json
     const opinion = await ask("Qu'est-ce que tu en penses ?")
     assert.equal(opinion.proposal, undefined)
     const direct = await ask("Rends-le plus direct")
     assert.ok(direct.proposal.changes.length >= 2)
-    const structure = await ask("Supprime cette lame")
-    assert.equal(structure.proposal, undefined)
-    assert.match(structure.message, /structure/)
+    const ambiguous = await ask("Supprime cette lame")
+    assert.equal(ambiguous.proposal, undefined, "sans sélection ni nom : une question, jamais une suppression au hasard")
+    const named = await ask("Supprime la lame Liste à icônes")
+    assert.equal(named.proposal.structure.remove.length, 1)
     const cta = await ask("Améliore le CTA")
     assert.equal(cta.proposal.changes.length, 1)
     assert.deepEqual(Object.keys(createMockAssistantClient().messages), ["create"])
