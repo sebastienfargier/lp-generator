@@ -27,6 +27,7 @@ import { formatPromotionDate, promotionDeadlineLabel, promotionScopeSentence, pr
 import type { EmailBlockType } from "../email/types"
 import type { EmailDocument } from "./document"
 import { normalizeTextDraft, slotEditor } from "./inline-edit"
+import { isControlledSlotName } from "./slot-roles"
 import { applyDocumentOperations, type DocumentOperation } from "./operations"
 import { getDocumentRecommendations } from "./recommendations"
 import type { CompositionStructure } from "./composition"
@@ -85,7 +86,7 @@ export type SlotProtection = "valeur de référence" | "mention légale" | "syst
 export function slotProtection(blockType: EmailBlockType, slot: string): SlotProtection | undefined {
   const { family, slots } = emailBlockManifest[blockType] as { family: string; slots: Record<string, string> }
   if (slots[slot] === "disclaimer") return "mention légale"
-  if (/^(valeur-cle|code-promo-\d+)$/.test(slot)) return "valeur de référence"
+  if (isControlledSlotName(slot)) return "valeur de référence"
   // Les en-têtes et pieds de page (date de fin, liens de navigation, désabonnement) appartiennent au système.
   if (family === "Header" || family === "Footer") return "système"
   // Un lien texte (« Voir le Parcours Découverte ») est un lien système, pas du contenu à réécrire : seuls les boutons.
