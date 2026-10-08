@@ -578,8 +578,8 @@ describe("V2.8 — route (multipart) et mock de développement", () => {
 
   test("la route est fine : aucune logique dans route.ts", () => {
     const route = code("app/api/email-builder/reference/route.ts")
-    assert.match(route, /handleReference\(request\)/)
-    assert.ok(route.split("\n").filter((line) => line.trim()).length <= 4)
+    assert.match(route, /withBuilderSession\(handleReference, "reference"\)\(request\)/)
+    assert.ok(route.split("\n").filter((line) => line.trim()).length <= 5)
   })
 })
 

@@ -197,10 +197,11 @@ describe("bibliothèque Email : aperçus réels", () => {
     assert.match(code("components/email/email-lame-frame.tsx"), /const EMAIL_WIDTH = 600/)
   })
 
-  test("route d'aperçu : une route statique par lame du manifeste, aucune autre", () => {
+  test("route d'aperçu : une lame du manifeste ou 404, rendue à la demande derrière la session HCC", () => {
     const route = code("app/(dashboard)/email-library/preview/[type]/route.ts")
-    assert.match(route, /export const dynamicParams = false/)
-    assert.match(route, /emailLibraryEntries\.map\(\(entry\) => \(\{ type: entry\.type \}\)\)/)
+    assert.match(route, /export const dynamic = "force-dynamic"/)
+    assert.match(route, /guardRequest\(request\)/)
+    assert.match(route, /status: 404/)
     assert.match(route, /getEmailLibraryEntry\(type\)/)
     assert.match(route, /text\/html; charset=utf-8/)
   })
@@ -294,7 +295,7 @@ describe("bibliothèque Email : portée et non-régression", () => {
   test("M. le Generator n'est pas touché : moteur, route et interface n'importent rien de la bibliothèque", () => {
     const generator = ["lib/email/anthropic.ts", "lib/email/anthropic-schema.ts", "lib/email/draft-prompt.ts", "lib/email/generate-handler.ts", "lib/email/draft-resolver.ts", "lib/email/generation-draft.ts", "lib/email/generation-context.ts", "app/api/generate-email/route.ts", "components/email/email-workspace.tsx", "components/email/email-brief-panel.tsx", "components/email/email-preview.tsx", "app/email-generator/page.tsx"]
     for (const path of generator) assert.ok(!/email-library|library-fixtures|lib\/email\/library|"\.\/library"|EmailLame/.test(strip(path)), path)
-    assert.match(code("app/api/generate-email/route.ts"), /handleEmailGeneration\(request\)/)
+    assert.match(code("app/api/generate-email/route.ts"), /withBuilderSession\(handleEmailGeneration, "legacy"\)\(request\)/)
   })
 
   test("N. le moteur de démonstration et ses sept presets restent inchangés", () => {

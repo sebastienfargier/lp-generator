@@ -317,7 +317,7 @@ describe("la route Next", () => {
 
   test("n'exporte que POST, appelle le gestionnaire, et n'importe ni le SDK ni le moteur directement", () => {
     assert.deepEqual([...route.matchAll(/export (?:async )?(?:function|const) (\w+)/g)].map((match) => match[1]), ["POST"])
-    assert.match(route, /handleLandingGeneration\(request\)/)
+    assert.match(route, /withBuilderSession\(handleLandingGeneration, "legacy"\)\(request\)/)
     assert.ok(!/@anthropic-ai\/sdk|landing\/anthropic"|process\.env/.test(route))
   })
 

@@ -15,11 +15,14 @@ import { toApiHistory } from "@/lib/email-builder/assistant-chat"
 import { compositionCatalog } from "@/lib/email-builder/composition"
 import type { AssistantResponseBody } from "@/lib/email-builder/assistant-handler"
 import type { BuilderRenderResponse } from "@/lib/email-builder/render-handler"
+import type { HccEditorLink } from "@/lib/email-builder/hcc-save"
+import type { DocumentStatus } from "@/lib/email-builder/versions"
 
 import { AssistantPanel } from "./assistant-panel"
 import { BuilderCanvas, type CanvasViewport } from "./builder-canvas"
 import { BuilderTopbar } from "./builder-topbar"
 import { EmptyCanvas } from "./empty-canvas"
+import { HccSaveBar } from "./hcc-save-bar"
 import { ImagePickerPanel } from "./image-picker-panel"
 import { LameLibraryPanel } from "./lame-library-panel"
 
@@ -31,6 +34,10 @@ type BuilderWorkspaceProps = {
   initialMessage?: string
   /** Abandonne ce travail et revient au choix de départ (le shell remplace alors le workspace). */
   onRestart: () => void
+  /** Création ouverte depuis le HCC : le travail s'y enregistre (`HccSaveBar`). */
+  hcc?: HccEditorLink
+  /** Statut éditorial enregistré dans le HCC pour le document de départ. */
+  initialStatus?: DocumentStatus
 }
 
 /** La sélection du canvas, telle que l'assistant la reçoit : un indice (lame, éventuellement champ), ou rien. */
@@ -47,8 +54,12 @@ const selectionHint = (selection: BuilderState["selection"]) => (selection.kind 
  * aucune iframe). Rien n'est persisté, rien n'est généré : aucun appel de modèle,
  * un rendu serveur par nouveau document non vide seulement.
  */
-export function BuilderWorkspace({ initialDocument, initialMessage, lames, onRestart }: BuilderWorkspaceProps) {
-  const [state, dispatch] = useReducer(builderReducer, { document: initialDocument, message: initialMessage }, ({ document: start, message }) => createBuilderState(start, message))
+export function BuilderWorkspace({ initialDocument, initialMessage, lames, onRestart, hcc, initialStatus }: BuilderWorkspaceProps) {
+  const [state, dispatch] = useReducer(builderReducer, { document: initialDocument, message: initialMessage }, ({ document: start, message }) => {
+    const initial = createBuilderState(start, message)
+    // Un email vide reste Brouillon (règle du réducteur).
+    return initialStatus && !isEmptyDocument(start) ? { ...initial, status: initialStatus } : initial
+  })
   const [viewport, setViewport] = useState<CanvasViewport>("desktop")
   const [assistantOpen, setAssistantOpen] = useState(true)
   // `document` : le TRAVAIL (opérations, bibliothèque, banque d'images). `shown` : ce que le canvas affiche, le même en travail, le snapshot d'une version en consultation.
@@ -162,6 +173,7 @@ export function BuilderWorkspace({ initialDocument, initialMessage, lames, onRes
         onViewport={setViewport}
         onToggleAssistant={() => setAssistantOpen((open) => !open)}
       />
+      {hcc && <HccSaveBar {...hcc} document={document} status={state.status} empty={empty} />}
 
       <div className="relative flex min-h-0 flex-1">
         {panel?.kind === "library" && (

@@ -251,7 +251,7 @@ describe("route : erreurs publiques", () => {
 describe("route et client : branchement", () => {
   test("la route délègue au gestionnaire du moteur V2, jamais à la démo ni au moteur V1", () => {
     const route = read("app/api/generate-email/route.ts")
-    assert.match(route, /handleEmailGeneration\(request\)/)
+    assert.match(route, /withBuilderSession\(handleEmailGeneration, "legacy"\)\(request\)/)
     assert.ok(!/runEmailGeneration|demo-generator|generateDemoEmail|lib\/email\/generation"/.test(route))
     const handler = read("lib/email/generate-handler.ts")
     assert.ok(!/runEmailGeneration|generateDemoEmail|generateEmailWithClaude/.test(handler))

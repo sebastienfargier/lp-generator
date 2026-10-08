@@ -53,7 +53,8 @@ describe("V2.6 — état d'entrée : aucun email ouvert", () => {
     const initial = createShell()
     assert.equal(initial.screen, "entry")
     assert.ok(!("document" in initial))
-    const page = code("app/email-builder/page.tsx")
+    // HCC : l'éditeur s'ouvre sur `/email-builder/[assetId]` (session liée à l'asset) ; `/email-builder` redirige.
+    const page = code("app/email-builder/[assetId]/page.tsx")
     assert.match(page, /BuilderShell/)
     assert.ok(!/demo-document|buildDemoDocument|renderCanvasHtml|BuilderWorkspace/.test(page), "la page n'injecte ni la démo ni un rendu")
     for (const path of ["builder-shell", "entry-screen", "builder-workspace", "builder-topbar", "empty-canvas", "restart-button"]) assert.ok(!/demo-document|buildDemoDocument/.test(code(`components/email-builder/${path}.tsx`)), path)
@@ -365,7 +366,7 @@ describe("V2.6 — recommencer", () => {
     assert.equal(fresh.history.past.length, 0)
     assert.equal(fresh.versions.length, 0)
     assert.equal(fresh.assistant.messages.length, 0)
-    assert.match(code("components/email-builder/builder-shell.tsx"), /<BuilderWorkspace key=\{shell\.opened\}/)
+    assert.match(code("components/email-builder/builder-shell.tsx"), /<BuilderWorkspace\s+key=\{shell\.opened\}/)
   })
 
   test("recommencer et choisir ne sont pas des opérations Undo : aucune action du Builder ne les connaît", () => {

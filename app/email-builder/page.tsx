@@ -1,20 +1,20 @@
 import type { Metadata } from "next"
+import { redirect } from "next/navigation"
 
-import { BuilderShell } from "@/components/email-builder/builder-shell"
-import { builderLames } from "@/lib/email-builder/catalog"
-import { builderTemplates } from "@/lib/email-builder/templates"
+import { readPageSession, refusalPath } from "@/lib/hcc/page-session"
+
+export const dynamic = "force-dynamic"
 
 export const metadata: Metadata = {
   title: "Email Builder",
+  robots: { index: false },
 }
 
 /**
- * Email Builder : la porte d'entrée. AUCUN email n'est ouvert à l'arrivée : la
- * personne choisit de partir de zéro ou d'un modèle (la référence viendra plus
- * tard). Les modèles et le catalogue de lames sont préparés côté serveur ; aucun
- * appel de modèle, aucune persistance. Le document de démonstration reste une
- * fixture de développement et de test (`demo-document.ts`), jamais injecté ici.
+ * `/email-builder` n'ouvre plus l'éditeur directement : l'accès passe par un lancement HCC (`/hcc/start`), qui mène à
+ * `/email-builder/[assetId]`. Avec une session valide, on y retourne ; sinon, la page « Ouvre depuis le HCC ».
  */
-export default function EmailBuilderPage() {
-  return <BuilderShell lames={builderLames()} templates={builderTemplates()} />
+export default async function EmailBuilderPage() {
+  const read = await readPageSession()
+  redirect(read.status === "valid" ? `/email-builder/${encodeURIComponent(read.session.assetId)}` : refusalPath(read.status))
 }

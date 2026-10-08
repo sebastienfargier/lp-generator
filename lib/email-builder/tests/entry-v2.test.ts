@@ -60,8 +60,8 @@ describe("Entry V2 — trois chemins, une seule porte, aucune logique changée",
   })
 
   test("la page n'injecte aucun rendu : les aperçus sont servis par leur route", () => {
-    const page = code("app/email-builder/page.tsx")
-    assert.match(page, /<BuilderShell lames=\{builderLames\(\)\} templates=\{builderTemplates\(\)\}/)
+    const page = code("app/email-builder/[assetId]/page.tsx")
+    assert.match(page, /<BuilderShell\s+lames=\{builderLames\(\)\}\s+templates=\{builderTemplates\(\)\}/)
     assert.ok(!/renderCanvasHtml|renderDocumentEmail|entryPreviewHtml/.test(page))
   })
 })
@@ -96,11 +96,10 @@ describe("Entry V2 — aperçus : de vrais emails, en nombre borné", () => {
     assert.ok(!/<table|<td|<div|\.png|\.jpg/.test(source), "aucun HTML ni capture dans le helper")
   })
 
-  test("la route : prérendue, id inconnu → 404, ensemble borné aux identifiants servis", () => {
+  test("la route : protégée par la session HCC (rendue à la demande), id inconnu → 404, ensemble borné aux identifiants servis", () => {
     const route = code("app/email-builder/preview/[id]/route.ts")
-    assert.match(route, /dynamic = "force-static"/)
-    assert.match(route, /dynamicParams = false/)
-    assert.match(route, /entryPreviewIds\(\)\.map/)
+    assert.match(route, /dynamic = "force-dynamic"/)
+    assert.match(route, /guardRequest\(request\)/)
     assert.match(route, /status: 404/)
     assert.match(route, /entryPreviewHtml\(id\)/)
   })
