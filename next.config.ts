@@ -12,6 +12,10 @@ const security = [
 ];
 
 const nextConfig: NextConfig = {
+  // Le rendu lit les gabarits sur le disque : la route d'aperçu HCC les embarque explicitement dans son bundle.
+  outputFileTracingIncludes: {
+    "/api/hcc/v1/render": ["./lib/email/socle-email.html", "./lib/email/templates/**/*.html"],
+  },
   async headers() {
     return [
       { source: "/:path*", headers: security },

@@ -46,7 +46,7 @@ const socialTokens: ReadonlySet<string> = new Set([
   emailSystemElements["social-4"].token,
 ])
 /** GIF transparent 1×1 : l'image garde sa place, rien n'est affiché. */
-const transparentPixel =
+export const transparentPixel =
   "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
 
 type Element = DefaultTreeAdapterTypes.Element
@@ -74,8 +74,18 @@ function previewSource(src: string) {
   return undefined
 }
 
-export function toPreviewHtml(html: string): string {
+export type PreviewOptions = {
+  /**
+   * Origine publique (HTTPS, validée côté serveur : `resolveExportAssetsBase`) qui préfixe les chemins locaux
+   * (`/logos/…`, `/icones/…`, `/images/…`) : un aperçu affiché HORS du Builder (HCC). Absente : comportement
+   * historique, chemins relatifs à l'application. Jamais déduite de la requête ni du document.
+   */
+  assetsBase?: string
+}
+
+export function toPreviewHtml(html: string, options: PreviewOptions = {}): string {
   const edits: Edit[] = []
+  const absolute = (path: string) => (options.assetsBase && path.startsWith("/") ? `${options.assetsBase}${path}` : path)
 
   for (const element of elements(parse(html, { sourceCodeLocationInfo: true }))) {
     const attrs = element.sourceCodeLocation?.attrs
@@ -83,7 +93,8 @@ export function toPreviewHtml(html: string): string {
 
     if (element.tagName === "img") {
       const src = element.attrs.find((attr) => attr.name === "src")?.value
-      const next = src === undefined ? undefined : previewSource(src)
+      const local = src === undefined ? undefined : previewSource(src)
+      const next = local === undefined ? undefined : absolute(local)
       if (next !== undefined && attrs.src) {
         edits.push({ start: attrs.src.startOffset, end: attrs.src.endOffset, text: `src="${next}"` })
       }

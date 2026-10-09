@@ -242,3 +242,60 @@ Bout en bout (local) : HCC et Builder en `next dev`, client `email-builder-local
 6. Routes héritées : dépôt Builder isolé, ou blocage par `proxy.ts` sur le déploiement POC.
 7. Limitation : compteur en mémoire seul, ou règle Vercel Firewall en plus.
 8. Comportement à l'expiration : page « Rouvrir depuis le HCC » (proposé) ou relance automatique de `/hcc/start`.
+
+---
+
+## 12. Aperçu HTML pour le HCC : `POST /api/hcc/v1/render` (sens HCC → Builder)
+
+Appel **serveur à serveur**, sans session Builder, protégé uniquement par sa signature HMAC (hors du filtre de `proxy.ts`). Rendu en lecture seule : aucune écriture, aucun appel réseau, aucun appel Anthropic.
+
+### 12.1 Clé dédiée (aucun nouveau secret)
+```
+clé de rendu = HKDF-SHA256(IKM  = octets de la clé partagée k1 (base64url décodé, la même que HCC_SIGNING_KEY),
+                           salt = UTF-8 "hcc-email-builder-v1",
+                           info = UTF-8 "hcc-to-builder:render",
+                           L    = 32 octets)
+```
+La clé brute k1 (sens Builder → HCC) n'est jamais acceptée par cette route.
+
+### 12.2 Requête
+```http
+POST https://<builder>/api/hcc/v1/render
+Content-Type: application/json
+HCC-Client-Id: <EMAIL_BUILDER_CLIENT_ID>      (= HCC_CLIENT_ID du Builder)
+HCC-Key-Id: <kid>                             (= HCC_SIGNING_KEY_ID du Builder)
+HCC-Timestamp: <secondes Unix>                (fenêtre ±300 s)
+HCC-Nonce: <22 à 64 caractères base64url>     (unique par requête)
+HCC-Signature: v1=<hex HMAC-SHA256(clé de rendu, chaîne)>
+(sans en-tête Origin)
+
+{"document": { …EmailDocument v1… }}
+```
+Chaîne signée (identique au contrat §4.2) : `POST \n /api/hcc/v1/render \n timestamp \n nonce \n hex(SHA-256(corps brut UTF-8)) \n client-id \n Idempotency-Key (ou vide)`. Le corps signé est la chaîne EXACTE envoyée.
+
+### 12.3 Réponses (`Cache-Control: no-store`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `HCC-Contract-Version: 1`)
+| Statut | Corps |
+|---|---|
+| 200 | `{"html":"<!DOCTYPE html>…","contractVersion":1}` |
+| 400 | `invalid_request` (JSON invalide, clé en plus) |
+| 401 | `invalid_client` (signature, client, kid, fenêtre, nonce absent, mal formé ou rejoué) |
+| 403 | `origin_refusee` |
+| 413 | `payload_too_large` (corps > 600 Ko) |
+| 422 | `invalid_document` (`parseEmailDocument` : schemaVersion ≠ 1, lame inconnue…) ; `empty_document` (aucune lame) |
+| 429 | `rate_limited` |
+| 500 | `render_failed` |
+| 503 | `client_non_configure` (clé ou `EMAIL_ASSETS_BASE_URL` absente ou non HTTPS) |
+
+Erreurs au format `{"error":{"code","message"}}`.
+
+### 12.4 HTML renvoyé
+`renderDocumentEmail` (sans repères d'édition) puis `toPreviewHtml(…, { assetsBase })` : images, logo et icônes en URL absolues sous `EMAIL_ASSETS_BASE_URL` (variable serveur validée, jamais l'en-tête Host ni le document), réseaux sociaux en pixel transparent `data:image/gif`, liens inertes (`data-preview-href`). Filet final : aucun `<script>`, événement `on*`, `href` actif, `javascript:`, repère ni URL de démonstration. Media query mobile conservée.
+
+### 12.5 Vecteur de test (clé FICTIVE)
+| Élément | Valeur |
+|---|---|
+| Clé partagée k1 (fictive) | octets `0x01…0x20` = base64url `AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA` |
+| Clé de rendu (hex) | `0f174bb17c0c4efe41cc9555653f7d9da6d3e0f87b92bcb241cff913bbeb75b2` |
+| Corps | `{"document":{}}` → SHA-256 `577fb1126636075a0283c21bc2eb10e101cdf16837c11cee50bb82e6241dec9e` |
+| Timestamp, nonce, client | `1791465600`, `AAAAAAAAAAAAAAAAAAAAAA`, `email-builder-poc` |
+| Signature | `v1=c028b7d24b628f006771e30d59b5966bad97f1063a36baef9d2d57579efddc22` |
