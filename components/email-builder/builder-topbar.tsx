@@ -20,6 +20,12 @@ const viewports = [
 
 type BuilderTopbarProps = {
   name: string
+  /** Versions nommées (en mémoire) : masquées en mode HCC, où elles ne seraient pas conservées. */
+  versionsEnabled?: boolean
+  /** « Recommencer » : masqué quand le HCC a verrouillé l'édition. */
+  restartEnabled?: boolean
+  /** Précision sur le statut affiché (mode HCC : statut de rédaction, pas une validation du HCC). */
+  statusHint?: string
   /** Statut affiché : celui du travail, ou celui de la version consultée. */
   status: DocumentStatus
   /** Consultation d'une version : lecture seule (pas d'historique, pas d'ajout, pas de statut). */
@@ -58,7 +64,7 @@ type BuilderTopbarProps = {
  * les actions secondaires n'affichent que leur icône (nom accessible conservé).
  * Aucune action n'est masquée : rien ne déborde.
  */
-export function BuilderTopbar({ name, status, readOnly, empty, confirmRestart, onRestart, versions, baseId, viewingId, changedSinceVersion, onStatus, onViewVersion, onExitView, onSaveVersion, canUndo, canRedo, viewport, assistantOpen, onUndo, onRedo, onAddBlock, onViewport, onToggleAssistant }: BuilderTopbarProps) {
+export function BuilderTopbar({ name, versionsEnabled = true, restartEnabled = true, statusHint, status, readOnly, empty, confirmRestart, onRestart, versions, baseId, viewingId, changedSinceVersion, onStatus, onViewVersion, onExitView, onSaveVersion, canUndo, canRedo, viewport, assistantOpen, onUndo, onRedo, onAddBlock, onViewport, onToggleAssistant }: BuilderTopbarProps) {
   return (
     <header className="flex min-h-12 shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b bg-background px-4 py-1 lg:h-12 lg:flex-nowrap lg:py-0">
       <Button variant="ghost" size="sm" nativeButton={false} render={<Link href="/" />} className="-ml-2">
@@ -69,11 +75,11 @@ export function BuilderTopbar({ name, status, readOnly, empty, confirmRestart, o
         <h1 className="truncate text-body font-semibold" title={name}>
           {name}
         </h1>
-        <StatusMenu status={status} readOnly={readOnly} empty={empty} onChange={onStatus} />
+        <StatusMenu status={status} readOnly={readOnly} empty={empty} onChange={onStatus} {...(statusHint ? { hint: statusHint } : {})} />
       </div>
 
       <div className="ml-auto flex items-center gap-2">
-        <RestartButton confirm={confirmRestart} onRestart={onRestart} />
+        {restartEnabled && <RestartButton confirm={confirmRestart} onRestart={onRestart} />}
         <div className="flex items-center">
           <Button type="button" variant="ghost" size="icon-sm" aria-label="Annuler" title="Annuler (Ctrl/Cmd+Z)" disabled={!canUndo} onClick={onUndo}>
             <Undo2Icon aria-hidden />
@@ -100,7 +106,7 @@ export function BuilderTopbar({ name, status, readOnly, empty, confirmRestart, o
             </ToggleGroupItem>
           ))}
         </ToggleGroup>
-        <VersionsMenu empty={empty} versions={versions} baseId={baseId} viewingId={viewingId} changed={changedSinceVersion} onView={onViewVersion} onExitView={onExitView} onSave={onSaveVersion} />
+        {versionsEnabled && <VersionsMenu empty={empty} versions={versions} baseId={baseId} viewingId={viewingId} changed={changedSinceVersion} onView={onViewVersion} onExitView={onExitView} onSave={onSaveVersion} />}
         <Button type="button" variant="outline" size="sm" aria-label="Ajouter une lame" title="Ajouter une lame" disabled={readOnly} onClick={onAddBlock}>
           <PlusIcon data-icon="inline-start" aria-hidden />
           <span className="hidden lg:inline">Ajouter une lame</span>

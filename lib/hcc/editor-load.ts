@@ -11,7 +11,7 @@ import { editorialStatuses, fetchHccDocument, type EditorialStatus, type HccCall
 import { editorAccess, openSession, publicSession, type PublicBuilderSession } from "./session"
 
 export type EditorLoad =
-  | { status: "ready"; session: PublicBuilderSession; document: EmailDocument | null; revision: number; editorialStatus: EditorialStatus }
+  | { status: "ready"; session: PublicBuilderSession; document: EmailDocument | null; revision: number; editorialStatus: EditorialStatus; /** Fiche de la production dans le HCC : origine de la configuration serveur + route connue du HCC. */ hccHome: string }
   | { status: "redirect"; to: string }
 
 export async function loadEditorDocument(input: { cookieValue: string | undefined; assetId: string; env?: Readonly<Record<string, string | undefined>> } & HccCallDependencies): Promise<EditorLoad> {
@@ -28,9 +28,10 @@ export async function loadEditorDocument(input: { cookieValue: string | undefine
     return { status: "redirect", to }
   }
   const { document, revision, statutEditorial } = fetched.value
+  const hccHome = new URL(`/mes-creations/${encodeURIComponent(input.assetId)}`, config.apiOrigin).toString()
   const editorialStatus: EditorialStatus = (editorialStatuses as readonly string[]).includes(statutEditorial ?? "") ? (statutEditorial as EditorialStatus) : "draft"
-  if (document === null) return { status: "ready", session: publicSession(read.session), document: null, revision: 0, editorialStatus: "draft" }
+  if (document === null) return { status: "ready", session: publicSession(read.session), document: null, revision: 0, editorialStatus: "draft", hccHome }
   const parsed = parseEmailDocument(document)
   if (!parsed.success) return { status: "redirect", to: "/hcc/erreur?raison=document_invalide" }
-  return { status: "ready", session: publicSession(read.session), document: parsed.data, revision, editorialStatus }
+  return { status: "ready", session: publicSession(read.session), document: parsed.data, revision, editorialStatus, hccHome }
 }

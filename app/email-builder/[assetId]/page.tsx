@@ -26,7 +26,7 @@ export default async function EmailBuilderAssetPage({ params }: { params: Promis
     <BuilderShell
       lames={builderLames()}
       templates={builderTemplates()}
-      hcc={{ assetId, assetName: load.session.assetName, revision: load.revision, document: load.document, editorialStatus: load.editorialStatus }}
+      hcc={{ assetId, assetName: load.session.assetName, revision: load.revision, document: load.document, editorialStatus: load.editorialStatus, hccHome: load.hccHome }}
     />
   )
 }

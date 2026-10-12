@@ -4,7 +4,7 @@ import { useReducer, useState } from "react"
 
 import type { BuilderLame } from "@/lib/email-builder/catalog"
 import type { EmailDocument } from "@/lib/email-builder/document"
-import { saveKey, type HccSaved } from "@/lib/email-builder/hcc-save"
+import { saveKey, type HccLock, type HccSaved } from "@/lib/email-builder/hcc-save"
 import type { DocumentStatus } from "@/lib/email-builder/versions"
 import { createShell, shellReducer } from "@/lib/email-builder/shell-state"
 import type { BuilderTemplate } from "@/lib/email-builder/templates"
@@ -17,7 +17,7 @@ type BuilderShellProps = {
   lames: readonly BuilderLame[]
   templates: readonly BuilderTemplate[]
   /** Création ouverte depuis le HCC : document enregistré (`null` pour une création neuve), révision, statut éditorial. */
-  hcc?: { assetId: string; assetName: string; revision: number; document: EmailDocument | null; editorialStatus: DocumentStatus }
+  hcc?: { assetId: string; assetName: string; revision: number; document: EmailDocument | null; editorialStatus: DocumentStatus; hccHome: string | null }
 }
 
 /**
@@ -32,6 +32,8 @@ export function BuilderShell({ lames, templates, hcc }: BuilderShellProps) {
   const [shell, dispatch] = useReducer(shellReducer, undefined, () => (hcc?.document ? { screen: "builder" as const, opened: 1, document: hcc.document } : createShell()))
   // Ce que le HCC contient : survit à « Recommencer » (nouvel espace de travail, même création HCC).
   const [saved, setSaved] = useState<HccSaved>(() => ({ revision: hcc?.revision ?? 0, key: hcc?.document ? saveKey(hcc.document, hcc.editorialStatus) : null }))
+  // Verrou posé par le HCC (production plus modifiable, session expirée) : définitif pour cette page, même après « Recommencer ».
+  const [lock, setLock] = useState<HccLock | null>(null)
 
   if (shell.screen === "builder") {
     // Le statut éditorial enregistré ne s'applique qu'au document enregistré (première ouverture).
@@ -41,7 +43,7 @@ export function BuilderShell({ lames, templates, hcc }: BuilderShellProps) {
         key={shell.opened}
         initialDocument={shell.document}
         {...(shell.intro ? { initialMessage: shell.intro } : {})}
-        {...(hcc ? { hcc: { assetId: hcc.assetId, assetName: hcc.assetName, saved, onSaved: setSaved } } : {})}
+        {...(hcc ? { hcc: { assetId: hcc.assetId, assetName: hcc.assetName, saved, onSaved: setSaved, lock, onLock: (next: HccLock) => setLock((current) => current ?? next), hccHome: hcc.hccHome } } : {})}
         {...(initialStatus ? { initialStatus } : {})}
         lames={lames}
         onRestart={() => dispatch({ type: "restart" })}

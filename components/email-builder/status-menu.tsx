@@ -12,6 +12,8 @@ type StatusMenuProps = {
   /** Aucune lame : il n'y a encore rien à valider ni à envoyer, le statut reste Brouillon. */
   empty?: boolean
   onChange: (status: DocumentStatus) => void
+  /** Précision affichée au survol et lue par les lecteurs d'écran (mode HCC : statut de rédaction). */
+  hint?: string
 }
 
 /**
@@ -19,18 +21,18 @@ type StatusMenuProps = {
  * transition imposée. « Prêt à envoyer » dit que l'équipe juge l'email prêt ; le
  * Builder ne le garantit pas, et aucune recommandation ne le bloque.
  */
-export function StatusMenu({ status, readOnly, empty = false, onChange }: StatusMenuProps) {
+export function StatusMenu({ status, readOnly, empty = false, onChange, hint }: StatusMenuProps) {
   const chip = "flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-0.5 text-caption"
   if (readOnly) {
     return (
-      <span className={`${chip} text-muted-foreground`} title="Statut enregistré avec cette version">
+      <span className={`${chip} text-muted-foreground`} title={hint ?? "Statut enregistré avec cette version"}>
         {statusLabels[status]}
       </span>
     )
   }
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger aria-label={`Statut : ${statusLabels[status]}`} className={`${chip} outline-none transition-colors hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 ${status === "ready" ? "bg-accent-1 text-neutral-900" : "text-muted-foreground"}`}>
+      <DropdownMenuTrigger aria-label={`${hint ? "Statut de rédaction" : "Statut"} : ${statusLabels[status]}`} title={hint} className={`${chip} outline-none transition-colors hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 ${status === "ready" ? "bg-accent-1 text-neutral-900" : "text-muted-foreground"}`}>
         {statusLabels[status]}
         <ChevronDownIcon className="size-3" aria-hidden />
       </DropdownMenuTrigger>
@@ -43,6 +45,7 @@ export function StatusMenu({ status, readOnly, empty = false, onChange }: Status
           ))}
         </DropdownMenuRadioGroup>
         {empty && <p className="px-2 py-1.5 text-caption text-muted-foreground">Ajoute une première lame pour changer le statut.</p>}
+        {hint && <p className="max-w-56 px-2 py-1.5 text-caption text-muted-foreground">{hint}</p>}
       </DropdownMenuContent>
     </DropdownMenu>
   )

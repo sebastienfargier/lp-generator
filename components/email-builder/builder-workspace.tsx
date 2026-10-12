@@ -15,7 +15,7 @@ import { toApiHistory } from "@/lib/email-builder/assistant-chat"
 import { compositionCatalog } from "@/lib/email-builder/composition"
 import type { AssistantResponseBody } from "@/lib/email-builder/assistant-handler"
 import type { BuilderRenderResponse } from "@/lib/email-builder/render-handler"
-import type { HccEditorLink } from "@/lib/email-builder/hcc-save"
+import { guardLockedDispatch, type HccEditorLink } from "@/lib/email-builder/hcc-save"
 import type { DocumentStatus } from "@/lib/email-builder/versions"
 
 import { AssistantPanel } from "./assistant-panel"
@@ -55,7 +55,7 @@ const selectionHint = (selection: BuilderState["selection"]) => (selection.kind 
  * un rendu serveur par nouveau document non vide seulement.
  */
 export function BuilderWorkspace({ initialDocument, initialMessage, lames, onRestart, hcc, initialStatus }: BuilderWorkspaceProps) {
-  const [state, dispatch] = useReducer(builderReducer, { document: initialDocument, message: initialMessage }, ({ document: start, message }) => {
+  const [state, baseDispatch] = useReducer(builderReducer, { document: initialDocument, message: initialMessage }, ({ document: start, message }) => {
     const initial = createBuilderState(start, message)
     // Un email vide reste Brouillon (règle du réducteur).
     return initialStatus && !isEmptyDocument(start) ? { ...initial, status: initialStatus } : initial
@@ -66,7 +66,12 @@ export function BuilderWorkspace({ initialDocument, initialMessage, lames, onRes
   const document = builderDocument(state)
   const shown = shownDocument(state)
   const viewing = builderViewing(state)
-  const readOnly = builderReadOnly(state)
+  // Verrou posé par le HCC (production plus modifiable, session expirée) : lecture seule pour toute la suite de la page.
+  const hccLocked = (hcc?.lock ?? null) !== null
+  // Lecture seule : consultation d'une version, ou verrou HCC.
+  const readOnly = builderReadOnly(state) || hccLocked
+  /** Tout geste passe par ici : sous verrou HCC, seuls les gestes sans effet sur le document sont transmis. */
+  const dispatch = guardLockedDispatch(hccLocked, baseDispatch)
   const empty = builderIsEmpty(state)
   const shownEmpty = isEmptyDocument(shown)
   const key = JSON.stringify(shown)
@@ -104,7 +109,7 @@ export function BuilderWorkspace({ initialDocument, initialMessage, lames, onRes
   const { notice, noticeKey } = state
   useEffect(() => {
     if (!notice) return
-    const timer = setTimeout(() => dispatch({ type: "dismiss-notice" }), notice.tone === "error" ? 7000 : 9000)
+    const timer = setTimeout(() => baseDispatch({ type: "dismiss-notice" }), notice.tone === "error" ? 7000 : 9000)
     return () => clearTimeout(timer)
   }, [notice, noticeKey])
 
@@ -152,6 +157,9 @@ export function BuilderWorkspace({ initialDocument, initialMessage, lames, onRes
         name={shown.config.name}
         status={viewing ? viewing.status : state.status}
         readOnly={readOnly}
+        versionsEnabled={!hcc}
+        restartEnabled={!hccLocked}
+        statusHint={hcc ? "Statut de rédaction dans le Builder : la validation officielle de la production se fait dans le HCC." : undefined}
         versions={state.versions}
         baseId={state.baseId}
         viewingId={state.viewingId}
@@ -262,6 +270,7 @@ export function BuilderWorkspace({ initialDocument, initialMessage, lames, onRes
             messages={state.assistant.messages}
             pending={state.assistant.pending}
             readOnly={readOnly}
+            {...(hccLocked ? { readOnlyMessage: "Email en lecture seule : l'assistant ne peut plus le modifier." } : {})}
             empty={empty}
             document={document}
             blockName={(type) => lamesByType[type]?.name ?? type}

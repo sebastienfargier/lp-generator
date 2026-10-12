@@ -348,7 +348,7 @@ describe("Builder — assistant éditorial (V2.5)", () => {
   })
 
   test("consultation d'une version : saisie, amorces et « Appliquer » désactivés, avec l'explication", () => {
-    assert.match(panel, /Reviens au travail actuel pour utiliser l&apos;assistant\./)
+    assert.match(panel, /readOnlyMessage \?\? "Reviens au travail actuel pour utiliser l'assistant\."/)
     assert.match(panel, /disabled=\{readOnly\}/)
     assert.match(panel, /disabled=\{!canSend\}/)
     assert.match(workspace, /readOnly=\{readOnly\}/)

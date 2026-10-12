@@ -16,6 +16,8 @@ type AssistantPanelProps = {
   pending: boolean
   /** Consultation d'une version : l'assistant ne travaille que sur le travail actuel. */
   readOnly: boolean
+  /** Le message affiché en lecture seule (défaut : consultation d'une version). */
+  readOnlyMessage?: string
   /** Aucune lame : il n'y a encore rien à relire, l'assistant attend la première lame. */
   empty: boolean
   /** Le travail COURANT : ce que les propositions décrivent et ce qui les rend périmées. */
@@ -120,7 +122,7 @@ function ProposalCard({ messageId, proposal, document, readOnly, blockName, cata
  * personne n'a pas cliqué « Appliquer ». Le panneau ne connaît ni le modèle ni
  * le réseau : il reçoit des messages et renvoie des gestes.
  */
-export function AssistantPanel({ messages, pending, readOnly, empty, document, blockName, catalog, onSend, onApply, onIgnore, onClose }: AssistantPanelProps) {
+export function AssistantPanel({ messages, pending, readOnly, readOnlyMessage, empty, document, blockName, catalog, onSend, onApply, onIgnore, onClose }: AssistantPanelProps) {
   const [draft, setDraft] = useState("")
   const end = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -188,7 +190,7 @@ export function AssistantPanel({ messages, pending, readOnly, empty, document, b
           submit(draft)
         }}
       >
-        {readOnly && <p className="text-caption text-muted-foreground">Reviens au travail actuel pour utiliser l&apos;assistant.</p>}
+        {readOnly && <p className="text-caption text-muted-foreground">{readOnlyMessage ?? "Reviens au travail actuel pour utiliser l'assistant."}</p>}
         {empty && !readOnly && <p className="text-caption text-muted-foreground">Ajoute une première lame pour utiliser l&apos;assistant.</p>}
         <div className="flex items-end gap-2">
           <textarea
