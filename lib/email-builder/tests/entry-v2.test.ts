@@ -38,9 +38,14 @@ describe("Entry V2 — trois chemins, une seule porte, aucune logique changée",
   })
 
   test("même hiérarchie : un seul composant de carte, un micro-CTA identique, aucune variante « principale » ni « recommandée »", () => {
-    assert.ok(!/recommand|variant="default"|buttonVariants/.test(entry), "aucun bouton principal ni recommandation")
-    assert.ok(!/<Button/.test(entry.slice(entry.indexOf('id="blank"'))), "les chemins ne sont pas des boutons du design system : le seul CTA est celui de la carte")
-    assert.ok(!/recommand/i.test(entry + card + scenes))
+    // Option B (L1, décision produit du 12/10/2026) : une recommandation de MODÈLES existe pour une création ouverte depuis
+    // un brief HCC valide, dans son propre composant (brief-recommendation.tsx), au-dessus des chemins. Les trois chemins
+    // d'entrée, eux, restent strictement de même poids : ni variante principale, ni « recommandé ».
+    const paths = entry.slice(entry.indexOf('id="blank"'))
+    assert.ok(!/variant="default"|buttonVariants/.test(entry), "aucun bouton principal")
+    assert.ok(!/recommand/i.test(paths), "aucun chemin d'entrée recommandé")
+    assert.ok(!/<Button/.test(paths), "les chemins ne sont pas des boutons du design system : le seul CTA est celui de la carte")
+    assert.ok(!/recommand/i.test(card + scenes))
     assert.equal((card.match(/<button/g) ?? []).length, 1, "un seul élément interactif par carte")
   })
 

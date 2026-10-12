@@ -9,6 +9,7 @@ import type { DocumentStatus } from "@/lib/email-builder/versions"
 import { createShell, shellReducer } from "@/lib/email-builder/shell-state"
 import type { BuilderTemplate } from "@/lib/email-builder/templates"
 import type { HccBriefState } from "@/lib/hcc/brief"
+import { recommendTemplates } from "@/lib/email-builder/brief-templates"
 
 import { BuilderWorkspace } from "./builder-workspace"
 import { EntryScreen } from "./entry-screen"
@@ -64,6 +65,15 @@ export function BuilderShell({ lames, templates, hcc }: BuilderShellProps) {
       onReference={() => dispatch({ type: "choose-reference" })}
       onTemplate={(template) => dispatch({ type: "choose-template", document: template.document })}
       onBack={() => dispatch({ type: "back" })}
+      onRecommendedTemplate={(template) => dispatch({ type: "choose-recommended-template", document: template.document })}
+      recommendation={recommendTemplates(hcc?.brief?.status === "valide" ? hcc.brief.brief : null, templates)}
+      briefNotice={
+        hcc?.brief?.status === "obsolete"
+          ? "Le brief HCC de cette production a changé et doit être revalidé : aucune recommandation de modèle n'est faite."
+          : hcc?.brief?.status === "indisponible"
+            ? "Brief HCC indisponible pour le moment : choisis ton départ librement."
+            : null
+      }
     />
   )
 }

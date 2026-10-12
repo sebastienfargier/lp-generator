@@ -4,8 +4,10 @@ import Link from "next/link"
 import { ArrowLeftIcon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import type { TemplateRecommendation } from "@/lib/email-builder/brief-templates"
 import type { BuilderTemplate } from "@/lib/email-builder/templates"
 
+import { BriefRecommendation } from "./brief-recommendation"
 import { CreationPathCard } from "./creation-path-card"
 import { EntryFrame } from "./entry-frame"
 import { BlankStage, ReferenceStage, TemplateFan, TemplateStage } from "./entry-scenes"
@@ -19,6 +21,12 @@ type EntryScreenProps = {
   onReference: () => void
   onTemplate: (template: BuilderTemplate) => void
   onBack: () => void
+  /** Brief HCC valide : modèles recommandés d'après son intention (la personne garde le choix de tout autre modèle). */
+  recommendation?: TemplateRecommendation | null
+  /** Brief HCC obsolète ou indisponible : message affiché à la place de la recommandation. */
+  briefNotice?: string | null
+  /** Ouverture d'un modèle recommandé depuis l'écran d'entrée. */
+  onRecommendedTemplate?: (template: BuilderTemplate) => void
 }
 
 const content = "mx-auto w-full max-w-6xl px-4 pb-12 lg:px-6"
@@ -29,8 +37,11 @@ const content = "mx-auto w-full max-w-6xl px-4 pb-12 lg:px-6"
  * emails rendus par le renderer. Choisir ne crée aucune opération : cela ouvre le travail. Pas de
  * wizard, pas de formulaire : un choix, puis le Builder.
  */
-export function EntryScreen({ mode, templates, onBlank, onTemplates, onReference, onTemplate, onBack }: EntryScreenProps) {
+export function EntryScreen({ mode, templates, onBlank, onTemplates, onReference, onTemplate, onBack, recommendation, briefNotice, onRecommendedTemplate }: EntryScreenProps) {
   if (mode === "templates") {
+    // Les modèles recommandés d'abord (avec leur raison), puis tous les autres : aucun n'est retiré.
+    const reasons = new Map((recommendation?.templates ?? []).map(({ template, reason }) => [template.id, reason]))
+    const ordered = [...templates].sort((a, b) => Number(reasons.has(b.id)) - Number(reasons.has(a.id)))
     return (
       <EntryFrame
         label="Choisir un modèle"
@@ -47,15 +58,15 @@ export function EntryScreen({ mode, templates, onBlank, onTemplates, onReference
             <p className="text-body text-muted-foreground">Une base Studi à modifier librement : tu pourras tout changer, ajouter ou retirer des lames.</p>
           </div>
           <ul role="list" className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {templates.map((template) => (
+            {ordered.map((template) => (
               <li key={template.id} className="flex">
                 <div className="w-full">
                   <CreationPathCard
                     id={`template-${template.id}`}
                     title={template.title}
-                    description={template.description}
+                    description={reasons.has(template.id) ? `${template.description}. ${reasons.get(template.id)}` : template.description}
                     cta="Utiliser ce modèle"
-                    meta={`${template.blockCount} lames`}
+                    meta={reasons.has(template.id) ? `Recommandé pour ce brief · ${template.blockCount} lames` : `${template.blockCount} lames`}
                     stage={<TemplateStage id={template.id} />}
                     stageClass="bg-neutral-100"
                     stageHeight="h-64 sm:h-72"
@@ -85,6 +96,12 @@ export function EntryScreen({ mode, templates, onBlank, onTemplates, onReference
           <h1 className="text-h1 text-balance sm:text-display">Créons ton prochain email.</h1>
           <p className="text-h2 font-normal text-muted-foreground">Pars d&apos;une page blanche, d&apos;un modèle Studi ou d&apos;une inspiration.</p>
         </div>
+        {recommendation && recommendation.templates.length > 0 && <BriefRecommendation recommendation={recommendation} onTemplate={onRecommendedTemplate ?? onTemplate} onTemplates={onTemplates} />}
+        {briefNotice && (
+          <p role="status" className="rounded-lg border px-4 py-3 text-body text-muted-foreground">
+            {briefNotice}
+          </p>
+        )}
         <ul role="list" className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
           <li className="flex">
             <div className="w-full">
