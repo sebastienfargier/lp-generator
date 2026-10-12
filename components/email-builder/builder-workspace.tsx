@@ -16,12 +16,14 @@ import { compositionCatalog } from "@/lib/email-builder/composition"
 import type { AssistantResponseBody } from "@/lib/email-builder/assistant-handler"
 import type { BuilderRenderResponse } from "@/lib/email-builder/render-handler"
 import { guardLockedDispatch, type HccEditorLink } from "@/lib/email-builder/hcc-save"
+import type { HccBriefState } from "@/lib/hcc/brief"
 import type { DocumentStatus } from "@/lib/email-builder/versions"
 
 import { AssistantPanel } from "./assistant-panel"
 import { BuilderCanvas, type CanvasViewport } from "./builder-canvas"
 import { BuilderTopbar } from "./builder-topbar"
 import { EmptyCanvas } from "./empty-canvas"
+import { HccBriefBar, HccBriefPanel } from "./hcc-brief-panel"
 import { HccSaveBar } from "./hcc-save-bar"
 import { ImagePickerPanel } from "./image-picker-panel"
 import { LameLibraryPanel } from "./lame-library-panel"
@@ -36,6 +38,8 @@ type BuilderWorkspaceProps = {
   onRestart: () => void
   /** Création ouverte depuis le HCC : le travail s'y enregistre (`HccSaveBar`). */
   hcc?: HccEditorLink
+  /** Brief HCC relu côté serveur à l'ouverture (option B), en lecture seule. */
+  hccBrief?: HccBriefState
   /** Statut éditorial enregistré dans le HCC pour le document de départ. */
   initialStatus?: DocumentStatus
 }
@@ -54,7 +58,8 @@ const selectionHint = (selection: BuilderState["selection"]) => (selection.kind 
  * aucune iframe). Rien n'est persisté, rien n'est généré : aucun appel de modèle,
  * un rendu serveur par nouveau document non vide seulement.
  */
-export function BuilderWorkspace({ initialDocument, initialMessage, lames, onRestart, hcc, initialStatus }: BuilderWorkspaceProps) {
+export function BuilderWorkspace({ initialDocument, initialMessage, lames, onRestart, hcc, initialStatus, hccBrief }: BuilderWorkspaceProps) {
+  const [briefOpen, setBriefOpen] = useState(false)
   const [state, baseDispatch] = useReducer(builderReducer, { document: initialDocument, message: initialMessage }, ({ document: start, message }) => {
     const initial = createBuilderState(start, message)
     // Un email vide reste Brouillon (règle du réducteur).
@@ -182,6 +187,7 @@ export function BuilderWorkspace({ initialDocument, initialMessage, lames, onRes
         onToggleAssistant={() => setAssistantOpen((open) => !open)}
       />
       {hcc && <HccSaveBar {...hcc} document={document} status={state.status} empty={empty} />}
+      {hcc && hccBrief && <HccBriefBar state={hccBrief} open={briefOpen} onToggle={() => setBriefOpen((open) => !open)} />}
 
       <div className="relative flex min-h-0 flex-1">
         {panel?.kind === "library" && (
@@ -265,6 +271,7 @@ export function BuilderWorkspace({ initialDocument, initialMessage, lames, onRes
           )}
         </main>
 
+        {briefOpen && hccBrief?.status === "valide" && <HccBriefPanel brief={hccBrief.brief} onClose={() => setBriefOpen(false)} />}
         {assistantOpen && (
           <AssistantPanel
             messages={state.assistant.messages}

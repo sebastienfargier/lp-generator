@@ -136,7 +136,8 @@ describe("HCC documents — chargement de /email-builder/[assetId]", () => {
       assert.equal(result.revision, 0)
       assert.ok(!JSON.stringify(result).includes("hcca_"), "jamais le jeton vers la page")
     }
-    assert.deepEqual(hcc.calls.map((call) => call.init.method), ["GET"], "lecture seule")
+    // Document puis brief HCC (option B) : deux lectures, aucune écriture.
+    assert.deepEqual(hcc.calls.map((call) => call.init.method), ["GET", "GET"], "lecture seule")
   })
   test("document enregistré : chargé tel quel avec sa révision et son statut ; jamais remplacé par un document initial", async () => {
     const saved = buildDemoDocument()
@@ -148,7 +149,7 @@ describe("HCC documents — chargement de /email-builder/[assetId]", () => {
       assert.equal(result.revision, 7)
       assert.equal(result.editorialStatus, "review")
     }
-    assert.equal(hcc.calls.length, 1)
+    assert.equal(hcc.calls.length, 2) // document, puis brief HCC (option B)
   })
   test("document enregistré illisible : page d'erreur, l'éditeur ne s'ouvre pas (pas d'écrasement possible)", async () => {
     const result = await load(fakeHcc([200, stored({ schemaVersion: 1, config: { blocks: "x" }, facts: {}, provenance: {}, blockMeta: {}, registry: {} })]).fetch)
@@ -176,7 +177,7 @@ describe("HCC documents — PUT /api/email-builder/hcc/document", () => {
 
   test("première sauvegarde (révision 0 → 1), relecture, modification et nouvelle sauvegarde (1 → 2)", async () => {
     const document = buildDemoDocument()
-    const hcc = fakeHcc([200, { revision: 1, updatedAt: "t1" }], [200, stored(document, 1, "draft")], [200, { revision: 2, updatedAt: "t2" }])
+    const hcc = fakeHcc([200, { revision: 1, updatedAt: "t1" }], [200, stored(document, 1, "draft")], [200, { contractVersion: 1, status: "aucun", brief: null }], [200, { revision: 2, updatedAt: "t2" }])
     const first = await save(valid({ document }), hcc.fetch)
     assert.equal(first.status, 200)
     assert.deepEqual(await first.json(), { status: "saved", revision: 1, updatedAt: "t1" })
@@ -187,7 +188,7 @@ describe("HCC documents — PUT /api/email-builder/hcc/document", () => {
     changed.config.name = "Relance modifiée"
     const second = await save(valid({ document: changed, baseRevision: 1, statutEditorial: "review" }), hcc.fetch)
     assert.deepEqual(await second.json(), { status: "saved", revision: 2, updatedAt: "t2" })
-    assert.deepEqual(JSON.parse(String(hcc.calls[2]!.init.body)), { document: changed, schemaVersion: 1, statutEditorial: "review", baseRevision: 1 })
+    assert.deepEqual(JSON.parse(String(hcc.calls[3]!.init.body)), { document: changed, schemaVersion: 1, statutEditorial: "review", baseRevision: 1 })
   })
   test("conflit de révision : 409 avec la révision courante du HCC, rien n'est réécrit automatiquement", async () => {
     const hcc = fakeHcc([409, { error: { code: "revision_conflict", message: "Le document a changé." }, revision: 4 }])

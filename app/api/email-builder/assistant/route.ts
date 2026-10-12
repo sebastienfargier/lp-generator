@@ -1,5 +1,5 @@
+import { assistantWithHccBrief } from "@/lib/hcc/assistant-brief"
 import { withBuilderSession } from "@/lib/hcc/guard"
-import { handleAssistant } from "@/lib/email-builder/assistant-handler"
 
 /**
  * POST /api/email-builder/assistant : message à l'assistant éditorial du Builder.
@@ -7,7 +7,10 @@ import { handleAssistant } from "@/lib/email-builder/assistant-handler"
  * exports de méthodes HTTP). Serveur uniquement : la clé Anthropic n'en sort jamais.
  *
  * Protégée (docs/POC_INTEGRATION_HCC.md §7) : origine du Builder, session HCC valide, limitation par session.
+ * Brief HCC (option B) : relu côté serveur à chaque appel, pour l'asset de la session (`assistant-brief.ts`).
  */
+const assistant = assistantWithHccBrief()
+
 export async function POST(request: Request) {
-  return withBuilderSession(handleAssistant, "assistant")(request)
+  return withBuilderSession(assistant, "assistant")(request)
 }

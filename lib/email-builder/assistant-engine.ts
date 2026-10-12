@@ -28,6 +28,21 @@ import { buildAssistantTransportSchema, safeParseAssistantResponse, type Assista
 import { builderLames } from "./catalog"
 import { compositionCatalog, hasStructure, validateCompositionPlan, type CompositionCatalog } from "./composition"
 import type { EmailDocument } from "./document"
+import { emailBlockManifest } from "../email/manifest"
+import type { EditorialBriefV1 } from "../hcc/brief"
+
+/** Slots de valeur d'offre (montant, code promo) : sans faits d'offre, une lame qui en porte n'afficherait que des valeurs de démonstration. */
+const OFFER_SLOT = /^(valeur-cle|code-promo-\d+)$/
+
+/**
+ * Brief HCC présent et AUCUN fait d'offre dans le document : les lames d'offre sortent du catalogue de l'assistant, pour
+ * qu'aucune fausse promotion (valeur, code) ne puisse être proposée. Sans brief, le catalogue est inchangé.
+ */
+export function catalogForBrief(catalog: CompositionCatalog, document: EmailDocument, brief: EditorialBriefV1 | null | undefined): CompositionCatalog {
+  if (!brief || document.facts.promotion) return catalog
+  const manifest = emailBlockManifest as Record<string, { slots: Record<string, unknown> } | undefined>
+  return Object.fromEntries(Object.entries(catalog).filter(([type]) => !Object.keys(manifest[type]?.slots ?? {}).some((slot) => OFFER_SLOT.test(slot))))
+}
 
 /** Une réponse d'assistant tient en quelques centaines de tokens. */
 export const ASSISTANT_MAX_TOKENS = 4000
@@ -40,6 +55,8 @@ export type AssistantEngineInput = {
   selection?: AssistantSelection | null
   /** Les lames ajoutables ; par défaut, celles de la bibliothèque du Builder. */
   catalog?: CompositionCatalog
+  /** Brief HCC validé (une DONNÉE du message, jamais une consigne) ; absent ou `null` : aucun brief. */
+  brief?: EditorialBriefV1 | null
 }
 
 export type AssistantEngineResult =
@@ -64,14 +81,14 @@ export async function runAssistant(input: AssistantEngineInput, dependencies: Em
   }
 
   const { document } = input
-  const catalog = input.catalog ?? compositionCatalog(builderLames())
+  const catalog = catalogForBrief(input.catalog ?? compositionCatalog(builderLames()), document, input.brief)
   const schemaContext: AssistantSchemaContext = { targets: assistantFields(document).map((field) => field.target), blockIds: blocksOf(document).map((block) => block.id), blockTypes: Object.keys(catalog) }
   const model = resolveEmailModel(env)
   const params: CreateParams = {
     model,
     max_tokens: ASSISTANT_MAX_TOKENS,
     system: assistantSystemPrompt,
-    messages: buildAssistantMessages(document, input.history, input.message, { catalog, selection: input.selection ?? null }),
+    messages: buildAssistantMessages(document, input.history, input.message, { catalog, selection: input.selection ?? null, brief: input.brief ?? null }),
     output_config: { format: { type: "json_schema", schema: buildAssistantTransportSchema(schemaContext) } },
   }
 

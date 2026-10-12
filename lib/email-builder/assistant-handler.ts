@@ -13,6 +13,7 @@
  * Domaine Email Builder uniquement : aucun import depuis `lib/landing`.
  */
 import type { EmailGenerationErrorKind } from "../email/anthropic"
+import type { EditorialBriefV1 } from "../hcc/brief"
 import { runAssistant, type AssistantEngineInput, type AssistantEngineResult } from "./assistant-engine"
 import { createMockAssistantClient } from "./assistant-mock"
 import type { AssistantProposal } from "./assistant-proposal"
@@ -31,6 +32,8 @@ export type AssistantHandlerOptions = {
   engine?: (input: AssistantEngineInput, options: { devMock: boolean }) => Promise<AssistantEngineResult>
   env?: Readonly<Record<string, string | undefined>>
   log?: (entry: { kind: string; status?: number; requestId?: string; rule?: string }) => void
+  /** Brief HCC VALIDÉ de l'asset de la session, relu côté serveur (`lib/hcc/assistant-brief.ts`) ; jamais reçu du navigateur. */
+  brief?: EditorialBriefV1 | null
 }
 
 const maxBodyLength = 600 * 1024
@@ -90,7 +93,7 @@ export async function handleAssistant(request: Request, options: AssistantHandle
   const devMock = parsed.data.devMock === true && env.NODE_ENV !== "production"
   let result: AssistantEngineResult
   try {
-    result = await engine({ document: document.data, history: parsed.data.history, message: parsed.data.message, selection: parsed.data.selection ?? null }, { devMock })
+    result = await engine({ document: document.data, history: parsed.data.history, message: parsed.data.message, selection: parsed.data.selection ?? null, brief: options.brief ?? null }, { devMock })
   } catch {
     log({ kind: "engine-threw" })
     return fail(500, "internal", simple.retry)

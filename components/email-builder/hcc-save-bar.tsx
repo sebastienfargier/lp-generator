@@ -133,6 +133,12 @@ export function HccSaveBar({ assetId, assetName, saved, onSaved, lock, onLock, h
             {failure ? "Réessayer" : "Enregistrer dans le HCC"}
           </Button>
         )}
+        {/* Retour à la fiche de la production (option B) : seulement une fois tout enregistré, pour ne rien perdre. */}
+        {hccHome && !dirty && !busy && !failure && (
+          <Button size="sm" variant="ghost" nativeButton={false} render={<a href={hccHome} />}>
+            Retour au HCC
+          </Button>
+        )}
       </div>
 
       <Dialog open={confirming} onOpenChange={setConfirming}>

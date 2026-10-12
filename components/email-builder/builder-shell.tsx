@@ -8,6 +8,7 @@ import { saveKey, type HccLock, type HccSaved } from "@/lib/email-builder/hcc-sa
 import type { DocumentStatus } from "@/lib/email-builder/versions"
 import { createShell, shellReducer } from "@/lib/email-builder/shell-state"
 import type { BuilderTemplate } from "@/lib/email-builder/templates"
+import type { HccBriefState } from "@/lib/hcc/brief"
 
 import { BuilderWorkspace } from "./builder-workspace"
 import { EntryScreen } from "./entry-screen"
@@ -17,7 +18,7 @@ type BuilderShellProps = {
   lames: readonly BuilderLame[]
   templates: readonly BuilderTemplate[]
   /** Création ouverte depuis le HCC : document enregistré (`null` pour une création neuve), révision, statut éditorial. */
-  hcc?: { assetId: string; assetName: string; revision: number; document: EmailDocument | null; editorialStatus: DocumentStatus; hccHome: string | null }
+  hcc?: { assetId: string; assetName: string; revision: number; document: EmailDocument | null; editorialStatus: DocumentStatus; hccHome: string | null; brief?: HccBriefState }
 }
 
 /**
@@ -45,6 +46,7 @@ export function BuilderShell({ lames, templates, hcc }: BuilderShellProps) {
         {...(shell.intro ? { initialMessage: shell.intro } : {})}
         {...(hcc ? { hcc: { assetId: hcc.assetId, assetName: hcc.assetName, saved, onSaved: setSaved, lock, onLock: (next: HccLock) => setLock((current) => current ?? next), hccHome: hcc.hccHome } } : {})}
         {...(initialStatus ? { initialStatus } : {})}
+        {...(hcc?.brief ? { hccBrief: hcc.brief } : {})}
         lames={lames}
         onRestart={() => dispatch({ type: "restart" })}
       />
