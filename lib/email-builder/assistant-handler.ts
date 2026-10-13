@@ -31,7 +31,7 @@ export type AssistantHandlerOptions = {
   /** Moteur ; par défaut Claude (ou le client simulé en développement). Injecté par les tests. */
   engine?: (input: AssistantEngineInput, options: { devMock: boolean }) => Promise<AssistantEngineResult>
   env?: Readonly<Record<string, string | undefined>>
-  log?: (entry: { kind: string; status?: number; requestId?: string; rule?: string }) => void
+  log?: (entry: { kind: string; status?: number; requestId?: string; rule?: string; regles?: string[] }) => void
   /** Brief HCC (version figée) de l'asset de la session, relu côté serveur (`lib/hcc/assistant-brief.ts`) ; jamais reçu du navigateur. */
   brief?: EditorialBrief | null
 }
@@ -101,7 +101,9 @@ export async function handleAssistant(request: Request, options: AssistantHandle
 
   if (result.status === "error") {
     const { kind, status, requestId, issues } = result.error
-    log({ kind, ...(status ? { status } : {}), ...(requestId ? { requestId } : {}), ...(issues?.[0]?.code ? { rule: issues[0].code } : {}) })
+    // Chemins et libellés FIXES des règles non respectées (jamais un texte de l'email ni de la réponse) : diagnostic.
+    const regles = kind === "invalid-draft" ? issues?.slice(0, 5).map((i) => `${i.path}: ${i.message.slice(0, 80)}`) : undefined
+    log({ kind, ...(status ? { status } : {}), ...(requestId ? { requestId } : {}), ...(issues?.[0]?.code ? { rule: issues[0].code } : {}), ...(regles?.length ? { regles } : {}) })
     const mapped = mapping[kind] ?? mapping.unexpected
     return fail(mapped.status, mapped.code, mapped.message)
   }
