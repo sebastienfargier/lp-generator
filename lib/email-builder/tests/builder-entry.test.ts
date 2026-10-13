@@ -426,10 +426,10 @@ describe("Dashboard → Email Builder", () => {
     assert.ok(!/L'IA le compose|l'IA compose/.test(dashboard.match(/title: "Emails"[\s\S]*?href/)?.[0] ?? ""), "la carte ne promet pas une composition par l'IA que le Builder ne fait pas encore")
   })
 
-  test("le bouton Dashboard du Builder (entrée comme topbar) retourne au dashboard global, pas à l'ancien générateur", () => {
+  test("le Builder n'affiche plus de lien Dashboard (entrée comme topbar) ni de lien vers l'ancien générateur", () => {
     for (const path of ["entry-screen", "builder-topbar"]) {
       const source = code(`components/email-builder/${path}.tsx`)
-      assert.match(source, /render=\{<Link href="\/" \/>\}/, path)
+      assert.ok(!/Dashboard|<Link href="\/"/.test(source), path)
       assert.ok(!/email-generator/.test(source), path)
     }
     assert.ok(existsSync(join(root, "app/(dashboard)/page.tsx")), "le dashboard global est la page racine")

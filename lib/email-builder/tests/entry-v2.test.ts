@@ -164,14 +164,26 @@ describe("Entry V2 — accessibilité et mouvement (structure, pas de classes)",
     assert.ok(!/animate-|@keyframes|animation/.test(card + scenes + thumb + frame + entry))
   })
 
-  test("l'enveloppe commune : atmosphère décorative (aria-hidden, sans capture de souris, sans image), header de 48 px aligné sur le contenu", () => {
-    assert.match(frame, /aria-hidden/)
-    assert.match(frame, /pointer-events-none/)
-    assert.match(frame, /h-12/)
-    assert.match(frame, /brand-green-soft/)
-    assert.match(frame, /accent-1/)
+  test("l'enveloppe commune : le fond des pages du HCC (jaune très pâle vers blanc, sans image ni effet), header de 48 px seulement avec un retour", () => {
+    assert.match(frame, /linear-gradient\(to bottom, color-mix\(in oklab, var\(--accent-1\) 22%, var\(--background\)\), var\(--background\) 28rem\)/)
+    assert.ok(!/radial-gradient|brand-green-soft/.test(frame), "plus de halos décoratifs")
+    assert.match(frame, /\{back && \(\s*<header className="h-12/)
     assert.ok(!/<img|url\(|blur-|filter/.test(frame))
     assert.match(frame, /maxWidth = "max-w-6xl"/)
+  })
+
+  test("harmonisation HCC : intro centrée, recommandation masquée par un drapeau, aucun lien Dashboard ; l'éditeur reste neutre", () => {
+    const entryMode = entry.slice(entry.indexOf('label="Créer un email"'))
+    assert.match(entryMode, /<header className="mx-auto flex max-w-2xl flex-col items-center gap-3 text-center">/)
+    assert.match(entryMode, /<h1 className="text-h1 text-balance">/)
+    assert.match(entry, /const SHOW_BRIEF_RECOMMENDATION: boolean = false/)
+    assert.match(entryMode, /\{SHOW_BRIEF_RECOMMENDATION && recommendation && [^\n]*<BriefRecommendation /)
+    assert.match(entryMode, /\{SHOW_BRIEF_RECOMMENDATION && briefNotice && /)
+    for (const path of ["entry-screen", "builder-topbar", "builder-workspace", "reference-screen"]) {
+      const source = read(`components/email-builder/${path}.tsx`)
+      assert.ok(!/Dashboard|<Link href="\/"/.test(source), path)
+    }
+    assert.ok(!/gradient/.test(read("components/email-builder/builder-workspace.tsx") + read("components/email-builder/builder-topbar.tsx")), "aucun dégradé dans l'éditeur")
   })
 })
 

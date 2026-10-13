@@ -1,6 +1,5 @@
 "use client"
 
-import Link from "next/link"
 import { ArrowLeftIcon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -30,6 +29,13 @@ type EntryScreenProps = {
 }
 
 const content = "mx-auto w-full max-w-6xl px-4 pb-12 lg:px-6"
+
+/**
+ * Section « Modèles recommandés pour ce brief » (et le message « brief indisponible » qui la remplace) : masquée pour
+ * l'instant. `true` la réaffiche telle quelle ; la recommandation reste calculée (ordre et mention « Recommandé » du
+ * choix d'un modèle). Masquée, aucun aperçu de modèle n'est monté.
+ */
+const SHOW_BRIEF_RECOMMENDATION: boolean = false
 
 /**
  * La porte d'entrée du Builder : aucun email n'est ouvert. Trois chemins vers LE MÊME Builder, de
@@ -82,22 +88,14 @@ export function EntryScreen({ mode, templates, onBlank, onTemplates, onReference
   }
 
   return (
-    <EntryFrame
-      label="Créer un email"
-      back={
-        <Button variant="ghost" size="sm" nativeButton={false} render={<Link href="/" />} className="-ml-2">
-          <ArrowLeftIcon data-icon="inline-start" aria-hidden />
-          Dashboard
-        </Button>
-      }
-    >
-      <div className={`${content} flex flex-col gap-8 pt-4 sm:gap-10 sm:pt-10`}>
-        <div className="flex max-w-2xl flex-col gap-3">
-          <h1 className="text-h1 text-balance sm:text-display">Créons ton prochain email.</h1>
-          <p className="text-h2 font-normal text-muted-foreground">Pars d&apos;une page blanche, d&apos;un modèle Studi ou d&apos;une inspiration.</p>
-        </div>
-        {recommendation && recommendation.templates.length > 0 && <BriefRecommendation recommendation={recommendation} onTemplate={onRecommendedTemplate ?? onTemplate} onTemplates={onTemplates} />}
-        {briefNotice && (
+    <EntryFrame label="Créer un email">
+      <div className={`${content} flex flex-col gap-8 pt-12 sm:gap-12 sm:pt-16`}>
+        <header className="mx-auto flex max-w-2xl flex-col items-center gap-3 text-center">
+          <h1 className="text-h1 text-balance">Créons ton prochain email.</h1>
+          <p className="text-body text-pretty text-muted-foreground">Pars d&apos;une page blanche, d&apos;un modèle Studi ou d&apos;une inspiration.</p>
+        </header>
+        {SHOW_BRIEF_RECOMMENDATION && recommendation && recommendation.templates.length > 0 && <BriefRecommendation recommendation={recommendation} onTemplate={onRecommendedTemplate ?? onTemplate} onTemplates={onTemplates} />}
+        {SHOW_BRIEF_RECOMMENDATION && briefNotice && (
           <p role="status" className="rounded-lg border px-4 py-3 text-body text-muted-foreground">
             {briefNotice}
           </p>

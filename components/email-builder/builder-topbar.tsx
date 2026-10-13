@@ -1,7 +1,6 @@
 "use client"
 
-import Link from "next/link"
-import { ArrowLeftIcon, MonitorIcon, PlusIcon, Redo2Icon, SmartphoneIcon, SparklesIcon, Undo2Icon } from "lucide-react"
+import { MonitorIcon, PlusIcon, Redo2Icon, SmartphoneIcon, SparklesIcon, Undo2Icon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
@@ -67,10 +66,6 @@ type BuilderTopbarProps = {
 export function BuilderTopbar({ name, versionsEnabled = true, restartEnabled = true, statusHint, status, readOnly, empty, confirmRestart, onRestart, versions, baseId, viewingId, changedSinceVersion, onStatus, onViewVersion, onExitView, onSaveVersion, canUndo, canRedo, viewport, assistantOpen, onUndo, onRedo, onAddBlock, onViewport, onToggleAssistant }: BuilderTopbarProps) {
   return (
     <header className="flex min-h-12 shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b bg-background px-4 py-1 lg:h-12 lg:flex-nowrap lg:py-0">
-      <Button variant="ghost" size="sm" nativeButton={false} render={<Link href="/" />} className="-ml-2">
-        <ArrowLeftIcon data-icon="inline-start" aria-hidden />
-        Dashboard
-      </Button>
       <div className="flex min-w-0 items-center gap-3">
         <h1 className="truncate text-body font-semibold" title={name}>
           {name}
