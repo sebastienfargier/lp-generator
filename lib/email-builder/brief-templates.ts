@@ -8,7 +8,7 @@
  *
  * Domaine Email Builder uniquement : aucun import depuis `lib/landing`.
  */
-import type { BriefIntention, EditorialBriefV1 } from "../hcc/brief"
+import type { BriefIntention, EditorialBrief } from "../hcc/brief"
 import type { BuilderTemplate } from "./templates"
 
 export const intentionLabels: Record<BriefIntention, string> = {
@@ -46,7 +46,7 @@ export const intentionTemplates: Record<BriefIntention, readonly { id: string; r
 export type TemplateRecommendation = { intention: BriefIntention; label: string; justification: string; templates: { template: BuilderTemplate; reason: string }[] }
 
 /** Recommandation pour un brief valide ; `null` sans brief. Seuls les modèles réellement disponibles sont retenus. */
-export function recommendTemplates(brief: EditorialBriefV1 | null | undefined, templates: readonly BuilderTemplate[]): TemplateRecommendation | null {
+export function recommendTemplates(brief: EditorialBrief | null | undefined, templates: readonly BuilderTemplate[]): TemplateRecommendation | null {
   if (!brief) return null
   const intention = brief.intention.valeur
   const recommended = intentionTemplates[intention].flatMap(({ id, reason }) => {

@@ -16,15 +16,15 @@ import { createBlankDocument } from "../document"
 import { createShell, shellReducer } from "../shell-state"
 import { builderTemplates } from "../templates"
 import { emailBlockManifest } from "../../email/manifest"
-import { briefIntentions, type BriefIntention, type EditorialBriefV1 } from "../../hcc/brief"
+import { briefIntentions, type BriefIntention, type EditorialBrief } from "../../hcc/brief"
 
 const templates = builderTemplates()
-const i = (texte: string) => ({ texte, statut: "acquis" as const })
-const brief = (valeur: BriefIntention): EditorialBriefV1 => ({
-  schema: "editorial-brief", version: 1, briefId: "s1:C1", briefVersion: 1, valideLe: "2026-10-12T12:00:00.000Z", productionId: "ast_1",
-  priseDeParole: { nom: "P" }, contenu: { id: "C1", titre: "T", format: "email", canal: "Email" }, intention: { valeur, justification: "Parce que." },
+const i = (texte: string) => ({ texte, aConfirmer: false })
+const brief = (valeur: BriefIntention): EditorialBrief => ({
+  schema: "editorial-brief", version: 2, briefId: "s1:brief:annonce", briefVersion: 1, cadrageVersion: 1, redigeLe: "2026-10-12T12:00:00.000Z", productionId: "ast_1",
+  priseDeParole: { nom: "P" }, contenu: { id: "annonce", titre: "T", format: "email", moment: "J" }, intention: { valeur, justification: "Parce que." },
   objectif: i("o"), audience: i("a"), angle: i("an"), promesse: i("p"), messages: { principal: i("m"), secondaires: [] }, tonalite: i("t"), cta: i("c"),
-  preuves: [], contraintes: [], criteresReussite: [], specificites: [], structure: [{ partie: "x", contenu: "y" }], aConfirmer: [],
+  preuves: [], contraintes: [], criteresReussite: [], specificites: [], structure: [{ partie: "x", contenu: "y" }], aConfirmer: [], simplifie: false, sources: [],
 })
 const sequence = (id: string) => templates.find((t) => t.id === id)!.document.config.blocks.map((b) => b.type)
 const OFFER_BLOCKS = ["email-module-hero-offer-image-top", "email-module-discount-banner-full", "email-module-banner-full", "email-module-discount-banner-cards"]

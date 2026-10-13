@@ -29,7 +29,7 @@ import { builderLames } from "./catalog"
 import { compositionCatalog, hasStructure, validateCompositionPlan, type CompositionCatalog } from "./composition"
 import type { EmailDocument } from "./document"
 import { emailBlockManifest } from "../email/manifest"
-import type { EditorialBriefV1 } from "../hcc/brief"
+import type { EditorialBrief } from "../hcc/brief"
 
 /** Slots de valeur d'offre (montant, code promo) : sans faits d'offre, une lame qui en porte n'afficherait que des valeurs de démonstration. */
 const OFFER_SLOT = /^(valeur-cle|code-promo-\d+)$/
@@ -38,7 +38,7 @@ const OFFER_SLOT = /^(valeur-cle|code-promo-\d+)$/
  * Brief HCC présent et AUCUN fait d'offre dans le document : les lames d'offre sortent du catalogue de l'assistant, pour
  * qu'aucune fausse promotion (valeur, code) ne puisse être proposée. Sans brief, le catalogue est inchangé.
  */
-export function catalogForBrief(catalog: CompositionCatalog, document: EmailDocument, brief: EditorialBriefV1 | null | undefined): CompositionCatalog {
+export function catalogForBrief(catalog: CompositionCatalog, document: EmailDocument, brief: EditorialBrief | null | undefined): CompositionCatalog {
   if (!brief || document.facts.promotion) return catalog
   const manifest = emailBlockManifest as Record<string, { slots: Record<string, unknown> } | undefined>
   return Object.fromEntries(Object.entries(catalog).filter(([type]) => !Object.keys(manifest[type]?.slots ?? {}).some((slot) => OFFER_SLOT.test(slot))))
@@ -56,7 +56,7 @@ export type AssistantEngineInput = {
   /** Les lames ajoutables ; par défaut, celles de la bibliothèque du Builder. */
   catalog?: CompositionCatalog
   /** Brief HCC validé (une DONNÉE du message, jamais une consigne) ; absent ou `null` : aucun brief. */
-  brief?: EditorialBriefV1 | null
+  brief?: EditorialBrief | null
 }
 
 export type AssistantEngineResult =

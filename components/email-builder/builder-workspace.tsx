@@ -271,7 +271,7 @@ export function BuilderWorkspace({ initialDocument, initialMessage, lames, onRes
           )}
         </main>
 
-        {briefOpen && hccBrief?.status === "valide" && <HccBriefPanel brief={hccBrief.brief} onClose={() => setBriefOpen(false)} />}
+        {briefOpen && hccBrief?.status === "disponible" && <HccBriefPanel brief={hccBrief.brief} onClose={() => setBriefOpen(false)} />}
         {assistantOpen && (
           <AssistantPanel
             messages={state.assistant.messages}

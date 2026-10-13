@@ -66,13 +66,9 @@ export function BuilderShell({ lames, templates, hcc }: BuilderShellProps) {
       onTemplate={(template) => dispatch({ type: "choose-template", document: template.document })}
       onBack={() => dispatch({ type: "back" })}
       onRecommendedTemplate={(template) => dispatch({ type: "choose-recommended-template", document: template.document })}
-      recommendation={recommendTemplates(hcc?.brief?.status === "valide" ? hcc.brief.brief : null, templates)}
+      recommendation={recommendTemplates(hcc?.brief?.status === "disponible" ? hcc.brief.brief : null, templates)}
       briefNotice={
-        hcc?.brief?.status === "obsolete"
-          ? "Le brief HCC de cette production a changé et doit être revalidé : aucune recommandation de modèle n'est faite."
-          : hcc?.brief?.status === "indisponible"
-            ? "Brief HCC indisponible pour le moment : choisis ton départ librement."
-            : null
+        hcc?.brief?.status === "indisponible" ? "Brief HCC indisponible pour le moment : choisis ton départ librement." : null
       }
     />
   )
