@@ -175,7 +175,8 @@ describe("Entry V2 — accessibilité et mouvement (structure, pas de classes)",
   test("harmonisation HCC : intro centrée, recommandation masquée par un drapeau, aucun lien Dashboard ; l'éditeur reste neutre", () => {
     const entryMode = entry.slice(entry.indexOf('label="Créer un email"'))
     assert.match(entryMode, /<header className="mx-auto flex max-w-2xl flex-col items-center gap-3 text-center">/)
-    assert.match(entryMode, /<h1 className="text-h1 text-balance">/)
+    assert.match(entryMode, /<h1 className="text-intro text-balance">/)
+    assert.match(read("app/globals.css"), /@utility text-intro \{[^}]*font-size: var\(--text-h1\);[^}]*font-weight: 600;\s*@variant sm \{\s*font-size: 2.25rem;\s*line-height: 2.75rem;/)
     assert.match(entry, /const SHOW_BRIEF_RECOMMENDATION: boolean = false/)
     assert.match(entryMode, /\{SHOW_BRIEF_RECOMMENDATION && recommendation && [^\n]*<BriefRecommendation /)
     assert.match(entryMode, /\{SHOW_BRIEF_RECOMMENDATION && briefNotice && /)

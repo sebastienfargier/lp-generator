@@ -205,3 +205,17 @@
     @apply font-sans;
   }
 }
+
+/*
+ * Titre d'introduction des écrans d'entrée (même échelle que les introductions du HCC) : 30/38 en mobile, 36/44 à
+ * partir de `sm`, semibold. Réservé aux introductions : les cinq styles de la charte restent inchangés.
+ */
+@utility text-intro {
+  font-size: var(--text-h1);
+  line-height: var(--text-h1--line-height);
+  font-weight: 600;
+  @variant sm {
+    font-size: 2.25rem;
+    line-height: 2.75rem;
+  }
+}

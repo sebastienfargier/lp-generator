@@ -89,9 +89,9 @@ export function EntryScreen({ mode, templates, onBlank, onTemplates, onReference
 
   return (
     <EntryFrame label="Créer un email">
-      <div className={`${content} flex flex-col gap-8 pt-12 sm:gap-12 sm:pt-16`}>
+      <div className={`${content} flex flex-col gap-8 pt-12 sm:pt-16`}>
         <header className="mx-auto flex max-w-2xl flex-col items-center gap-3 text-center">
-          <h1 className="text-h1 text-balance">Créons ton prochain email.</h1>
+          <h1 className="text-intro text-balance">Créons ton prochain email.</h1>
           <p className="text-body text-pretty text-muted-foreground">Pars d&apos;une page blanche, d&apos;un modèle Studi ou d&apos;une inspiration.</p>
         </header>
         {SHOW_BRIEF_RECOMMENDATION && recommendation && recommendation.templates.length > 0 && <BriefRecommendation recommendation={recommendation} onTemplate={onRecommendedTemplate ?? onTemplate} onTemplates={onTemplates} />}
